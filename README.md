@@ -50,6 +50,12 @@ With all that said, real world performance losses are generally imperceptible. I
 see less than 30ms to parse a complex configuration, and keybind / button bind latency of less than 3ms at worst. And, lets be honest, if
 you are here looking at this patch, optimizing down to the last atom is not likely your chief concern.
 
+## TODOs
+There are still a few things I want to adjust before releasing this as a proper patch:
+- [ ] Complete documentation. I have about 50% if it already elsewhere, it just needs to be completed and adapted to this version of the parser
+- [ ] Fix the very clumsy logging. `print_log()` is just a placeholder macro to bridge the gap between my fully fledged logger and dwm's original source. It needs a little more polish.
+- [ ] If I can, I want to remove the need for most functions called by a bind to be made a non-const `Arg`. If I can solve this, it will reduce the codebase impact of the patch and reduce conflicts with other patches a little.
+
 ## Reaching Out
 I am more than happy to help you out if you are having issues or just want to ask some questions about the patch. The best way is to reach
 out on Discord @jeffofbread, or email me at jeffofbreadcoding@gmail.com.
