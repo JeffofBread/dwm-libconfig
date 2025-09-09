@@ -53,7 +53,7 @@ static void load_default_keybind_config( Key **keybind_config, unsigned int *key
 static void load_default_master_config( Configuration *master_config );
 static int open_config( config_t *config, char **config_filepath, Configuration *master_config );
 static int parse_bind_argument( const char *argument_string, const enum Argument_Type *arg_type, Arg *arg, long double range_min, long double range_max );
-static int parse_bind_function( const char *function_string, enum Argument_Type *arg_type, void ( **function )( Arg * ), Arg *arg, long double *range_min, long double *range_max );
+static int parse_bind_function( const char *function_string, enum Argument_Type *arg_type, void ( **function )( const Arg* ), Arg *arg, long double *range_min, long double *range_max );
 static int parse_bind_modifier( const char *modifier_string, unsigned int *modifier );
 static int parse_buttonbind( const char *buttonbind_string, Button *buttonbind, unsigned int max_keys );
 static int parse_buttonbind_button( const char *button_string, unsigned int *button );
@@ -589,36 +589,36 @@ static int parse_bind_argument( const char *argument_string, const enum Argument
         return 0;
 }
 
-static int parse_bind_function( const char *function_string, enum Argument_Type *arg_type, void ( **function )( Arg * ), Arg *arg, long double *range_min, long double *range_max ) {
+static int parse_bind_function( const char *function_string, enum Argument_Type *arg_type, void ( **function )( const Arg* ), Arg *arg, long double *range_min, long double *range_max ) {
 
         const struct {
                 const char *name;
-                void ( *func )( Arg * );
+                void ( *func )( const Arg * );
                 enum Argument_Type arg_type;
                 const long double range_min, range_max;
                 const Arg provided_argument;
         } function_alias_map[ ] = {
-                { "focusmon", &focusmon, ARG_TYPE_INT, -99, 99 },
-                { "focusstack", &focusstack, ARG_TYPE_INT, -99, 99 },
-                { "incnmaster", &incnmaster, ARG_TYPE_INT, -99, 99 },
-                { "killclient", &killclient, ARG_TYPE_NONE },
-                { "movemouse", &movemouse, ARG_TYPE_NONE },
-                { "quit", &quit, ARG_TYPE_NONE },
-                { "resizemouse", &resizemouse, ARG_TYPE_NONE },
-                { "setlayout-tiled", &setlayout, ARG_TYPE_PROVIDED, 0, 0, { .v = &layouts[0] } },
-                { "setlayout-floating", &setlayout, ARG_TYPE_PROVIDED, 0, 0, { .v = &layouts[1] } },
-                { "setlayout-monocle", &setlayout, ARG_TYPE_PROVIDED, 0, 0, { .v = &layouts[2] } },
-                { "setlayout-toggle", &setlayout, ARG_TYPE_NONE },
-                { "setmfact", &setmfact, ARG_TYPE_FLOAT, -0.95f, 1.95f },
-                { "spawn", &spawn, ARG_TYPE_POINTER },
-                { "tag", &tag, ARG_TYPE_INT, -1, TAGMASK },
-                { "tagmon", &tagmon, ARG_TYPE_INT, -99, 99 },
-                { "togglebar", &togglebar, ARG_TYPE_NONE },
-                { "togglefloating", &togglefloating, ARG_TYPE_NONE },
-                { "toggletag", &toggletag, ARG_TYPE_INT, -1, TAGMASK },
-                { "toggleview", &toggleview, ARG_TYPE_INT, -1, TAGMASK },
-                { "view", &view, ARG_TYPE_INT, -1, TAGMASK },
-                { "zoom", &zoom, ARG_TYPE_NONE },
+                { "focusmon", focusmon, ARG_TYPE_INT, -99, 99 },
+                { "focusstack", focusstack, ARG_TYPE_INT, -99, 99 },
+                { "incnmaster", incnmaster, ARG_TYPE_INT, -99, 99 },
+                { "killclient", killclient, ARG_TYPE_NONE },
+                { "movemouse", movemouse, ARG_TYPE_NONE },
+                { "quit", quit, ARG_TYPE_NONE },
+                { "resizemouse", resizemouse, ARG_TYPE_NONE },
+                { "setlayout-tiled", setlayout, ARG_TYPE_PROVIDED, 0, 0, { .v = &layouts[0] } },
+                { "setlayout-floating", setlayout, ARG_TYPE_PROVIDED, 0, 0, { .v = &layouts[1] } },
+                { "setlayout-monocle", setlayout, ARG_TYPE_PROVIDED, 0, 0, { .v = &layouts[2] } },
+                { "setlayout-toggle", setlayout, ARG_TYPE_NONE },
+                { "setmfact", setmfact, ARG_TYPE_FLOAT, -0.95f, 1.95f },
+                { "spawn", spawn, ARG_TYPE_POINTER },
+                { "tag", tag, ARG_TYPE_INT, -1, TAGMASK },
+                { "tagmon", tagmon, ARG_TYPE_INT, -99, 99 },
+                { "togglebar", togglebar, ARG_TYPE_NONE },
+                { "togglefloating", togglefloating, ARG_TYPE_NONE },
+                { "toggletag", toggletag, ARG_TYPE_INT, -1, TAGMASK },
+                { "toggleview", toggleview, ARG_TYPE_INT, -1, TAGMASK },
+                { "view", view, ARG_TYPE_INT, -1, TAGMASK },
+                { "zoom", zoom, ARG_TYPE_NONE },
         };
 
         log_print( "TRACE: Function being parsed: \"%s\"\n", function_string );
