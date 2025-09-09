@@ -17,6 +17,7 @@ typedef struct Configuration {
         config_t *libconfig_config;
         char *config_filepath;
         unsigned int max_keys;
+        bool default_binds_loaded;
 
         // dwm configuration values
         bool showbar, topbar, resizehints, lockfullscreen;
@@ -330,6 +331,7 @@ static void load_default_master_config( Configuration *master_config ) {
 
         master_config->config_filepath = NULL;
         master_config->max_keys = 4;
+        master_config->default_binds_loaded = false;
 
         master_config->showbar = true;
         master_config->topbar = true;
@@ -440,6 +442,7 @@ static int open_config( config_t *config, char **config_filepath, Configuration 
         }
 
         log_print( "ERROR: Unable to load any configs. Loading hardcoded default config values and exiting parsing.\n" );
+        master_config->default_binds_loaded = true;
         load_default_keybind_config( &master_config->keybinds, &master_config->keybinds_count );
         load_default_buttonbind_config( &master_config->buttonbinds, &master_config->buttonbinds_count );
 
@@ -466,29 +469,21 @@ void config_cleanup( Configuration *master_config ) {
 
         SAFE_FREE( master_config->rules );
 
-        for ( i = 0; i < master_config->keybinds_count; i++ ) {
-                if ( master_config->keybinds[ i ].argument_type == ARG_TYPE_POINTER ) {
-                        SAFE_FREE( master_config->keybinds[ i ].arg.v );
+        if ( !master_config->default_binds_loaded ) {
+                for ( i = 0; i < master_config->keybinds_count; i++ ) {
+                        if ( master_config->keybinds[ i ].argument_type == ARG_TYPE_POINTER ) {
+                                SAFE_FREE( master_config->keybinds[ i ].arg.v );
+                        }
                 }
-        }
+                SAFE_FREE( master_config->keybinds );
 
-        // Note: This will cause an invalid free if
-        // load_default_keybind_config(), as it is mapped
-        // to a static const array, but its such a small
-        // issue im not gonna rewrite this right now.
-        SAFE_FREE( master_config->keybinds );
-
-        for ( i = 0; i < master_config->buttonbinds_count; i++ ) {
-                if ( master_config->buttonbinds[ i ].argument_type == ARG_TYPE_POINTER ) {
-                        SAFE_FREE( master_config->buttonbinds[ i ].arg.v );
+                for ( i = 0; i < master_config->buttonbinds_count; i++ ) {
+                        if ( master_config->buttonbinds[ i ].argument_type == ARG_TYPE_POINTER ) {
+                                SAFE_FREE( master_config->buttonbinds[ i ].arg.v );
+                        }
                 }
+                SAFE_FREE( master_config->buttonbinds );
         }
-
-        // Note: This will cause an invalid free if
-        // load_default_buttonbind_config(), as it is mapped
-        // to a static const array, but its such a small
-        // issue im not gonna rewrite this right now.
-        SAFE_FREE( master_config->buttonbinds );
 
         config_destroy( master_config->libconfig_config );
 }

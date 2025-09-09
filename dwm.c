@@ -147,7 +147,7 @@ typedef struct {
 	char *instance;
 	char *title;
 	unsigned int tags;
-	bool isfloating;
+	bool isfloating; // TODO: Does this need to be a bool? Go back to int for less edits to dwm.c
 	int monitor;
 } Rule;
 
