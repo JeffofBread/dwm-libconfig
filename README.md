@@ -36,6 +36,29 @@ sudo dnf install libconfig-devel
 sudo zypper install libconfig-devel
 ```
 
+## Configuration
+
+NOTE: Documentation in `dwm.conf` is not complete, I know. I have not finished all the documentation for the file yet, apologies.
+
+dwm-libconfig will search for a configuration in a few places. It will first look for any configuration file passed from the CLI using 
+`-c PATH`. If it finds no file or an invalid configuration file, it will continue. It will then search `~/.config/`, `~/.config/dwm/`.
+If it is still unable to find a configuration, it will try and locate a backup of your latest successfully parsed configuration. 
+This will be located at `~/.local/share/dwm/dwm_last.conf`. Note, this is NOT where YOU should save a file to. This is used as a backup
+of your configuration, created and managed by dwm. Finally, if it can't find any user configurations, it will search in `/etc/dwm/`.
+This is where a default, minimal configuration is saved. It will not be backed up, and purely exists as a fallback configuration. You
+can edit this if you feel you need to, but it is probably best to leave it alone. Finally, should the parser completely fail and be
+unable to locate a single valid configuration file, it will use an internal, hardcoded set of default values. 
+
+Now about the configuration file itself. The example configuration provided with this repository (`dwm.conf`) contains most of the
+documentation you should need. All elements in the file must follow the libconfig file syntax, read up on it here: 
+ - https://hyperrealm.github.io/libconfig/libconfig_manual.html#Configuration-Files
+
+Any issues with the syntax will cause parsing to fail, as libconfig is not very fault-tolerant when it comes to syntax. Warning,
+older versions of libconfig do not support trailing commas. This means that parsing could fail if you place a comma after the final
+element in a list. Please be careful about this, it can catch you off guard quite easily. Also, be careful with commas surrounding
+the button/key binds. Libconfig supports multi-line strings, meaning if you forget a comma after a line of binds, libconfig will
+combine the line you just wrote and the next together into one long bind, causing that keybind to likely fail to parse.
+
 ## Performance Impact
 There is definitely a performance impact, but it is generally minimal. In my testing, even in extremely resource limited VM or emulated
 systems, the time to parse a configuration is negligible. The longest time I found in my testing was around 400ms, with the rest of the
