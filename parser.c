@@ -48,7 +48,7 @@ static void config_cleanup( Configuration *master_config );
 static int parse_config( const char *custom_config_filepath, Configuration *master_config );
 
 // Internal functions
-static void backup_config( config_t *config, const char *current_config_filepath );
+static void backup_config( config_t *config );
 static void load_default_buttonbind_config( Button **buttonbind_config, unsigned int *buttonbind_count );
 static void load_default_keybind_config( Key **keybind_config, unsigned int *keybind_count );
 static void load_default_master_config( Configuration *master_config );
@@ -203,7 +203,7 @@ static inline char *trim_whitespace( char *string ) {
 
 // ----- Function Definitions -----
 
-static void backup_config( config_t *config, const char *current_config_filepath ) {
+static void backup_config( config_t *config ) {
 
         // Save xdg data folder to buffer (~/.local/share)
         char *buffer = get_xdg_data_home();
@@ -219,12 +219,6 @@ static void backup_config( config_t *config, const char *current_config_filepath
                 mstrextend( &buffer, "/dwm/" );
                 make_parent_directory( buffer );
                 mstrextend( &buffer, "dwm_last.conf" );
-
-                if ( strcmp( current_config_filepath, buffer ) == 0 || strcmp( current_config_filepath, "/etc/dwm/dwm.conf" ) == 0 ) {
-                        log_print( "WARN: Not saving config as backup, as current working config is not the user's\n" );
-                        SAFE_FREE( buffer );
-                        return;
-                }
 
                 if ( config_write_file( config, buffer ) == CONFIG_FALSE ) {
                         log_print( "ERROR: Problem backing up current config to \"%s\"\n", buffer );
@@ -391,19 +385,23 @@ static int open_config( config_t *config, char **config_filepath, Configuration 
         }
 
         // ~/.config/dwm.conf
-        config_filepaths[ config_filepaths_length ] = get_xdg_config_home();
-        mstrextend( &config_filepaths[ config_filepaths_length++ ], "/dwm.conf" );
+        char *config_top_directory = get_xdg_config_home();
+        mstrextend( &config_top_directory, "/dwm.conf" );
+        config_filepaths[ config_filepaths_length++ ] = config_top_directory;
 
         // ~/.config/dwm/dwm.conf
-        config_filepaths[ config_filepaths_length ] = get_xdg_config_home();
-        mstrextend( &config_filepaths[ config_filepaths_length++ ], "/dwm/dwm.conf" );
+        char *config_sub_directory = get_xdg_config_home();
+        mstrextend( &config_sub_directory, "/dwm/dwm.conf" );
+        config_filepaths[ config_filepaths_length++ ] = config_sub_directory;
 
         // ~/.local/share/dwm/dwm_last.conf
-        config_filepaths[ config_filepaths_length ] = get_xdg_data_home();
-        mstrextend( &config_filepaths[ config_filepaths_length++ ], "/dwm/dwm_last.conf" );
+        char *config_backup = get_xdg_data_home();
+        mstrextend( &config_backup, "/dwm/dwm_last.conf" );
+        config_filepaths[ config_filepaths_length++ ] = config_backup;
 
         // /etc/dwm/dwm.conf
-        config_filepaths[ config_filepaths_length++ ] = strdup( "/etc/dwm/dwm.conf" );
+        char *config_fallback = strdup( "/etc/dwm/dwm.conf" );
+        config_filepaths[ config_filepaths_length++ ] = config_fallback;
 
         FILE *tmp_file = NULL;
         for ( i = 0; i < config_filepaths_length; i++ ) {
@@ -418,19 +416,22 @@ static int open_config( config_t *config, char **config_filepath, Configuration 
 
                 if ( tmp_file == NULL ) {
                         log_print( "WARN: Unable to open config file \"%s\".\n", config_filepaths[ i ] );
-                        SAFE_FREE( config_filepaths[ i ] );
                         continue;
                 }
 
                 if ( config_read( config, tmp_file ) == CONFIG_FALSE ) {
                         log_print( "WARN: Problem parsing config file \"%s\", line %d: %s\n", config_filepaths[ i ], config_error_line( config ), config_error_text( config ) );
-                        SAFE_FREE( config_filepaths[ i ] );
                         SAFE_FCLOSE( tmp_file );
                         continue;
                 }
 
                 // Save found config filepath
                 *config_filepath = strdup( config_filepaths[ i ] );
+
+                // Check if it's a user's custom configuration
+                if ( strcmp( config_filepaths[ i ], config_backup ) == 0 || strcmp( config_filepaths[ i ], config_fallback ) == 0 ) {
+                        master_config->default_binds_loaded = true;
+                }
 
                 for ( i = 0; i < config_filepaths_length; i++ ) {
                         SAFE_FREE( config_filepaths[ i ] );
@@ -442,7 +443,6 @@ static int open_config( config_t *config, char **config_filepath, Configuration 
         }
 
         log_print( "ERROR: Unable to load any configs. Loading hardcoded default config values and exiting parsing.\n" );
-        master_config->default_binds_loaded = true;
         load_default_keybind_config( &master_config->keybinds, &master_config->keybinds_count );
         load_default_buttonbind_config( &master_config->buttonbinds, &master_config->buttonbinds_count );
 
@@ -534,7 +534,11 @@ int parse_config( const char *custom_config_filepath, Configuration *master_conf
         total_errors += parse_tags_config( &libconfig_config, master_config );
         total_errors += parse_theme_config( &libconfig_config, master_config );
 
-        if ( total_errors == 0 ) backup_config( &libconfig_config, config_filepath );
+        if ( total_errors == 0 && !master_config->default_binds_loaded ) {
+                backup_config( &libconfig_config );
+        } else {
+                log_print( "WARN: Not saving config as backup, as current working config is not the user's\n" );
+        }
 
         SAFE_FREE( config_filepath );
 
