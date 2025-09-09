@@ -3,7 +3,7 @@
 Do you want to completely up-end one of the core features of [suckless](https://suckless.org/) software? Well this is the patch for you.
 dwm-libconfig is a patch for dwm that adds runtime configuration for dwm using [libconfig](https://hyperrealm.github.io/libconfig/). It
 completely removes the need for the traditional `config.h`, replacing it with a configuration file called 'dwm.conf'. This means that to
-adjust configuration values in dwm, you no longer need to recompile. Assuming you don't need to add new configuration options to the,
+adjust configuration values in dwm, you no longer need to recompile. Assuming you don't need to add new configuration options to the
 parser you will never need to recompile dwm.
 
 Some notes however, this is a backported featured from a very different project. Certain design choices or style are definitely a little
@@ -17,8 +17,8 @@ I have tried my best to make this patch minimally invasive, but by its nature, i
 many other patches without tweaking. This patch removes `config.h`, which many patches need.
 
 ## Requirements
-For this patch you will need all the base dwm dependencies plus [libconfig](https://hyperrealm.github.io/libconfig/). You can find it in
-most distributions repositories without issue.
+The patch is based on dwm 6.6, so it is recommended to start there. You will need all the base dwm dependencies plus 
+[libconfig](https://hyperrealm.github.io/libconfig/). You can find it in most distributions repositories without issue.
 
 Here are a few common distros:
 ```bash
