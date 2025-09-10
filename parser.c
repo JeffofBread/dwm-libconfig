@@ -472,7 +472,12 @@ int parse_config( const char *custom_config_filepath, Configuration *master_conf
         if ( total_errors == 0 && !master_config->default_binds_loaded ) {
                 backup_config( &libconfig_config );
         } else {
-                log_warn( "Not saving config as backup, as current working config is not the user's\n" );
+                if ( master_config->default_binds_loaded ) {
+                        log_warn( "Not saving config as backup, as current working config is not the user's\n" );
+                }
+                if ( total_errors != 0 ) {
+                        log_warn( "Not saving config as backup, as the parsed config had too many errors\n" );
+                }
         }
 
         SAFE_FREE( config_filepath );
