@@ -8,7 +8,12 @@
 // Uncomment to enable log printing for debugging. This is just
 // a crude compatability macro between my own logging system,
 // which I didn't want to bring over just for the config parser.
-#define log_print( ... ) fprintf( stdout, __VA_ARGS__ );
+#define log_trace( ... ) //fprintf( stdout, "TRACE: " __VA_ARGS__ );
+#define log_debug( ... ) fprintf( stdout, "DEBUG: " __VA_ARGS__ );
+#define log_info( ... ) fprintf( stdout, "INFO: " __VA_ARGS__ );
+#define log_warn( ... ) fprintf( stdout, "WARN: " __VA_ARGS__ );
+#define log_error( ... ) fprintf( stdout, "ERROR: " __VA_ARGS__ );
+#define log_fatal( ... ) fprintf( stdout, "FATAL: " __VA_ARGS__ );
 
 #define SAFE_FREE( p )     do { if ( p ) { free( ( void * ) ( p ) ); ( p ) = NULL; } } while ( 0 )
 #define SAFE_FCLOSE( f )   do { if ( f ) { fclose( f ); ( f ) = NULL; } } while ( 0 )
@@ -24,11 +29,11 @@ int normalize_path( const char *path, char **normal );
 
 static inline int normalize_range_int( const int i, const int min, const int max ) {
         if ( i > max ) {
-                log_print( "WARN: Value %d above max of %d, value clamped to %d\n", i, max, max );
+                log_warn( "Value %d above max of %d, value clamped to %d\n", i, max, max );
                 return max;
         }
         if ( i < min ) {
-                log_print( "WARN: Value %d under min of %d, value clamped to %d\n", i, min, min );
+                log_warn( "Value %d under min of %d, value clamped to %d\n", i, min, min );
                 return min;
         }
         return i;
@@ -36,11 +41,11 @@ static inline int normalize_range_int( const int i, const int min, const int max
 
 static inline unsigned int normalize_range_uint( const unsigned int i, const unsigned int min, const unsigned int max ) {
         if ( i > max ) {
-                log_print( "WARN: Value %u above max of %u, value clamped to %u\n", i, max, max );
+                log_warn( "Value %u above max of %u, value clamped to %u\n", i, max, max );
                 return max;
         }
         if ( i < min ) {
-                log_print( "WARN: Value %u under min of %u, value clamped to %u\n", i, min, min );
+                log_warn( "Value %u under min of %u, value clamped to %u\n", i, min, min );
                 return min;
         }
         return i;
@@ -48,11 +53,11 @@ static inline unsigned int normalize_range_uint( const unsigned int i, const uns
 
 static inline long normalize_range_long( const long i, const long min, const long max ) {
         if ( i > max ) {
-                log_print( "WARN: Value %ld above max of %ld, value clamped to %ld\n", i, max, max );
+                log_warn( "Value %ld above max of %ld, value clamped to %ld\n", i, max, max );
                 return max;
         }
         if ( i < min ) {
-                log_print( "WARN: Value %ld under min of %ld, value clamped to %ld\n", i, min, min );
+                log_warn( "Value %ld under min of %ld, value clamped to %ld\n", i, min, min );
                 return min;
         }
         return i;
@@ -60,11 +65,11 @@ static inline long normalize_range_long( const long i, const long min, const lon
 
 static inline unsigned long normalize_range_ulong( const unsigned long i, const unsigned long min, const unsigned long max ) {
         if ( i > max ) {
-                log_print( "WARN: Value %lu above max of %lu, value clamped to %lu\n", i, max, max );
+                log_warn( "Value %lu above max of %lu, value clamped to %lu\n", i, max, max );
                 return max;
         }
         if ( i < min ) {
-                log_print( "WARN: Value %lu under min of %lu, value clamped to %lu\n", i, min, min );
+                log_warn( "Value %lu under min of %lu, value clamped to %lu\n", i, min, min );
                 return min;
         }
         return i;
@@ -72,11 +77,11 @@ static inline unsigned long normalize_range_ulong( const unsigned long i, const 
 
 static inline float normalize_range_float( const float i, const float min, const float max ) {
         if ( i > max ) {
-                log_print( "WARN: Value %f above max of %f, value clamped to %f\n", i, max, max );
+                log_warn( "Value %f above max of %f, value clamped to %f\n", i, max, max );
                 return max;
         }
         if ( i < min ) {
-                log_print( "WARN: Value %f under min of %f, value clamped to %f\n", i, min, min );
+                log_warn( "Value %f under min of %f, value clamped to %f\n", i, min, min );
                 return min;
         }
         return i;

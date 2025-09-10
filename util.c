@@ -100,15 +100,15 @@ int make_parent_directory( const char *path ) {
 
                 if ( res < 0 ) {
                         if ( errno == ENOENT ) {
-                                log_print( "DEBUG: Making directory %s", curpath );
+                                log_debug( "Making directory %s", curpath );
                                 if ( mkdir( curpath, 0700 ) < 0 ) {
-                                        log_print( "ERROR: Failed to make directory %s", curpath );
+                                        log_error( "Failed to make directory %s", curpath );
                                         perror( "" );
                                         free( normal );
                                         return -1;
                                 }
                         } else {
-                                log_print( "ERROR: Error stat-ing directory %s", curpath );
+                                log_error( "Error stat-ing directory %s", curpath );
                                 perror( "" );
                                 free( normal );
                                 return -1;

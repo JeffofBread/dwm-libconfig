@@ -76,7 +76,7 @@ you are here looking at this patch, optimizing down to the last atom is not like
 ## TODOs
 There are still a few things I want to adjust before releasing this as a proper patch:
 - [ ] Complete documentation. I have about 50% of it already elsewhere, it just needs to be completed and adapted to this version of the parser
-- [ ] Fix the very clumsy logging. `print_log()` is just a placeholder macro to bridge the gap between my fully fledged logger and dwm's original source. It needs a little more polish.
+- [x] Fix the very clumsy logging. `print_log()` is just a placeholder macro to bridge the gap between my fully fledged logger and dwm's original source. It needs a little more polish.
 - [x] If I can, I want to remove the need for most functions called by a bind to be made a non-const `Arg`. If I can solve this, it will reduce the codebase impact of the patch and reduce conflicts with other patches a little.
 
 ## Reaching Out
