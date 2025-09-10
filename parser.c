@@ -392,7 +392,17 @@ void config_cleanup( Configuration *master_config ) {
                 SAFE_FREE( master_config->tags[ i ] );
         }
 
-        SAFE_FREE( master_config->rules );
+        for ( i = 0; i < master_config->rules_count; i++ ) {
+                SAFE_FREE( master_config->rules[ i ].class );
+                SAFE_FREE( master_config->rules[ i ].instance );
+                SAFE_FREE( master_config->rules[ i ].title );
+        }
+
+        for ( i = 0; i < LENGTH( master_config->theme ); i++ ) {
+                for ( int j = 0; j < LENGTH( master_config->theme[ i ] ); j++ ) {
+                        SAFE_FREE( master_config->theme[ i ][ j ] );
+                }
+        }
 
         if ( !master_config->default_binds_loaded ) {
                 for ( i = 0; i < master_config->keybinds_count; i++ ) {
@@ -1114,17 +1124,31 @@ static int parse_tags_config( const config_t *config, Configuration *master_conf
 
 static int parse_theme( const config_setting_t *theme, Configuration *master_config ) {
 
+        const char *tmp_string = NULL;
+
         int theme_elements_failed_count = 0;
 
-        theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "font", &master_config->font, false );
+        const struct {
+                const char *path;
+                const char **value;
+        } Theme_Mapping[ ] = {
+                { "font", &master_config->font },
+                { "normal-foreground", &master_config->theme[ SchemeNorm ][ ColFg ] },
+                { "normal-background", &master_config->theme[ SchemeNorm ][ ColBg ] },
+                { "normal-border", &master_config->theme[ SchemeNorm ][ ColBorder ] },
+                { "selected-foreground", &master_config->theme[ SchemeSel ][ ColFg ] },
+                { "selected-background", &master_config->theme[ SchemeSel ][ ColBg ] },
+                { "selected-border", &master_config->theme[ SchemeSel ][ ColBorder ] },
+        };
 
-        theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "normal-foreground", &master_config->theme[ SchemeNorm ][ ColFg ],false );
-        theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "normal-background", &master_config->theme[ SchemeNorm ][ ColBg ],false );
-        theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "normal-border", &master_config->theme[ SchemeNorm ][ ColBorder ],false );
-
-        theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "selected-foreground", &master_config->theme[ SchemeSel ][ ColFg ],false );
-        theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "selected-background", &master_config->theme[ SchemeSel ][ ColBg ],false );
-        theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "selected-border", &master_config->theme[ SchemeSel ][ ColBorder ],false );
+        for ( int i = 0; i < LENGTH( Theme_Mapping ); i++ ) {
+                if ( !libconfig_setting_lookup_string( theme, Theme_Mapping[ i ].path, &tmp_string,false ) ) {
+                        SAFE_FREE( *Theme_Mapping[ i ].value );
+                        *Theme_Mapping[ i ].value = strdup( tmp_string );
+                } else {
+                        theme_elements_failed_count++;
+                }
+        }
 
         return theme_elements_failed_count;
 }
