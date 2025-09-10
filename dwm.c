@@ -113,7 +113,7 @@ typedef struct {
 	KeySym keysym;
 	void (*func)(const Arg *);
 	Arg arg;
-        enum Argument_Type argument_type;
+	enum Argument_Type argument_type;
 } Key;
 
 typedef struct {
