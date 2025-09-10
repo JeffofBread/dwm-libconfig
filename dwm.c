@@ -58,7 +58,7 @@
 
 /* enums */
 enum { CurNormal, CurResize, CurMove, CurLast }; /* cursor */
-enum { SchemeNorm, SchemeSel, SchemeCount }; /* color schemes */
+enum { SchemeNorm, SchemeSel }; /* color schemes */
 enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
        NetWMFullscreen, NetActiveWindow, NetWMWindowType,
        NetWMWindowTypeDialog, NetClientList, NetLast }; /* EWMH atoms */
@@ -88,7 +88,7 @@ typedef struct {
 	unsigned int button;
 	void (*func)(const Arg *arg);
 	Arg arg;
-        enum Argument_Type argument_type;
+	enum Argument_Type argument_type;
 } Button;
 
 typedef struct Monitor Monitor;
@@ -147,7 +147,7 @@ typedef struct {
 	char *instance;
 	char *title;
 	unsigned int tags;
-	bool isfloating; // TODO: Does this need to be a bool? Go back to int for less edits to dwm.c
+	int isfloating;
 	int monitor;
 } Rule;
 
@@ -195,6 +195,7 @@ static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
 static void movemouse(const Arg *arg);
 static Client *nexttiled(Client *c);
+static void parser_spawn(const Arg *arg);
 static void pop(Client *c);
 static void propertynotify(XEvent *e);
 static void quit(const Arg *arg);
@@ -279,13 +280,13 @@ static Monitor *mons, *selmon;
 static Window root, wmcheckwin;
 static char *custom_config_path = NULL;
 
-static const Layout layouts[] = {
-        /* symbol     arrange function */
-        { "[]=",      tile },    /* first entry is default */
-        { "><>",      NULL },    /* no layout function means floating behavior */
-        { "[M]",      monocle },
-};
+/* configuration, allows nested code to access above variables */
+#include "config.h"
 
+/* compile-time check if all tags fit into an unsigned int bit array. */
+struct NumTags { char limitexceeded[LENGTH(tags) > 31 ? -1 : 1]; };
+
+/* parser, allows for parsing dwm.conf at runtime */
 #include "parser.c"
 
 /* function implementations */
@@ -503,7 +504,7 @@ cleanup(void)
 	for (i = 0; i < LENGTH(dwm_config.theme); i++)
 		free(scheme[i]);
 	free(scheme);
-        config_cleanup( &dwm_config );
+	config_cleanup( &dwm_config );
 	XDestroyWindow(dpy, wmcheckwin);
 	drw_free(drw);
 	XSync(dpy, False);
@@ -1225,6 +1226,25 @@ nexttiled(Client *c)
 }
 
 void
+parser_spawn(const Arg *arg)
+{
+        struct sigaction sa;
+        if (fork() == 0) {
+                if (dpy) close(ConnectionNumber(dpy));
+                setsid();
+                sigemptyset(&sa.sa_mask);
+                sa.sa_flags = 0;
+                sa.sa_handler = SIG_DFL;
+                sigaction(SIGCHLD, &sa, NULL);
+                const char *cmd = arg->v;
+                char *argv[ ] = { "/bin/sh", "-c", (char *) cmd, NULL };
+                log_debug( "Attempting to spawn \"%s\"\n", (char *) cmd );
+                execvp( argv[ 0 ], argv );
+                die("dwm: execvp '%s' failed:", ((char **)arg->v)[0]);
+        }
+}
+
+void
 pop(Client *c)
 {
 	detach(c);
@@ -1575,13 +1595,15 @@ setup(void)
 	root = RootWindow(dpy, screen);
 	drw = drw_create(dpy, screen, root, sw, sh);
 
-        parse_config( custom_config_path, &dwm_config );
+	/* parse dwm.conf */
+	parse_config( custom_config_path, &dwm_config );
 
 	if (!drw_fontset_create(drw, ((const char **) &dwm_config.font), 1 ))
 		die("no fonts could be loaded.");
 	lrpad = drw->fonts->h;
 	bh = drw->fonts->h + 2;
 	updategeom();
+
 	/* init atoms */
 	utf8string = XInternAtom(dpy, "UTF8_STRING", False);
 	wmatom[WMProtocols] = XInternAtom(dpy, "WM_PROTOCOLS", False);
@@ -1667,6 +1689,8 @@ spawn(const Arg *arg)
 {
 	struct sigaction sa;
 
+	if (arg->v == dmenucmd)
+		dmenumon[0] = '0' + selmon->num;
 	if (fork() == 0) {
 		if (dpy)
 			close(ConnectionNumber(dpy));
@@ -1676,9 +1700,8 @@ spawn(const Arg *arg)
 		sa.sa_flags = 0;
 		sa.sa_handler = SIG_DFL;
 		sigaction(SIGCHLD, &sa, NULL);
-	        const char *cmd = arg->v;
-	        char *argv[ ] = { "/bin/sh", "-c", (char *) cmd, NULL };
-	        execvp( argv[ 0 ], argv );
+
+		execvp(((char **)arg->v)[0], (char **)arg->v);
 		die("dwm: execvp '%s' failed:", ((char **)arg->v)[0]);
 	}
 }

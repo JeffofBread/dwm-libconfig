@@ -27,7 +27,7 @@ typedef struct Configuration {
         char *tags[ 9 ];
 
         const char *font;
-        const char *theme[ SchemeCount ][ ColSchemeCount ];
+        const char *theme[ 2 ][ 3 ];
 
         unsigned int rules_count;
         Rule *rules;
@@ -54,7 +54,7 @@ static void load_default_keybind_config( Key **keybind_config, unsigned int *key
 static void load_default_master_config( Configuration *master_config );
 static int open_config( config_t *config, char **config_filepath, Configuration *master_config );
 static int parse_bind_argument( const char *argument_string, const enum Argument_Type *arg_type, Arg *arg, long double range_min, long double range_max );
-static int parse_bind_function( const char *function_string, enum Argument_Type *arg_type, void ( **function )( const Arg* ), Arg *arg, long double *range_min, long double *range_max );
+static int parse_bind_function( const char *function_string, enum Argument_Type *arg_type, void ( **function )( const Arg * ), Arg *arg, long double *range_min, long double *range_max );
 static int parse_bind_modifier( const char *modifier_string, unsigned int *modifier );
 static int parse_buttonbind( const char *buttonbind_string, Button *buttonbind, unsigned int max_keys );
 static int parse_buttonbind_button( const char *button_string, unsigned int *button );
@@ -231,89 +231,14 @@ static void backup_config( config_t *config ) {
 }
 
 static void load_default_buttonbind_config( Button **buttonbind_config, unsigned int *buttonbind_count ) {
-
-        const int MODKEY = Mod1Mask;
-        static const char *termcmd[]  = { "st", NULL };
-
-        static Button default_buttonbinds[ ] = {
-                /* click                event mask      button          function        argument */
-                { ClkLtSymbol,          0,              Button1,        setlayout,      {0} },
-                { ClkLtSymbol,          0,              Button3,        setlayout,      {.v = &layouts[2]} },
-                { ClkWinTitle,          0,              Button2,        zoom,           {0} },
-                { ClkStatusText,        0,              Button2,        spawn,          {.v = termcmd } },
-                { ClkClientWin,         MODKEY,         Button1,        movemouse,      {0} },
-                { ClkClientWin,         MODKEY,         Button2,        togglefloating, {0} },
-                { ClkClientWin,         MODKEY,         Button3,        resizemouse,    {0} },
-                { ClkTagBar,            0,              Button1,        view,           {0} },
-                { ClkTagBar,            0,              Button3,        toggleview,     {0} },
-                { ClkTagBar,            MODKEY,         Button1,        tag,            {0} },
-                { ClkTagBar,            MODKEY,         Button3,        toggletag,      {0} },
-        };
-
-        *buttonbind_count = LENGTH( default_buttonbinds );
-        *buttonbind_config = default_buttonbinds;
+        *buttonbind_count = LENGTH( buttons );
+        *buttonbind_config = (Button *) buttons;
 }
 
 // Default binds from dwm's `config.def.h`
 static void load_default_keybind_config( Key **keybind_config, unsigned int *keybind_count ) {
-
-        static const char *termcmd[]  = { "st", NULL };
-        static const char *dmenucmd[] = {
-                "dmenu_run",
-                "-fn", "monospace:size=10",
-                "-nb", "#222222",
-                "-nf", "#bbbbbb",
-                "-sb", "#005577",
-                "-sf", "#eeeeee",
-                NULL
-        };
-
-        const int MODKEY = Mod1Mask;
-        #define TAGKEYS(KEY,TAG) \
-                { MODKEY,                       KEY,      view,           {.ui = 1 << TAG} }, \
-                { MODKEY|ControlMask,           KEY,      toggleview,     {.ui = 1 << TAG} }, \
-                { MODKEY|ShiftMask,             KEY,      tag,            {.ui = 1 << TAG} }, \
-                { MODKEY|ControlMask|ShiftMask, KEY,      toggletag,      {.ui = 1 << TAG} },
-
-        static Key default_keybinds[ ] = {
-	        /* modifier                     key        function        argument */
-	        { MODKEY,                       XK_p,      spawn,          {.v = dmenucmd } },
-	        { MODKEY|ShiftMask,             XK_Return, spawn,          {.v = termcmd } },
-	        { MODKEY,                       XK_b,      togglebar,      {0} },
-	        { MODKEY,                       XK_j,      focusstack,     {.i = +1 } },
-	        { MODKEY,                       XK_k,      focusstack,     {.i = -1 } },
-	        { MODKEY,                       XK_i,      incnmaster,     {.i = +1 } },
-	        { MODKEY,                       XK_d,      incnmaster,     {.i = -1 } },
-	        { MODKEY,                       XK_h,      setmfact,       {.f = -0.05} },
-	        { MODKEY,                       XK_l,      setmfact,       {.f = +0.05} },
-	        { MODKEY,                       XK_Return, zoom,           {0} },
-	        { MODKEY,                       XK_Tab,    view,           {0} },
-	        { MODKEY|ShiftMask,             XK_c,      killclient,     {0} },
-	        { MODKEY,                       XK_t,      setlayout,      {.v = &layouts[0]} },
-	        { MODKEY,                       XK_f,      setlayout,      {.v = &layouts[1]} },
-	        { MODKEY,                       XK_m,      setlayout,      {.v = &layouts[2]} },
-	        { MODKEY,                       XK_space,  setlayout,      {0} },
-	        { MODKEY|ShiftMask,             XK_space,  togglefloating, {0} },
-	        { MODKEY,                       XK_0,      view,           {.ui = ~0 } },
-	        { MODKEY|ShiftMask,             XK_0,      tag,            {.ui = ~0 } },
-	        { MODKEY,                       XK_comma,  focusmon,       {.i = -1 } },
-	        { MODKEY,                       XK_period, focusmon,       {.i = +1 } },
-	        { MODKEY|ShiftMask,             XK_comma,  tagmon,         {.i = -1 } },
-	        { MODKEY|ShiftMask,             XK_period, tagmon,         {.i = +1 } },
-	        TAGKEYS(                        XK_1,                      0)
-	        TAGKEYS(                        XK_2,                      1)
-	        TAGKEYS(                        XK_3,                      2)
-	        TAGKEYS(                        XK_4,                      3)
-	        TAGKEYS(                        XK_5,                      4)
-	        TAGKEYS(                        XK_6,                      5)
-	        TAGKEYS(                        XK_7,                      6)
-	        TAGKEYS(                        XK_8,                      7)
-	        TAGKEYS(                        XK_9,                      8)
-	        { MODKEY|ShiftMask,             XK_q,      quit,           {0} },
-};
-
-        *keybind_count = LENGTH( default_keybinds );
-        *keybind_config = default_keybinds;
+        *keybind_count = LENGTH( keys );
+        *keybind_config = (Key *) keys;
 }
 
 static void load_default_master_config( Configuration *master_config ) {
@@ -588,7 +513,7 @@ static int parse_bind_argument( const char *argument_string, const enum Argument
         return 0;
 }
 
-static int parse_bind_function( const char *function_string, enum Argument_Type *arg_type, void ( **function )( const Arg* ), Arg *arg, long double *range_min, long double *range_max ) {
+static int parse_bind_function( const char *function_string, enum Argument_Type *arg_type, void ( **function )( const Arg * ), Arg *arg, long double *range_min, long double *range_max ) {
 
         const struct {
                 const char *name;
@@ -604,12 +529,12 @@ static int parse_bind_function( const char *function_string, enum Argument_Type 
                 { "movemouse", movemouse, ARG_TYPE_NONE },
                 { "quit", quit, ARG_TYPE_NONE },
                 { "resizemouse", resizemouse, ARG_TYPE_NONE },
-                { "setlayout-tiled", setlayout, ARG_TYPE_PROVIDED, 0, 0, { .v = &layouts[0] } },
-                { "setlayout-floating", setlayout, ARG_TYPE_PROVIDED, 0, 0, { .v = &layouts[1] } },
-                { "setlayout-monocle", setlayout, ARG_TYPE_PROVIDED, 0, 0, { .v = &layouts[2] } },
+                { "setlayout-tiled", setlayout, ARG_TYPE_PROVIDED, 0, 0, { .v = &layouts[ 0 ] } },
+                { "setlayout-floating", setlayout, ARG_TYPE_PROVIDED, 0, 0, { .v = &layouts[ 1 ] } },
+                { "setlayout-monocle", setlayout, ARG_TYPE_PROVIDED, 0, 0, { .v = &layouts[ 2 ] } },
                 { "setlayout-toggle", setlayout, ARG_TYPE_NONE },
                 { "setmfact", setmfact, ARG_TYPE_FLOAT, -0.95f, 1.95f },
-                { "spawn", spawn, ARG_TYPE_POINTER },
+                { "spawn", parser_spawn, ARG_TYPE_POINTER },
                 { "tag", tag, ARG_TYPE_INT, -1, TAGMASK },
                 { "tagmon", tagmon, ARG_TYPE_INT, -99, 99 },
                 { "togglebar", togglebar, ARG_TYPE_NONE },
@@ -1120,7 +1045,7 @@ static int parse_rules_config( const config_t *config, Rule **rules_config, unsi
 
                                 failed_rules_elements_count -= libconfig_setting_lookup_uint( rule, "tag-mask", &( *rules_config )[ i ].tags, false, 0, TAGMASK );
                                 failed_rules_elements_count -= libconfig_setting_lookup_int( rule, "monitor", &( *rules_config )[ i ].monitor, false, -1, 99 );
-                                failed_rules_elements_count -= libconfig_setting_lookup_bool( rule, "floating", &( *rules_config )[ i ].isfloating, false );
+                                failed_rules_elements_count -= libconfig_setting_lookup_int( rule, "floating", &( *rules_config )[ i ].isfloating, false, 0, 1 );
                         } else {
                                 log_error( "Rule %d returned null, unable to parse\n", i + 1 );
                                 failed_rules_count++;
@@ -1193,13 +1118,13 @@ static int parse_theme( const config_setting_t *theme, Configuration *master_con
 
         theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "font", &master_config->font, false );
 
-        theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "normal-foreground", &master_config->theme[SchemeNorm][ColFg],false );
-        theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "normal-background", &master_config->theme[SchemeNorm][ColBg],false );
-        theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "normal-border", &master_config->theme[SchemeNorm][ColBorder],false );
+        theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "normal-foreground", &master_config->theme[ SchemeNorm ][ ColFg ],false );
+        theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "normal-background", &master_config->theme[ SchemeNorm ][ ColBg ],false );
+        theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "normal-border", &master_config->theme[ SchemeNorm ][ ColBorder ],false );
 
-        theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "selected-foreground", &master_config->theme[SchemeSel][ColFg],false );
-        theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "selected-background", &master_config->theme[SchemeSel][ColBg],false );
-        theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "selected-border", &master_config->theme[SchemeSel][ColBorder],false );
+        theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "selected-foreground", &master_config->theme[ SchemeSel ][ ColFg ],false );
+        theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "selected-background", &master_config->theme[ SchemeSel ][ ColBg ],false );
+        theme_elements_failed_count -= libconfig_setting_lookup_string( theme, "selected-border", &master_config->theme[ SchemeSel ][ ColBorder ],false );
 
         return theme_elements_failed_count;
 }
