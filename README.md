@@ -70,7 +70,7 @@ scenarios I found that it can add around 20-25ms of delay when accessing element
 resource system or VM.
 
 With all that said, real world performance losses are generally imperceptible. I have a relatively modern laptop and desktop PC, and both
-see less than 30ms to parse a complex configuration, and keybind / button bind latency of less than 3ms at worst. And, lets be honest, if
+see less than 3ms to parse a complex configuration, and keybind / button bind latency of less than .3ms at worst. And, lets be honest, if
 you are here looking at this patch, optimizing down to the last atom is not likely your chief concern.
 
 ## TODOs
