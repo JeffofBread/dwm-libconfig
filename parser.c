@@ -469,6 +469,9 @@ int parse_config( const char *custom_config_filepath, Configuration *master_conf
         total_errors += parse_tags_config( &libconfig_config, master_config );
         total_errors += parse_theme_config( &libconfig_config, master_config );
 
+        // The error requirement being 0 may be a bit strict, I am not sure yet. May need
+        // some relaxing or possibly come up with a better way of calculating if a config
+        // passes, or is valid enough to warrant backing up.
         if ( total_errors == 0 && !master_config->default_binds_loaded ) {
                 backup_config( &libconfig_config );
         } else {
