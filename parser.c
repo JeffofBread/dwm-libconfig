@@ -24,7 +24,7 @@ typedef struct Configuration {
         unsigned int borderpx, snap, nmaster, refreshrate;
         float mfact;
 
-        char *tags[ 9 ];
+        char *tags[ LENGTH( tags ) ];
 
         const char *font;
         const char *theme[ 2 ][ 3 ];
@@ -287,7 +287,7 @@ static void load_default_master_config( Configuration *master_config ) {
         master_config->theme[ SchemeSel ][ ColBg ] = strdup( colors[ SchemeSel ][ ColBg ] );
         master_config->theme[ SchemeSel ][ ColBorder ] = strdup( colors[ SchemeSel ][ ColBorder ] );
 
-        for ( int i = 0; i < LENGTH( tags ); i++ ) {
+        for ( int i = 0; i < LENGTH( master_config->tags ); i++ ) {
                 master_config->tags[ i ] = strdup( tags[ i ] );
         }
 }
@@ -1076,11 +1076,11 @@ static int parse_tags_config( const config_t *config, Configuration *master_conf
 
         int tags_failed_count = 0;
 
-        const config_setting_t *tags = config_lookup( config, "tag-names" );
-        if ( tags != NULL ) {
+        const config_setting_t *tag_names = config_lookup( config, "tag-names" );
+        if ( tag_names != NULL ) {
                 int i = 0;
                 const char *tag_name = NULL;
-                const int tags_count = config_setting_length( tags );
+                const int tags_count = config_setting_length( tag_names );
 
                 if ( tags_count == 0 ) {
                         log_warn( "No tag names detected while parsing config, default tag names will be used.\n" );
@@ -1089,14 +1089,14 @@ static int parse_tags_config( const config_t *config, Configuration *master_conf
 
                 log_debug( "Tags detected: %d\n", tags_count );
 
-                if ( tags_count > 9 ) {
-                        log_warn( "More than 9 tag names detected (%d) while parsing config, only the first 9 will be used.\n", tags_count );
-                } else if ( tags_count < 9 ) {
-                        log_warn( "Less than 9 tags detected (%d) while parsing config, default tags will be used to fill the remainder.\n", tags_count );
+                if ( tags_count > LENGTH( tags ) ) {
+                        log_warn( "More than %lu tag names detected (%d were detected) while parsing config, only the first %lu will be used.\n", LENGTH( tags ), tags_count, LENGTH( tags ) );
+                } else if ( tags_count < LENGTH( tags ) ) {
+                        log_warn( "Less than %lu tag names detected while parsing config, filler tags will be used for the remainder.\n", LENGTH( tags ) );
                 }
 
                 for ( i = 0; i < tags_count && i < 9; i++ ) {
-                        tag_name = config_setting_get_string_elem( tags, i );
+                        tag_name = config_setting_get_string_elem( tag_names, i );
 
                         if ( tag_name == NULL ) {
                                 log_error( "Problem reading tag array element %d: Value doesn't exist or isn't a string.\n", i + 1 );
