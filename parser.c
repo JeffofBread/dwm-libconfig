@@ -79,10 +79,10 @@ static inline int libconfig_lookup_bool( const config_t *config, const char *pat
         int tmp = 0;
         if ( config_lookup_bool( config, path, &tmp ) != CONFIG_TRUE ) {
                 if ( optional ) {
-                        log_debug( "Optional value \"%s\" not found, skipping.\n", path );
+                        log_debug( "Optional value \"%s\" not found, skipping\n", path );
                         return 0;
                 }
-                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type.\n", path );
+                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type\n", path );
                 return -1;
         }
         *value = tmp;
@@ -93,10 +93,10 @@ static inline int libconfig_setting_lookup_bool( const config_setting_t *setting
         int tmp = 0;
         if ( config_setting_lookup_bool( setting, path, &tmp ) != CONFIG_TRUE ) {
                 if ( optional ) {
-                        log_debug( "Optional value \"%s\" not found, skipping.\n", path );
+                        log_debug( "Optional value \"%s\" not found, skipping\n", path );
                         return 0;
                 }
-                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type.\n", path );
+                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type\n", path );
                 return -1;
         }
         *value = tmp;
@@ -106,10 +106,10 @@ static inline int libconfig_setting_lookup_bool( const config_setting_t *setting
 static inline int libconfig_lookup_int( const config_t *config, const char *path, int *value, const bool optional, const int range_min, const int range_max ) {
         if ( config_lookup_int( config, path, value ) != CONFIG_TRUE ) {
                 if ( optional ) {
-                        log_debug( "Optional value \"%s\" not found, skipping.\n", path );
+                        log_debug( "Optional value \"%s\" not found, skipping\n", path );
                         return 0;
                 }
-                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type.\n", path );
+                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type\n", path );
                 return -1;
         }
         *value = normalize_range_int( *value, range_min, range_max );
@@ -119,10 +119,10 @@ static inline int libconfig_lookup_int( const config_t *config, const char *path
 static inline int libconfig_setting_lookup_int( const config_setting_t *setting, const char *path, int *value, const bool optional, const int range_min, const int range_max ) {
         if ( config_setting_lookup_int( setting, path, value ) != CONFIG_TRUE ) {
                 if ( optional ) {
-                        log_debug( "Optional value \"%s\" not found, skipping.\n", path );
+                        log_debug( "Optional value \"%s\" not found, skipping\n", path );
                         return 0;
                 }
-                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type.\n", path );
+                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type\n", path );
                 return -1;
         }
         *value = normalize_range_int( *value, range_min, range_max );
@@ -133,10 +133,10 @@ static inline int libconfig_lookup_uint( const config_t *config, const char *pat
         int tmp = 0;
         if ( config_lookup_int( config, path, &tmp ) != CONFIG_TRUE ) {
                 if ( optional ) {
-                        log_debug( "Optional value \"%s\" not found, skipping.\n", path );
+                        log_debug( "Optional value \"%s\" not found, skipping\n", path );
                         return 0;
                 }
-                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type.\n", path );
+                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type\n", path );
                 return -1;
         }
         *value = normalize_range_uint( tmp, range_min, range_max );
@@ -148,10 +148,10 @@ static inline int libconfig_setting_lookup_uint( const config_setting_t *setting
         int tmp = 0;
         if ( config_setting_lookup_int( setting, path, &tmp ) != CONFIG_TRUE ) {
                 if ( optional ) {
-                        log_debug( "Optional value \"%s\" not found, skipping.\n", path );
+                        log_debug( "Optional value \"%s\" not found, skipping\n", path );
                         return 0;
                 }
-                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type.\n", path );
+                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type\n", path );
                 return -1;
         }
         *value = normalize_range_uint( tmp, range_min, range_max );
@@ -162,10 +162,10 @@ static inline int libconfig_lookup_float( const config_t *config, const char *pa
         double tmp = 0;
         if ( config_lookup_float( config, path, &tmp ) != CONFIG_TRUE ) {
                 if ( optional ) {
-                        log_debug( "Optional value \"%s\" not found, skipping.\n", path );
+                        log_debug( "Optional value \"%s\" not found, skipping\n", path );
                         return 0;
                 }
-                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type.\n", path );
+                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type\n", path );
                 return -1;
         }
         *value = normalize_range_float( tmp, range_min, range_max );
@@ -175,10 +175,10 @@ static inline int libconfig_lookup_float( const config_t *config, const char *pa
 static inline int libconfig_lookup_string( const config_t *config, const char *path, const char **value, const bool optional ) {
         if ( config_lookup_string( config, path, value ) != CONFIG_TRUE ) {
                 if ( optional ) {
-                        log_debug( "Optional value \"%s\" not found, skipping.\n", path );
+                        log_debug( "Optional value \"%s\" not found, skipping\n", path );
                         return 0;
                 }
-                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type.\n", path );
+                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type\n", path );
                 return -1;
         }
         return 0;
@@ -187,10 +187,10 @@ static inline int libconfig_lookup_string( const config_t *config, const char *p
 static inline int libconfig_setting_lookup_string( const config_setting_t *setting, const char *path, const char **value, const bool optional ) {
         if ( config_setting_lookup_string( setting, path, value ) == CONFIG_FALSE ) {
                 if ( optional ) {
-                        log_debug( "Optional value \"%s\" not found, skipping.\n", path );
+                        log_debug( "Optional value \"%s\" not found, skipping\n", path );
                         return 0;
                 }
-                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type.\n", path );
+                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type\n", path );
                 return -1;
         }
         return 0;
@@ -327,14 +327,14 @@ static int open_config( config_t *config, char **config_filepath, Configuration 
                 log_debug( "Attempting to open config file \"%s\"\n", config_filepaths[ i ] );
 
                 if ( config_filepaths[ i ] == NULL ) {
-                        log_warn( "config_filepaths[%d] was null, unable to lookup intended config. Likely a memory allocation error.\n", i );
+                        log_warn( "config_filepaths[%d] was null, unable to lookup intended config. Likely a memory allocation error\n", i );
                         continue;
                 }
 
                 tmp_file = fopen( config_filepaths[ i ], "r" );
 
                 if ( tmp_file == NULL ) {
-                        log_warn( "Unable to open config file \"%s\".\n", config_filepaths[ i ] );
+                        log_warn( "Unable to open config file \"%s\"\n", config_filepaths[ i ] );
                         continue;
                 }
 
@@ -361,7 +361,7 @@ static int open_config( config_t *config, char **config_filepath, Configuration 
                 return 0;
         }
 
-        log_error( "Unable to load any configs. Loading hardcoded default config values and exiting parsing.\n" );
+        log_error( "Unable to load any configs. Loading hardcoded default config values and exiting parsing\n" );
         load_default_keybind_config( &master_config->keybinds, &master_config->keybinds_count );
         load_default_buttonbind_config( &master_config->buttonbinds, &master_config->buttonbinds_count );
 
@@ -791,7 +791,7 @@ static int parse_buttonbinds_config( const config_t *config, Button **buttonbind
                 log_debug( "%d buttonbinds failed to be parsed\n", failed_buttonbinds_count );
         } else {
                 log_error( "Problem reading config value \"buttonbinds\": Not found\n" );
-                log_warn( "Default buttonbinds will be loaded. It is recommended you fix the config and reload dwm.\n" );
+                log_warn( "Default buttonbinds will be loaded. It is recommended you fix the config and reload dwm\n" );
         }
 
         return failed_buttonbinds_count;
@@ -990,7 +990,7 @@ static int parse_keybinds_config( const config_t *config, Key **keybind_config, 
                 log_debug( "%d keybinds failed to be parsed\n", failed_keybinds );
         } else {
                 log_error( "Problem reading config value \"keybinds\": Not found\n" );
-                log_warn( "Default keybinds will be loaded. It is recommended you fix the config and reload dwm.\n" );
+                log_warn( "Default keybinds will be loaded. It is recommended you fix the config and reload dwm\n" );
         }
 
         return failed_keybinds;
@@ -1083,23 +1083,23 @@ static int parse_tags_config( const config_t *config, Configuration *master_conf
                 const int tags_count = config_setting_length( tag_names );
 
                 if ( tags_count == 0 ) {
-                        log_warn( "No tag names detected while parsing config, default tag names will be used.\n" );
+                        log_warn( "No tag names detected while parsing config, default tag names will be used\n" );
                         return 1;
                 }
 
                 log_debug( "Tags detected: %d\n", tags_count );
 
                 if ( tags_count > LENGTH( tags ) ) {
-                        log_warn( "More than %lu tag names detected (%d were detected) while parsing config, only the first %lu will be used.\n", LENGTH( tags ), tags_count, LENGTH( tags ) );
+                        log_warn( "More than %lu tag names detected (%d were detected) while parsing config, only the first %lu will be used\n", LENGTH( tags ), tags_count, LENGTH( tags ) );
                 } else if ( tags_count < LENGTH( tags ) ) {
-                        log_warn( "Less than %lu tag names detected while parsing config, filler tags will be used for the remainder.\n", LENGTH( tags ) );
+                        log_warn( "Less than %lu tag names detected while parsing config, filler tags will be used for the remainder\n", LENGTH( tags ) );
                 }
 
                 for ( i = 0; i < tags_count && i < 9; i++ ) {
                         tag_name = config_setting_get_string_elem( tag_names, i );
 
                         if ( tag_name == NULL ) {
-                                log_error( "Problem reading tag array element %d: Value doesn't exist or isn't a string.\n", i + 1 );
+                                log_error( "Problem reading tag array element %d: Value doesn't exist or isn't a string\n", i + 1 );
                                 tags_failed_count++;
                                 continue;
                         }
@@ -1165,14 +1165,14 @@ static int parse_theme_config( const config_t *config, Configuration *master_con
 
                 if ( detected_theme_count == 0 ) {
                         log_error( "Problem reading config value \"themes\": Not themes provided\n" );
-                        log_warn( "Default theme will be loaded.\n" );
+                        log_warn( "Default theme will be loaded\n" );
                         return 1;
                 }
 
                 log_debug( "Themes detected: %d\n", detected_theme_count );
 
                 if ( detected_theme_count > 1 ) {
-                        log_warn( "More than 1 theme detected. dwm can only use the first theme in list \"themes\".\n" );
+                        log_warn( "More than 1 theme detected. dwm can only use the first theme in list \"themes\"\n" );
                         detected_theme_count = 1;
                 }
 
@@ -1196,7 +1196,7 @@ static int parse_theme_config( const config_t *config, Configuration *master_con
 
         } else {
                 log_error( "Problem reading config value \"themes\": Not found\n" );
-                log_warn( "Default theme will be loaded.\n" );
+                log_warn( "Default theme will be loaded\n" );
                 return 1;
         }
 
