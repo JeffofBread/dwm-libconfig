@@ -2,19 +2,16 @@
 
 Do you want to completely up-end one of the core features of [suckless](https://suckless.org/) software? Well this is the patch for you.
 dwm-libconfig is a patch for dwm that adds runtime configuration for dwm using [libconfig](https://hyperrealm.github.io/libconfig/). It
-completely removes the need for the traditional `config.h`, replacing it with a configuration file called 'dwm.conf'. This means that to
-adjust configuration values in dwm, you no longer need to recompile. Assuming you don't need to add new configuration options to the
-parser you will never need to recompile dwm.
+replaces the need to edit `config.h` for configuration changes with `dwm.conf`, a runtime parsed configuration file. This means that to
+adjust configuration values in dwm, you no longer need to recompile. Assuming you don't need to change the behavior of the parser or dwm,
+you don't need to recompile and re-install. Want to change your theme? Just edit the `dwm.conf` file and restart dwm, simple as that.
+I highly recommend the [restartsig](https://dwm.suckless.org/patches/restartsig/) patch for that reason.
 
 Some notes however, this is a backported featured from a very different project. Certain design choices or style are definitely a little
 out of place for a [suckless](https://suckless.org/) application, but to be honest, I didn't to rewrite it completely just to "fit" better.
 It is quite overbuild for the level of configuration dwm offers by default. That being said, I did design it to be quite robust and easily
 extensible. With a little editing you can add a wide variety of new configuration values or edit the names or ranges of existing ones with
 relative ease. If you would like to reach out, please do, I am more than happy to help. See [Reaching Out](#reaching-out) for contact info.
-
-## Warning
-I have tried my best to make this patch minimally invasive, but by its nature, is going to be quite invasive and will not work well with
-many other patches without tweaking. This patch removes `config.h`, which many patches need.
 
 ## Requirements
 The patch is based on dwm 6.6, so it is recommended to start there. You will need all the base dwm dependencies plus 
@@ -78,7 +75,8 @@ There are still a few things I want to adjust before releasing this as a proper 
 - [ ] Complete documentation. I have about 50% of it already elsewhere, it just needs to be completed and adapted to this version of the parser
 - [x] Fix the very clumsy logging. `print_log()` is just a placeholder macro to bridge the gap between my fully fledged logger and dwm's original source. It needs a little more polish.
 - [x] If I can, I want to remove the need for most functions called by a bind to be made a non-const `Arg`. If I can solve this, it will reduce the codebase impact of the patch and reduce conflicts with other patches a little.
-- [ ] Reduce codebase impact as much as possible to improve patch compatability
+- [x] Reduce codebase impact as much as possible to improve patch compatability
+- [ ] Add an extra diff(s) to support patches like [restartsig](https://dwm.suckless.org/patches/restartsig/) out of the box
 
 ## Reaching Out
 I am more than happy to help you out if you are having issues or just want to ask some questions about the patch. The best way is to reach
