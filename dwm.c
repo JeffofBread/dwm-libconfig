@@ -54,6 +54,7 @@
 #define MOUSEMASK               (BUTTONMASK|PointerMotionMask)
 #define WIDTH(X)                ((X)->w + 2 * (X)->bw)
 #define HEIGHT(X)               ((X)->h + 2 * (X)->bw)
+#define TAGMASK                 ((1 << LENGTH(tags)) - 1)
 #define TEXTW(X)                (drw_fontset_getwidth(drw, (X)) + lrpad)
 
 /* enums */
@@ -72,7 +73,6 @@ enum Argument_Type {
         ARG_TYPE_UINT,
         ARG_TYPE_FLOAT,
         ARG_TYPE_POINTER,
-        ARG_TYPE_PROVIDED,
 };
 
 typedef union {
@@ -87,7 +87,7 @@ typedef struct {
 	unsigned int mask;
 	unsigned int button;
 	void (*func)(const Arg *arg);
-	Arg arg;
+	const Arg arg;
 	enum Argument_Type argument_type;
 } Button;
 
@@ -112,7 +112,7 @@ typedef struct {
 	unsigned int mod;
 	KeySym keysym;
 	void (*func)(const Arg *);
-	Arg arg;
+	const Arg arg;
 	enum Argument_Type argument_type;
 } Key;
 
@@ -195,7 +195,6 @@ static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
 static void movemouse(const Arg *arg);
 static Client *nexttiled(Client *c);
-static void parser_spawn(const Arg *arg);
 static void pop(Client *c);
 static void propertynotify(XEvent *e);
 static void quit(const Arg *arg);
@@ -1223,25 +1222,6 @@ nexttiled(Client *c)
 {
 	for (; c && (c->isfloating || !ISVISIBLE(c)); c = c->next);
 	return c;
-}
-
-void
-parser_spawn(const Arg *arg)
-{
-        struct sigaction sa;
-        if (fork() == 0) {
-                if (dpy) close(ConnectionNumber(dpy));
-                setsid();
-                sigemptyset(&sa.sa_mask);
-                sa.sa_flags = 0;
-                sa.sa_handler = SIG_DFL;
-                sigaction(SIGCHLD, &sa, NULL);
-                const char *cmd = arg->v;
-                char *argv[ ] = { "/bin/sh", "-c", (char *) cmd, NULL };
-                log_debug( "Attempting to spawn \"%s\"\n", (char *) cmd );
-                execvp( argv[ 0 ], argv );
-                die("dwm: execvp '%s' failed:", ((char **)arg->v)[0]);
-        }
 }
 
 void

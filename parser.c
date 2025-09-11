@@ -41,8 +41,6 @@ typedef struct Configuration {
 
 static Configuration dwm_config = { 0 };
 
-#define TAGMASK ((1 << LENGTH(dwm_config.tags)) - 1)
-
 // Public functions
 static void config_cleanup( Configuration *master_config );
 static int parse_config( const char *custom_config_filepath, Configuration *master_config );
@@ -54,7 +52,7 @@ static void load_default_keybind_config( Key **keybind_config, unsigned int *key
 static void load_default_master_config( Configuration *master_config );
 static int open_config( config_t *config, char **config_filepath, Configuration *master_config );
 static int parse_bind_argument( const char *argument_string, const enum Argument_Type *arg_type, Arg *arg, long double range_min, long double range_max );
-static int parse_bind_function( const char *function_string, enum Argument_Type *arg_type, void ( **function )( const Arg * ), Arg *arg, long double *range_min, long double *range_max );
+static int parse_bind_function( const char *function_string, enum Argument_Type *arg_type, void ( **function )( const Arg * ), long double *range_min, long double *range_max );
 static int parse_bind_modifier( const char *modifier_string, unsigned int *modifier );
 static int parse_buttonbind( const char *buttonbind_string, Button *buttonbind, unsigned int max_keys );
 static int parse_buttonbind_button( const char *button_string, unsigned int *button );
@@ -69,6 +67,12 @@ static int parse_rules_config( const config_t *config, Rule **rules_config, unsi
 static int parse_tags_config( const config_t *config, Configuration *master_config );
 static int parse_theme( const config_setting_t *theme, Configuration *master_config );
 static int parse_theme_config( const config_t *config, Configuration *master_config );
+
+// Wrapper functions for better compatability
+static void parser_spawn( const Arg *arg );
+static void setlayout_floating( const Arg *arg );
+static void setlayout_monocle( const Arg *arg );
+static void setlayout_tiled( const Arg *arg );
 
 static inline int libconfig_lookup_bool( const config_t *config, const char *path, bool *value, const bool optional ) {
         int tmp = 0;
@@ -407,14 +411,16 @@ void config_cleanup( Configuration *master_config ) {
         if ( !master_config->default_binds_loaded ) {
                 for ( i = 0; i < master_config->keybinds_count; i++ ) {
                         if ( master_config->keybinds[ i ].argument_type == ARG_TYPE_POINTER ) {
-                                SAFE_FREE( master_config->keybinds[ i ].arg.v );
+                                Arg *tmp = (Arg *) &master_config->keybinds[ i ].arg;
+                                SAFE_FREE( tmp->v );
                         }
                 }
                 SAFE_FREE( master_config->keybinds );
 
                 for ( i = 0; i < master_config->buttonbinds_count; i++ ) {
                         if ( master_config->buttonbinds[ i ].argument_type == ARG_TYPE_POINTER ) {
-                                SAFE_FREE( master_config->buttonbinds[ i ].arg.v );
+                                Arg *tmp = (Arg *) &master_config->buttonbinds[ i ].arg;
+                                SAFE_FREE( tmp->v );
                         }
                 }
                 SAFE_FREE( master_config->buttonbinds );
@@ -522,8 +528,6 @@ static int parse_bind_argument( const char *argument_string, const enum Argument
                         }
                         log_trace( "Argument type pointer (string): \"%s\", (pointer): %p\n", argument_string, arg->v );
                         break;
-                case ARG_TYPE_PROVIDED: log_error( "ARG_TYPE_PROVIDED somehow entered parse_bind_argument()\n" );
-                        return -1;
                 default: log_error( "Unknown argument type during bind parsing: %d\n", *arg_type );
                         return -1;
         }
@@ -531,14 +535,13 @@ static int parse_bind_argument( const char *argument_string, const enum Argument
         return 0;
 }
 
-static int parse_bind_function( const char *function_string, enum Argument_Type *arg_type, void ( **function )( const Arg * ), Arg *arg, long double *range_min, long double *range_max ) {
+static int parse_bind_function( const char *function_string, enum Argument_Type *arg_type, void ( **function )( const Arg * ), long double *range_min, long double *range_max ) {
 
         const struct {
                 const char *name;
                 void ( *func )( const Arg * );
                 enum Argument_Type arg_type;
                 const long double range_min, range_max;
-                const Arg provided_argument;
         } function_alias_map[ ] = {
                 { "focusmon", focusmon, ARG_TYPE_INT, -99, 99 },
                 { "focusstack", focusstack, ARG_TYPE_INT, -99, 99 },
@@ -547,9 +550,9 @@ static int parse_bind_function( const char *function_string, enum Argument_Type 
                 { "movemouse", movemouse, ARG_TYPE_NONE },
                 { "quit", quit, ARG_TYPE_NONE },
                 { "resizemouse", resizemouse, ARG_TYPE_NONE },
-                { "setlayout-tiled", setlayout, ARG_TYPE_PROVIDED, 0, 0, { .v = &layouts[ 0 ] } },
-                { "setlayout-floating", setlayout, ARG_TYPE_PROVIDED, 0, 0, { .v = &layouts[ 1 ] } },
-                { "setlayout-monocle", setlayout, ARG_TYPE_PROVIDED, 0, 0, { .v = &layouts[ 2 ] } },
+                { "setlayout-tiled", setlayout_tiled, ARG_TYPE_NONE },
+                { "setlayout-floating", setlayout_floating, ARG_TYPE_NONE },
+                { "setlayout-monocle", setlayout_monocle, ARG_TYPE_NONE },
                 { "setlayout-toggle", setlayout, ARG_TYPE_NONE },
                 { "setmfact", setmfact, ARG_TYPE_FLOAT, -0.95f, 1.95f },
                 { "spawn", parser_spawn, ARG_TYPE_POINTER },
@@ -570,7 +573,6 @@ static int parse_bind_function( const char *function_string, enum Argument_Type 
                         *arg_type = function_alias_map[ i ].arg_type;
                         *range_min = function_alias_map[ i ].range_min;
                         *range_max = function_alias_map[ i ].range_max;
-                        if ( function_alias_map[ i ].arg_type == ARG_TYPE_PROVIDED ) *arg = function_alias_map[ i ].provided_argument;
                         log_trace( "Function successfully parsed as %p\n", (void *) function );
                         return 0;
                 }
@@ -630,8 +632,8 @@ static int parse_buttonbind( const char *buttonbind_string, Button *buttonbind, 
         char *function_token = strtok( NULL, "," );
         if ( function_token ) function_token = trim_whitespace( function_token );
 
-        char *Argoken = strtok( NULL, "," );
-        if ( Argoken ) Argoken = trim_whitespace( Argoken );
+        char *argument_token = strtok( NULL, "," );
+        if ( argument_token ) argument_token = trim_whitespace( argument_token );
 
         if ( !modifier_token_list || !function_token || !click_token || modifier_token_list[ 0 ] == '\0' || function_token[ 0 ] == '\0' || click_token[ 0 ] == '\0' ) {
                 log_error( "Invalid buttonbind string (expected format: \"mod+key, click, function, arg (if necessary)\" and got \"%s\"\n", buttonbind_string );
@@ -680,14 +682,14 @@ static int parse_buttonbind( const char *buttonbind_string, Button *buttonbind, 
         }
 
         long double range_min, range_max;
-        if ( parse_bind_function( function_token, &buttonbind->argument_type, &buttonbind->func, &buttonbind->arg, &range_min, &range_max ) ) {
+        if ( parse_bind_function( function_token, &buttonbind->argument_type, &buttonbind->func, &range_min, &range_max ) ) {
                 log_error( "Invalid function \"%s\" in buttonbind \"%s\"\n", function_token, buttonbind_string );
                 return -1;
         }
 
-        if ( buttonbind->argument_type != ARG_TYPE_NONE && buttonbind->argument_type != ARG_TYPE_PROVIDED ) {
-                if ( parse_bind_argument( Argoken, &buttonbind->argument_type, &buttonbind->arg, range_min, range_max ) ) {
-                        log_error( "Invalid argument \"%s\" in buttonbind \"%s\"\n", Argoken, buttonbind_string );
+        if ( buttonbind->argument_type != ARG_TYPE_NONE ) {
+                if ( parse_bind_argument( argument_token, &buttonbind->argument_type, (Arg *) &buttonbind->arg, range_min, range_max ) ) {
+                        log_error( "Invalid argument \"%s\" in buttonbind \"%s\"\n", argument_token, buttonbind_string );
                         return -1;
                 }
         } else {
@@ -880,8 +882,8 @@ static int parse_keybind( const char *keybind_string, Key *keybind, const unsign
         char *function_token = strtok( NULL, "," );
         if ( function_token ) function_token = trim_whitespace( function_token );
 
-        char *Argoken = strtok( NULL, "," );
-        if ( Argoken ) Argoken = trim_whitespace( Argoken );
+        char *argument_token = strtok( NULL, "," );
+        if ( argument_token ) argument_token = trim_whitespace( argument_token );
 
         if ( !modifier_token_list || !function_token || modifier_token_list[ 0 ] == '\0' || function_token[ 0 ] == '\0' ) {
                 log_error( "Invalid keybind string (expected format: \"mod+key, function, arg (if necessary)\" and got \"%s\"\n", keybind_string );
@@ -889,14 +891,14 @@ static int parse_keybind( const char *keybind_string, Key *keybind, const unsign
         }
 
         long double range_min, range_max;
-        if ( parse_bind_function( function_token, &keybind->argument_type, &keybind->func, &keybind->arg, &range_min, &range_max ) ) {
+        if ( parse_bind_function( function_token, &keybind->argument_type, &keybind->func, &range_min, &range_max ) ) {
                 log_error( "Invalid function \"%s\" in keybind \"%s\"\n", function_token, keybind_string );
                 return -1;
         }
 
-        if ( keybind->argument_type != ARG_TYPE_NONE && keybind->argument_type != ARG_TYPE_PROVIDED ) {
-                if ( parse_bind_argument( Argoken, &keybind->argument_type, &keybind->arg, range_min, range_max ) ) {
-                        log_error( "Invalid argument \"%s\" in keybind \"%s\"\n", Argoken, keybind_string );
+        if ( keybind->argument_type != ARG_TYPE_NONE ) {
+                if ( parse_bind_argument( argument_token, &keybind->argument_type, (Arg *) &keybind->arg, range_min, range_max ) ) {
+                        log_error( "Invalid argument \"%s\" in keybind \"%s\"\n", argument_token, keybind_string );
                         return -1;
                 }
         } else {
@@ -1209,4 +1211,33 @@ static int parse_theme_config( const config_t *config, Configuration *master_con
         }
 
         return failed_themes_count + failed_theme_elements_count;
+}
+
+// Wrapper functions for compatability
+
+void parser_spawn( const Arg *arg ) {
+
+        // Process argv to work with default spawn() behavior
+        const char *cmd = arg->v;
+        char *argv[ ] = { "/bin/sh", "-c", (char *) cmd, NULL };
+        log_debug( "Attempting to spawn \"%s\"\n", (char *) cmd );
+
+        // Call spawn with our new processed value
+        const Arg tmp = { .v = argv };
+        spawn( &tmp );
+}
+
+static void setlayout_floating( const Arg *arg ) {
+        const Arg tmp = { .v = &layouts[ 1 ] };
+        setlayout( &tmp );
+}
+
+static void setlayout_monocle( const Arg *arg ) {
+        const Arg tmp = { .v = &layouts[ 2 ] };
+        setlayout( &tmp );
+}
+
+static void setlayout_tiled( const Arg *arg ) {
+        const Arg tmp = { .v = &layouts[ 0 ] };
+        setlayout( &tmp );
 }
