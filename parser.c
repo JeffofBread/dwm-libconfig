@@ -27,7 +27,7 @@ typedef struct Configuration {
         char *tags[ LENGTH( tags ) ];
 
         const char *font;
-        const char *theme[ 2 ][ 3 ];
+        const char *theme[ LENGTH( colors ) ][ LENGTH( colors[ 0 ] ) ];
 
         unsigned int rules_count;
         Rule *rules;
@@ -280,12 +280,12 @@ static void load_default_master_config( Configuration *master_config ) {
         master_config->refreshrate = refreshrate;
 
         master_config->font = strdup( fonts[ 0 ] );
-        master_config->theme[ SchemeNorm ][ ColFg ] = strdup( colors[ SchemeNorm ][ ColFg ] );
-        master_config->theme[ SchemeNorm ][ ColBg ] = strdup( colors[ SchemeNorm ][ ColBg ] );
-        master_config->theme[ SchemeNorm ][ ColBorder ] = strdup( colors[ SchemeNorm ][ ColBorder ] );
-        master_config->theme[ SchemeSel ][ ColFg ] = strdup( colors[ SchemeSel ][ ColFg ] );
-        master_config->theme[ SchemeSel ][ ColBg ] = strdup( colors[ SchemeSel ][ ColBg ] );
-        master_config->theme[ SchemeSel ][ ColBorder ] = strdup( colors[ SchemeSel ][ ColBorder ] );
+
+        for ( int i = 0; i < LENGTH( colors ); i++ ) {
+                for ( int j = 0; j < LENGTH( colors[ i ] ); j++ ) {
+                        master_config->theme[ i ][ j ] = strdup( colors[ i ][ j ] );
+                }
+        }
 
         for ( int i = 0; i < LENGTH( master_config->tags ); i++ ) {
                 master_config->tags[ i ] = strdup( tags[ i ] );
@@ -401,16 +401,14 @@ void config_cleanup( Configuration *master_config ) {
         if ( !master_config->default_binds_loaded ) {
                 for ( i = 0; i < master_config->keybinds_count; i++ ) {
                         if ( master_config->keybinds[ i ].argument_type == ARG_TYPE_POINTER ) {
-                                Arg *tmp = (Arg *) &master_config->keybinds[ i ].arg;
-                                SAFE_FREE( tmp->v );
+                                SAFE_FREE( master_config->keybinds[ i ].arg.v );
                         }
                 }
                 SAFE_FREE( master_config->keybinds );
 
                 for ( i = 0; i < master_config->buttonbinds_count; i++ ) {
                         if ( master_config->buttonbinds[ i ].argument_type == ARG_TYPE_POINTER ) {
-                                Arg *tmp = (Arg *) &master_config->buttonbinds[ i ].arg;
-                                SAFE_FREE( tmp->v );
+                                SAFE_FREE( master_config->buttonbinds[ i ].arg.v );
                         }
                 }
                 SAFE_FREE( master_config->buttonbinds );
@@ -678,7 +676,7 @@ static int parse_buttonbind( const char *buttonbind_string, Button *buttonbind, 
         }
 
         if ( buttonbind->argument_type != ARG_TYPE_NONE ) {
-                if ( parse_bind_argument( argument_token, &buttonbind->argument_type, (Arg *) &buttonbind->arg, range_min, range_max ) ) {
+                if ( parse_bind_argument( argument_token, &buttonbind->argument_type, &buttonbind->arg, range_min, range_max ) ) {
                         log_error( "Invalid argument \"%s\" in buttonbind \"%s\"\n", argument_token, buttonbind_string );
                         return -1;
                 }
@@ -887,7 +885,7 @@ static int parse_keybind( const char *keybind_string, Key *keybind, const unsign
         }
 
         if ( keybind->argument_type != ARG_TYPE_NONE ) {
-                if ( parse_bind_argument( argument_token, &keybind->argument_type, (Arg *) &keybind->arg, range_min, range_max ) ) {
+                if ( parse_bind_argument( argument_token, &keybind->argument_type, &keybind->arg, range_min, range_max ) ) {
                         log_error( "Invalid argument \"%s\" in keybind \"%s\"\n", argument_token, keybind_string );
                         return -1;
                 }
@@ -1036,19 +1034,19 @@ static int parse_rules_config( const config_t *config, Rule **rules_config, unsi
                         if ( rule != NULL ) {
 
                                 libconfig_setting_lookup_string( rule, "class", &tmp_string, false );
-                                if ( parse_rules_string( tmp_string, (char **) &( *rules_config )[ i ].class ) ) {
+                                if ( parse_rules_string( tmp_string, &( *rules_config )[ i ].class ) ) {
                                         log_error( "Problem parsing \"class\" value of rule %d\n", i + 1 );
                                         failed_rules_elements_count++;
                                 }
 
                                 libconfig_setting_lookup_string( rule, "instance", &tmp_string, false );
-                                if ( parse_rules_string( tmp_string, (char **) &( *rules_config )[ i ].instance ) ) {
+                                if ( parse_rules_string( tmp_string, &( *rules_config )[ i ].instance ) ) {
                                         log_error( "Problem parsing \"instance\" value of rule %d\n", i + 1 );
                                         failed_rules_elements_count++;
                                 }
 
                                 libconfig_setting_lookup_string( rule, "title", &tmp_string,false );
-                                if ( parse_rules_string( tmp_string, (char **) &( *rules_config )[ i ].title ) ) {
+                                if ( parse_rules_string( tmp_string, &( *rules_config )[ i ].title ) ) {
                                         log_error( "Problem parsing \"title\" value of rule %d\n", i + 1 );
                                         failed_rules_elements_count++;
                                 }
@@ -1217,17 +1215,38 @@ void parser_spawn( const Arg *arg ) {
         spawn( &tmp );
 }
 
+static Arg find_layout( void ( *arrange )( Monitor * ) ) {
+        for ( int i = 0; i < LENGTH( layouts ); i++ ) {
+                if ( layouts[ i ].arrange == arrange ) {
+                        return (Arg) { .v = &layouts[ i ] };
+                }
+        }
+        return (Arg) { .i = 0 };
+}
+
 static void setlayout_floating( const Arg *arg ) {
-        const Arg tmp = { .v = &layouts[ 1 ] };
-        setlayout( &tmp );
+        Arg tmp = find_layout( NULL );
+        if ( !tmp.i ) {
+                log_warn( "setlayout_floating() failed to find floating layout in \"layouts\" array\n" );
+        } else {
+                setlayout( &tmp );
+        }
 }
 
 static void setlayout_monocle( const Arg *arg ) {
-        const Arg tmp = { .v = &layouts[ 2 ] };
-        setlayout( &tmp );
+        Arg tmp = find_layout( monocle );
+        if ( !tmp.i ) {
+                log_warn( "setlayout_monocle() failed to find monocle layout in \"layouts\" array\n" );
+        } else {
+                setlayout( &tmp );
+        }
 }
 
 static void setlayout_tiled( const Arg *arg ) {
-        const Arg tmp = { .v = &layouts[ 0 ] };
-        setlayout( &tmp );
+        Arg tmp = find_layout( tile );
+        if ( !tmp.i ) {
+                log_warn( "setlayout_tiled() failed to find tile layout in \"layouts\" array\n" );
+        } else {
+                setlayout( &tmp );
+        }
 }

@@ -86,7 +86,7 @@ typedef struct {
 	unsigned int mask;
 	unsigned int button;
 	void (*func)(const Arg *arg);
-	const Arg arg;
+	Arg arg;
 	enum Argument_Type argument_type;
 } Button;
 
@@ -111,7 +111,7 @@ typedef struct {
 	unsigned int mod;
 	KeySym keysym;
 	void (*func)(const Arg *);
-	const Arg arg;
+	Arg arg;
 	enum Argument_Type argument_type;
 } Key;
 
@@ -142,9 +142,9 @@ struct Monitor {
 };
 
 typedef struct {
-	const char *class;
-	const char *instance;
-	const char *title;
+	char *class;
+	char *instance;
+	char *title;
 	unsigned int tags;
 	int isfloating;
 	int monitor;
