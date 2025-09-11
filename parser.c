@@ -40,6 +40,7 @@ typedef struct Configuration {
 } Configuration;
 
 static Configuration dwm_config = { 0 };
+static char *custom_config_path = NULL;
 
 // Public functions
 static void config_cleanup( Configuration *master_config );
@@ -1046,19 +1047,19 @@ static int parse_rules_config( const config_t *config, Rule **rules_config, unsi
                         if ( rule != NULL ) {
 
                                 libconfig_setting_lookup_string( rule, "class", &tmp_string, false );
-                                if ( parse_rules_string( tmp_string, &( *rules_config )[ i ].class ) ) {
+                                if ( parse_rules_string( tmp_string, (char **) &( *rules_config )[ i ].class ) ) {
                                         log_error( "Problem parsing \"class\" value of rule %d\n", i + 1 );
                                         failed_rules_elements_count++;
                                 }
 
                                 libconfig_setting_lookup_string( rule, "instance", &tmp_string, false );
-                                if ( parse_rules_string( tmp_string, &( *rules_config )[ i ].instance ) ) {
+                                if ( parse_rules_string( tmp_string, (char **) &( *rules_config )[ i ].instance ) ) {
                                         log_error( "Problem parsing \"instance\" value of rule %d\n", i + 1 );
                                         failed_rules_elements_count++;
                                 }
 
                                 libconfig_setting_lookup_string( rule, "title", &tmp_string,false );
-                                if ( parse_rules_string( tmp_string, &( *rules_config )[ i ].title ) ) {
+                                if ( parse_rules_string( tmp_string, (char **) &( *rules_config )[ i ].title ) ) {
                                         log_error( "Problem parsing \"title\" value of rule %d\n", i + 1 );
                                         failed_rules_elements_count++;
                                 }

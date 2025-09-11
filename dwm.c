@@ -143,9 +143,9 @@ struct Monitor {
 };
 
 typedef struct {
-	char *class;
-	char *instance;
-	char *title;
+	const char *class;
+	const char *instance;
+	const char *title;
 	unsigned int tags;
 	int isfloating;
 	int monitor;
@@ -277,7 +277,6 @@ static Display *dpy;
 static Drw *drw;
 static Monitor *mons, *selmon;
 static Window root, wmcheckwin;
-static char *custom_config_path = NULL;
 
 /* configuration, allows nested code to access above variables */
 #include "config.h"
