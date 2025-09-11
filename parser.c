@@ -253,45 +253,10 @@ static void load_default_master_config( Configuration *master_config ) {
                 exit( EXIT_FAILURE );
         }
 
+        // Unique values to the Configuration struct
         master_config->config_filepath = NULL;
         master_config->max_keys = 4;
         master_config->default_binds_loaded = false;
-
-        master_config->showbar = true;
-        master_config->topbar = true;
-        master_config->resizehints = true;
-        master_config->lockfullscreen = true;
-
-        master_config->borderpx = 1;
-        master_config->snap = 32;
-        master_config->nmaster = 1;
-        master_config->mfact = 0.55f;
-        master_config->refreshrate = 120;
-
-        master_config->tags[ 0 ] = strdup( "1" );
-        master_config->tags[ 1 ] = strdup( "2" );
-        master_config->tags[ 2 ] = strdup( "3" );
-        master_config->tags[ 3 ] = strdup( "4" );
-        master_config->tags[ 4 ] = strdup( "5" );
-        master_config->tags[ 5 ] = strdup( "6" );
-        master_config->tags[ 6 ] = strdup( "7" );
-        master_config->tags[ 7 ] = strdup( "8" );
-        master_config->tags[ 8 ] = strdup( "9" );
-
-        master_config->font = strdup( "monospace:size=10" );
-
-        const char col_gray1[ ] = "#222222";
-        const char col_gray2[ ] = "#444444";
-        const char col_gray3[ ] = "#bbbbbb";
-        const char col_gray4[ ] = "#eeeeee";
-        const char col_cyan[ ] = "#005577";
-
-        master_config->theme[ SchemeNorm ][ ColFg ] = strdup( col_gray3 );
-        master_config->theme[ SchemeNorm ][ ColBg ] = strdup( col_gray1 );
-        master_config->theme[ SchemeNorm ][ ColBorder ] = strdup( col_gray2 );
-        master_config->theme[ SchemeSel ][ ColFg ] = strdup( col_gray4 );
-        master_config->theme[ SchemeSel ][ ColBg ] = strdup( col_cyan );
-        master_config->theme[ SchemeSel ][ ColBorder ] = strdup( col_cyan );
 
         master_config->rules_count = 0;
         master_config->rules = NULL;
@@ -301,6 +266,30 @@ static void load_default_master_config( Configuration *master_config ) {
 
         master_config->buttonbinds_count = 0;
         master_config->buttonbinds = NULL;
+
+        // Values from config.h
+        master_config->showbar = showbar;
+        master_config->topbar = topbar;
+        master_config->resizehints = resizehints;
+        master_config->lockfullscreen = lockfullscreen;
+
+        master_config->borderpx = borderpx;
+        master_config->snap = snap;
+        master_config->nmaster = nmaster;
+        master_config->mfact = mfact;
+        master_config->refreshrate = refreshrate;
+
+        master_config->font = strdup( fonts[ 0 ] );
+        master_config->theme[ SchemeNorm ][ ColFg ] = strdup( colors[ SchemeNorm ][ ColFg ] );
+        master_config->theme[ SchemeNorm ][ ColBg ] = strdup( colors[ SchemeNorm ][ ColBg ] );
+        master_config->theme[ SchemeNorm ][ ColBorder ] = strdup( colors[ SchemeNorm ][ ColBorder ] );
+        master_config->theme[ SchemeSel ][ ColFg ] = strdup( colors[ SchemeSel ][ ColFg ] );
+        master_config->theme[ SchemeSel ][ ColBg ] = strdup( colors[ SchemeSel ][ ColBg ] );
+        master_config->theme[ SchemeSel ][ ColBorder ] = strdup( colors[ SchemeSel ][ ColBorder ] );
+
+        for ( int i = 0; i < LENGTH( tags ); i++ ) {
+                master_config->tags[ i ] = strdup( tags[ i ] );
+        }
 }
 
 static int open_config( config_t *config, char **config_filepath, Configuration *master_config ) {
