@@ -11,6 +11,19 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 
+// Uncomment to enable log printing for debugging. This is just
+// a crude compatability macro between my own logging system,
+// which I didn't want to bring over just for the config parser.
+#define log_trace( ... ) //fprintf( stdout, "TRACE: " __VA_ARGS__ );
+#define log_debug( ... ) fprintf( stdout, "DEBUG: " __VA_ARGS__ );
+#define log_info( ... ) fprintf( stdout, "INFO: " __VA_ARGS__ );
+#define log_warn( ... ) fprintf( stdout, "WARN: " __VA_ARGS__ );
+#define log_error( ... ) fprintf( stdout, "ERROR: " __VA_ARGS__ );
+#define log_fatal( ... ) fprintf( stdout, "FATAL: " __VA_ARGS__ );
+
+#define SAFE_FREE( p )     do { if ( p ) { free( ( void * ) ( p ) ); ( p ) = NULL; } } while ( 0 )
+#define SAFE_FCLOSE( f )   do { if ( f ) { fclose( f ); ( f ) = NULL; } } while ( 0 )
+
 typedef struct Configuration {
 
         // Parser internal values
@@ -42,38 +55,107 @@ typedef struct Configuration {
 static Configuration dwm_config = { 0 };
 static char *custom_config_path = NULL;
 
-// Public functions
+// Public parser functions
 static void config_cleanup( Configuration *master_config );
 static int parse_config( const char *custom_config_filepath, Configuration *master_config );
 
-// Internal functions
-static void backup_config( config_t *config );
-static void load_default_buttonbind_config( Button **buttonbind_config, unsigned int *buttonbind_count );
-static void load_default_keybind_config( Key **keybind_config, unsigned int *keybind_count );
-static void load_default_master_config( Configuration *master_config );
-static int open_config( config_t *config, char **config_filepath, Configuration *master_config );
-static int parse_bind_argument( const char *argument_string, const enum Argument_Type *arg_type, Arg *arg, long double range_min, long double range_max );
-static int parse_bind_function( const char *function_string, enum Argument_Type *arg_type, void ( **function )( const Arg * ), long double *range_min, long double *range_max );
-static int parse_bind_modifier( const char *modifier_string, unsigned int *modifier );
-static int parse_buttonbind( const char *buttonbind_string, Button *buttonbind, unsigned int max_keys );
-static int parse_buttonbind_button( const char *button_string, unsigned int *button );
-static int parse_buttonbind_click( const char *click_string, unsigned int *click );
-static int parse_buttonbinds_config( const config_t *config, Button **buttonbind_config, unsigned int *buttonbind_count, unsigned int max_keys );
-static int parse_generic_settings( const config_t *config, Configuration *master_config );
-static int parse_keybind( const char *keybind_string, Key *keybind, unsigned int max_keys );
-static int parse_keybind_keysym( const char *keysym_string, KeySym *keysym );
-static int parse_keybinds_config( const config_t *config, Key **keybind_config, unsigned int *keybinds_count, unsigned int max_keys );
-static int parse_rules_string( const char *input_string, char **output_string );
-static int parse_rules_config( const config_t *config, Rule **rules_config, unsigned int *rules_count );
-static int parse_tags_config( const config_t *config, Configuration *master_config );
-static int parse_theme( const config_setting_t *theme, Configuration *master_config );
-static int parse_theme_config( const config_t *config, Configuration *master_config );
+// Parser specific functions
+static void _backup_config( config_t *config );
+static void _load_default_buttonbind_config( Button **buttonbind_config, unsigned int *buttonbind_count );
+static void _load_default_keybind_config( Key **keybind_config, unsigned int *keybind_count );
+static void _load_default_master_config( Configuration *master_config );
+static int _open_config( config_t *config, char **config_filepath, Configuration *master_config );
+static int _parse_bind_argument( const char *argument_string, const enum Argument_Type *arg_type, Arg *arg, long double range_min, long double range_max );
+static int _parse_bind_function( const char *function_string, enum Argument_Type *arg_type, void ( **function )( const Arg * ), long double *range_min, long double *range_max );
+static int _parse_bind_modifier( const char *modifier_string, unsigned int *modifier );
+static int _parse_buttonbind( const char *buttonbind_string, Button *buttonbind, unsigned int max_keys );
+static int _parse_buttonbind_button( const char *button_string, unsigned int *button );
+static int _parse_buttonbind_click( const char *click_string, unsigned int *click );
+static int _parse_buttonbinds_config( const config_t *config, Button **buttonbind_config, unsigned int *buttonbind_count, unsigned int max_keys );
+static int _parse_generic_settings( const config_t *config, Configuration *master_config );
+static int _parse_keybind( const char *keybind_string, Key *keybind, unsigned int max_keys );
+static int _parse_keybind_keysym( const char *keysym_string, KeySym *keysym );
+static int _parse_keybinds_config( const config_t *config, Key **keybind_config, unsigned int *keybinds_count, unsigned int max_keys );
+static int _parse_rules_string( const char *input_string, char **output_string );
+static int _parse_rules_config( const config_t *config, Rule **rules_config, unsigned int *rules_count );
+static int _parse_tags_config( const config_t *config, Configuration *master_config );
+static int _parse_theme( const config_setting_t *theme, Configuration *master_config );
+static int _parse_theme_config( const config_t *config, Configuration *master_config );
 
 // Wrapper functions for better compatability
-static void parser_spawn( const Arg *arg );
+static void spawn_simple( const Arg *arg );
 static void setlayout_floating( const Arg *arg );
 static void setlayout_monocle( const Arg *arg );
 static void setlayout_tiled( const Arg *arg );
+
+// Utility functions
+static char *get_xdg_config_home( void );
+static char *get_xdg_data_home( void );
+static int make_parent_directory( const char *path );
+static char *mstrjoin( const char *string_1, const char *string_2 );
+static void mstrextend( char **source_string_pointer, const char *addition );
+static int normalize_path( const char *path, char **normal );
+
+// Inline helper functions
+static inline int normalize_range_int( const int i, const int min, const int max ) {
+        if ( i > max ) {
+                log_warn( "Value %d above max of %d, value clamped to %d\n", i, max, max );
+                return max;
+        }
+        if ( i < min ) {
+                log_warn( "Value %d under min of %d, value clamped to %d\n", i, min, min );
+                return min;
+        }
+        return i;
+}
+
+static inline unsigned int normalize_range_uint( const unsigned int i, const unsigned int min, const unsigned int max ) {
+        if ( i > max ) {
+                log_warn( "Value %u above max of %u, value clamped to %u\n", i, max, max );
+                return max;
+        }
+        if ( i < min ) {
+                log_warn( "Value %u under min of %u, value clamped to %u\n", i, min, min );
+                return min;
+        }
+        return i;
+}
+
+static inline long normalize_range_long( const long i, const long min, const long max ) {
+        if ( i > max ) {
+                log_warn( "Value %ld above max of %ld, value clamped to %ld\n", i, max, max );
+                return max;
+        }
+        if ( i < min ) {
+                log_warn( "Value %ld under min of %ld, value clamped to %ld\n", i, min, min );
+                return min;
+        }
+        return i;
+}
+
+static inline unsigned long normalize_range_ulong( const unsigned long i, const unsigned long min, const unsigned long max ) {
+        if ( i > max ) {
+                log_warn( "Value %lu above max of %lu, value clamped to %lu\n", i, max, max );
+                return max;
+        }
+        if ( i < min ) {
+                log_warn( "Value %lu under min of %lu, value clamped to %lu\n", i, min, min );
+                return min;
+        }
+        return i;
+}
+
+static inline float normalize_range_float( const float i, const float min, const float max ) {
+        if ( i > max ) {
+                log_warn( "Value %f above max of %f, value clamped to %f\n", i, max, max );
+                return max;
+        }
+        if ( i < min ) {
+                log_warn( "Value %f under min of %f, value clamped to %f\n", i, min, min );
+                return min;
+        }
+        return i;
+}
 
 static inline int libconfig_lookup_bool( const config_t *config, const char *path, bool *value, const bool optional ) {
         int tmp = 0;
@@ -208,7 +290,7 @@ static inline char *trim_whitespace( char *string ) {
 
 // ----- Function Definitions -----
 
-static void backup_config( config_t *config ) {
+static void _backup_config( config_t *config ) {
 
         // Save xdg data folder to buffer (~/.local/share)
         char *buffer = get_xdg_data_home();
@@ -235,18 +317,18 @@ static void backup_config( config_t *config ) {
         }
 }
 
-static void load_default_buttonbind_config( Button **buttonbind_config, unsigned int *buttonbind_count ) {
+static void _load_default_buttonbind_config( Button **buttonbind_config, unsigned int *buttonbind_count ) {
         *buttonbind_count = LENGTH( buttons );
         *buttonbind_config = (Button *) buttons;
 }
 
 // Default binds from dwm's `config.def.h`
-static void load_default_keybind_config( Key **keybind_config, unsigned int *keybind_count ) {
+static void _load_default_keybind_config( Key **keybind_config, unsigned int *keybind_count ) {
         *keybind_count = LENGTH( keys );
         *keybind_config = (Key *) keys;
 }
 
-static void load_default_master_config( Configuration *master_config ) {
+static void _load_default_master_config( Configuration *master_config ) {
 
         if ( master_config == NULL ) {
                 log_fatal( "master_config is NULL, can't load default configuration\n" );
@@ -292,7 +374,7 @@ static void load_default_master_config( Configuration *master_config ) {
         }
 }
 
-static int open_config( config_t *config, char **config_filepath, Configuration *master_config ) {
+static int _open_config( config_t *config, char **config_filepath, Configuration *master_config ) {
 
         int i, config_filepaths_length = 0;
         char *config_filepaths[ 5 ];
@@ -362,8 +444,8 @@ static int open_config( config_t *config, char **config_filepath, Configuration 
         }
 
         log_error( "Unable to load any configs. Loading hardcoded default config values and exiting parsing\n" );
-        load_default_keybind_config( &master_config->keybinds, &master_config->keybinds_count );
-        load_default_buttonbind_config( &master_config->buttonbinds, &master_config->buttonbinds_count );
+        _load_default_keybind_config( &master_config->keybinds, &master_config->keybinds_count );
+        _load_default_buttonbind_config( &master_config->buttonbinds, &master_config->buttonbinds_count );
 
         for ( i = 0; i < config_filepaths_length; i++ ) {
                 SAFE_FREE( config_filepaths[ i ] );
@@ -428,13 +510,13 @@ int parse_config( const char *custom_config_filepath, Configuration *master_conf
         master_config->libconfig_config = &libconfig_config;
 
         // Populate master dwm configuration with default values
-        load_default_master_config( master_config );
+        _load_default_master_config( master_config );
 
         // Simple way of passing users custom config to open_config()
         // This strdup is freed at the start of open_config()
         if ( custom_config_filepath != NULL ) config_filepath = strdup( custom_config_filepath );
 
-        if ( open_config( &libconfig_config, &config_filepath, master_config ) ) return -1;
+        if ( _open_config( &libconfig_config, &config_filepath, master_config ) ) return -1;
 
         log_info( "Path to config file: \"%s\"\n", config_filepath );
         master_config->config_filepath = strdup( config_filepath );
@@ -456,18 +538,18 @@ int parse_config( const char *custom_config_filepath, Configuration *master_conf
         // Note: I may want to come back to this and think about how I handle these returns.
         // The return values from the functions aren't the greatest and I may want a threshold
         // or severity based on the error.
-        total_errors += parse_generic_settings( &libconfig_config, master_config );
-        total_errors += parse_keybinds_config( &libconfig_config, &master_config->keybinds, &master_config->keybinds_count, master_config->max_keys );
-        total_errors += parse_buttonbinds_config( &libconfig_config, &master_config->buttonbinds, &master_config->buttonbinds_count, master_config->max_keys );
-        total_errors += parse_rules_config( &libconfig_config, &master_config->rules, &master_config->rules_count );
-        total_errors += parse_tags_config( &libconfig_config, master_config );
-        total_errors += parse_theme_config( &libconfig_config, master_config );
+        total_errors += _parse_generic_settings( &libconfig_config, master_config );
+        total_errors += _parse_keybinds_config( &libconfig_config, &master_config->keybinds, &master_config->keybinds_count, master_config->max_keys );
+        total_errors += _parse_buttonbinds_config( &libconfig_config, &master_config->buttonbinds, &master_config->buttonbinds_count, master_config->max_keys );
+        total_errors += _parse_rules_config( &libconfig_config, &master_config->rules, &master_config->rules_count );
+        total_errors += _parse_tags_config( &libconfig_config, master_config );
+        total_errors += _parse_theme_config( &libconfig_config, master_config );
 
         // The error requirement being 0 may be a bit strict, I am not sure yet. May need
         // some relaxing or possibly come up with a better way of calculating if a config
         // passes, or is valid enough to warrant backing up.
         if ( total_errors == 0 && !master_config->default_binds_loaded ) {
-                backup_config( &libconfig_config );
+                _backup_config( &libconfig_config );
         } else {
                 if ( master_config->default_binds_loaded ) {
                         log_warn( "Not saving config as backup, as current working config is not the user's\n" );
@@ -482,7 +564,7 @@ int parse_config( const char *custom_config_filepath, Configuration *master_conf
         return 0;
 }
 
-static int parse_bind_argument( const char *argument_string, const enum Argument_Type *arg_type, Arg *arg, const long double range_min, const long double range_max ) {
+static int _parse_bind_argument( const char *argument_string, const enum Argument_Type *arg_type, Arg *arg, const long double range_min, const long double range_max ) {
 
         log_trace( "Argument being parsed: \"%s\"\n", argument_string );
 
@@ -523,7 +605,7 @@ static int parse_bind_argument( const char *argument_string, const enum Argument
         return 0;
 }
 
-static int parse_bind_function( const char *function_string, enum Argument_Type *arg_type, void ( **function )( const Arg * ), long double *range_min, long double *range_max ) {
+static int _parse_bind_function( const char *function_string, enum Argument_Type *arg_type, void ( **function )( const Arg * ), long double *range_min, long double *range_max ) {
 
         const struct {
                 const char *name;
@@ -543,7 +625,7 @@ static int parse_bind_function( const char *function_string, enum Argument_Type 
                 { "setlayout-monocle", setlayout_monocle, ARG_TYPE_NONE },
                 { "setlayout-toggle", setlayout, ARG_TYPE_NONE },
                 { "setmfact", setmfact, ARG_TYPE_FLOAT, -0.95f, 1.95f },
-                { "spawn", parser_spawn, ARG_TYPE_POINTER },
+                { "spawn", spawn_simple, ARG_TYPE_POINTER },
                 { "tag", tag, ARG_TYPE_INT, -1, TAGMASK },
                 { "tagmon", tagmon, ARG_TYPE_INT, -99, 99 },
                 { "togglebar", togglebar, ARG_TYPE_NONE },
@@ -569,7 +651,7 @@ static int parse_bind_function( const char *function_string, enum Argument_Type 
         return -1;
 }
 
-static int parse_bind_modifier( const char *modifier_string, unsigned int *modifier ) {
+static int _parse_bind_modifier( const char *modifier_string, unsigned int *modifier ) {
 
         const struct {
                 const char *name;
@@ -605,7 +687,7 @@ static int parse_bind_modifier( const char *modifier_string, unsigned int *modif
         return 0;
 }
 
-static int parse_buttonbind( const char *buttonbind_string, Button *buttonbind, const unsigned int max_keys ) {
+static int _parse_buttonbind( const char *buttonbind_string, Button *buttonbind, const unsigned int max_keys ) {
 
         log_debug( "Buttonbind string to parse: \"%s\"\n", buttonbind_string );
 
@@ -653,30 +735,30 @@ static int parse_buttonbind( const char *buttonbind_string, Button *buttonbind, 
         }
 
         for ( int i = 0; i < modifier_token_count - 1; i++ ) {
-                if ( parse_bind_modifier( trimmed_modifier_token_list[ i ], &buttonbind->mask ) ) {
+                if ( _parse_bind_modifier( trimmed_modifier_token_list[ i ], &buttonbind->mask ) ) {
                         log_error( "Invalid modifier \"%s\" in buttonbind \"%s\"\n", trimmed_modifier_token_list[ i ], buttonbind_string );
                         return -1;
                 }
         }
 
-        if ( parse_buttonbind_button( trimmed_modifier_token_list[ modifier_token_count - 1 ], &buttonbind->button ) ) {
+        if ( _parse_buttonbind_button( trimmed_modifier_token_list[ modifier_token_count - 1 ], &buttonbind->button ) ) {
                 log_error( "Invalid button \"%s\" in buttonbind \"%s\"\n", function_token, buttonbind_string );
                 return -1;
         }
 
-        if ( parse_buttonbind_click( click_token, &buttonbind->click ) ) {
+        if ( _parse_buttonbind_click( click_token, &buttonbind->click ) ) {
                 log_error( "Invalid click \"%s\" in buttonbind \"%s\"\n", function_token, buttonbind_string );
                 return -1;
         }
 
         long double range_min, range_max;
-        if ( parse_bind_function( function_token, &buttonbind->argument_type, &buttonbind->func, &range_min, &range_max ) ) {
+        if ( _parse_bind_function( function_token, &buttonbind->argument_type, &buttonbind->func, &range_min, &range_max ) ) {
                 log_error( "Invalid function \"%s\" in buttonbind \"%s\"\n", function_token, buttonbind_string );
                 return -1;
         }
 
         if ( buttonbind->argument_type != ARG_TYPE_NONE ) {
-                if ( parse_bind_argument( argument_token, &buttonbind->argument_type, &buttonbind->arg, range_min, range_max ) ) {
+                if ( _parse_bind_argument( argument_token, &buttonbind->argument_type, &buttonbind->arg, range_min, range_max ) ) {
                         log_error( "Invalid argument \"%s\" in buttonbind \"%s\"\n", argument_token, buttonbind_string );
                         return -1;
                 }
@@ -687,7 +769,7 @@ static int parse_buttonbind( const char *buttonbind_string, Button *buttonbind, 
         return 0;
 }
 
-static int parse_buttonbind_button( const char *button_string, unsigned int *button ) {
+static int _parse_buttonbind_button( const char *button_string, unsigned int *button ) {
 
         const struct {
                 const char *name;
@@ -727,7 +809,7 @@ static int parse_buttonbind_button( const char *button_string, unsigned int *but
         return 0;
 }
 
-static int parse_buttonbind_click( const char *click_string, unsigned int *click ) {
+static int _parse_buttonbind_click( const char *click_string, unsigned int *click ) {
 
         const struct {
                 const char *name;
@@ -745,7 +827,7 @@ static int parse_buttonbind_click( const char *click_string, unsigned int *click
         return -1;
 }
 
-static int parse_buttonbinds_config( const config_t *config, Button **buttonbind_config, unsigned int *buttonbind_count, const unsigned int max_keys ) {
+static int _parse_buttonbinds_config( const config_t *config, Button **buttonbind_config, unsigned int *buttonbind_count, const unsigned int max_keys ) {
 
         // I may look at adjusting how memory is allocated and used here. For example,
         // if a bind fails and is assigned. This just leaves empty unused memory. Not
@@ -760,7 +842,7 @@ static int parse_buttonbinds_config( const config_t *config, Button **buttonbind
 
                 if ( *buttonbind_count == 0 ) {
                         log_warn( "No buttonbinds listed, assigning minimal default buttonbinds and exiting buttonbind parsing\n" );
-                        load_default_buttonbind_config( buttonbind_config, buttonbind_count );
+                        _load_default_buttonbind_config( buttonbind_config, buttonbind_count );
                         return 1;
                 }
 
@@ -779,7 +861,7 @@ static int parse_buttonbinds_config( const config_t *config, Button **buttonbind
                                 continue;
                         }
 
-                        if ( parse_buttonbind( config_setting_get_string( buttonbind ), &( *buttonbind_config )[ i ], max_keys ) == -1 ) {
+                        if ( _parse_buttonbind( config_setting_get_string( buttonbind ), &( *buttonbind_config )[ i ], max_keys ) == -1 ) {
                                 ( *buttonbind_config )[ i ].button = 0;
                                 failed_buttonbinds_count++;
                         }
@@ -795,7 +877,7 @@ static int parse_buttonbinds_config( const config_t *config, Button **buttonbind
         return failed_buttonbinds_count;
 }
 
-static int parse_generic_settings( const config_t *config, Configuration *master_config ) {
+static int _parse_generic_settings( const config_t *config, Configuration *master_config ) {
 
         enum Setting_Type {
                 TYPE_BOOL,
@@ -858,7 +940,7 @@ static int parse_generic_settings( const config_t *config, Configuration *master
         return settings_failed_count;
 }
 
-static int parse_keybind( const char *keybind_string, Key *keybind, const unsigned int max_keys ) {
+static int _parse_keybind( const char *keybind_string, Key *keybind, const unsigned int max_keys ) {
 
         log_debug( "Keybind string to parse: \"%s\"\n", keybind_string );
 
@@ -879,13 +961,13 @@ static int parse_keybind( const char *keybind_string, Key *keybind, const unsign
         }
 
         long double range_min, range_max;
-        if ( parse_bind_function( function_token, &keybind->argument_type, &keybind->func, &range_min, &range_max ) ) {
+        if ( _parse_bind_function( function_token, &keybind->argument_type, &keybind->func, &range_min, &range_max ) ) {
                 log_error( "Invalid function \"%s\" in keybind \"%s\"\n", function_token, keybind_string );
                 return -1;
         }
 
         if ( keybind->argument_type != ARG_TYPE_NONE ) {
-                if ( parse_bind_argument( argument_token, &keybind->argument_type, &keybind->arg, range_min, range_max ) ) {
+                if ( _parse_bind_argument( argument_token, &keybind->argument_type, &keybind->arg, range_min, range_max ) ) {
                         log_error( "Invalid argument \"%s\" in keybind \"%s\"\n", argument_token, keybind_string );
                         return -1;
                 }
@@ -918,13 +1000,13 @@ static int parse_keybind( const char *keybind_string, Key *keybind, const unsign
         }
 
         for ( int i = 0; i < modifier_token_count - 1; i++ ) {
-                if ( parse_bind_modifier( trimmed_modifier_token_list[ i ], &keybind->mod ) ) {
+                if ( _parse_bind_modifier( trimmed_modifier_token_list[ i ], &keybind->mod ) ) {
                         log_error( "Invalid modifier \"%s\" in keybind \"%s\"\n", trimmed_modifier_token_list[ i ], keybind_string );
                         return -1;
                 }
         }
 
-        if ( parse_keybind_keysym( trimmed_modifier_token_list[ modifier_token_count - 1 ], &keybind->keysym ) ) {
+        if ( _parse_keybind_keysym( trimmed_modifier_token_list[ modifier_token_count - 1 ], &keybind->keysym ) ) {
                 log_error( "Invalid keysym \"%s\" in keybind \"%s\"\n", trimmed_modifier_token_list[ modifier_token_count - 1 ], keybind_string );
                 return -1;
         }
@@ -932,7 +1014,7 @@ static int parse_keybind( const char *keybind_string, Key *keybind, const unsign
         return 0;
 }
 
-static int parse_keybind_keysym( const char *keysym_string, KeySym *keysym ) {
+static int _parse_keybind_keysym( const char *keysym_string, KeySym *keysym ) {
 
         log_trace( "Keysym being parsed: \"%s\"\n", keysym_string );
 
@@ -946,7 +1028,7 @@ static int parse_keybind_keysym( const char *keysym_string, KeySym *keysym ) {
         return 0;
 }
 
-static int parse_keybinds_config( const config_t *config, Key **keybind_config, unsigned int *keybinds_count, const unsigned int max_keys ) {
+static int _parse_keybinds_config( const config_t *config, Key **keybind_config, unsigned int *keybinds_count, const unsigned int max_keys ) {
 
         // I may look at adjusting how memory is allocated and used here. For example,
         // if a bind fails and is assigned. This just leaves empty unused memory. Not
@@ -961,7 +1043,7 @@ static int parse_keybinds_config( const config_t *config, Key **keybind_config, 
 
                 if ( *keybinds_count == 0 ) {
                         log_warn( "No keybinds listed, assigning minimal default keybinds and exiting keybinds parsing\n" );
-                        load_default_keybind_config( keybind_config, keybinds_count );
+                        _load_default_keybind_config( keybind_config, keybinds_count );
                         return 1;
                 }
 
@@ -978,7 +1060,7 @@ static int parse_keybinds_config( const config_t *config, Key **keybind_config, 
                                 continue;
                         }
 
-                        if ( parse_keybind( config_setting_get_string( keybind ), &( *keybind_config )[ i ], max_keys ) == -1 ) {
+                        if ( _parse_keybind( config_setting_get_string( keybind ), &( *keybind_config )[ i ], max_keys ) == -1 ) {
                                 ( *keybind_config )[ i ].keysym = NoSymbol;
                                 failed_keybinds++;
                         }
@@ -994,7 +1076,7 @@ static int parse_keybinds_config( const config_t *config, Key **keybind_config, 
         return failed_keybinds;
 }
 
-static int parse_rules_string( const char *input_string, char **output_string ) {
+static int _parse_rules_string( const char *input_string, char **output_string ) {
 
         if ( input_string == NULL ) return -1;
 
@@ -1008,7 +1090,7 @@ static int parse_rules_string( const char *input_string, char **output_string ) 
         return 0;
 }
 
-static int parse_rules_config( const config_t *config, Rule **rules_config, unsigned int *rules_count ) {
+static int _parse_rules_config( const config_t *config, Rule **rules_config, unsigned int *rules_count ) {
 
         int failed_rules_count = 0;
         int failed_rules_elements_count = 0;
@@ -1034,19 +1116,19 @@ static int parse_rules_config( const config_t *config, Rule **rules_config, unsi
                         if ( rule != NULL ) {
 
                                 libconfig_setting_lookup_string( rule, "class", &tmp_string, false );
-                                if ( parse_rules_string( tmp_string, &( *rules_config )[ i ].class ) ) {
+                                if ( _parse_rules_string( tmp_string, &( *rules_config )[ i ].class ) ) {
                                         log_error( "Problem parsing \"class\" value of rule %d\n", i + 1 );
                                         failed_rules_elements_count++;
                                 }
 
                                 libconfig_setting_lookup_string( rule, "instance", &tmp_string, false );
-                                if ( parse_rules_string( tmp_string, &( *rules_config )[ i ].instance ) ) {
+                                if ( _parse_rules_string( tmp_string, &( *rules_config )[ i ].instance ) ) {
                                         log_error( "Problem parsing \"instance\" value of rule %d\n", i + 1 );
                                         failed_rules_elements_count++;
                                 }
 
                                 libconfig_setting_lookup_string( rule, "title", &tmp_string,false );
-                                if ( parse_rules_string( tmp_string, &( *rules_config )[ i ].title ) ) {
+                                if ( _parse_rules_string( tmp_string, &( *rules_config )[ i ].title ) ) {
                                         log_error( "Problem parsing \"title\" value of rule %d\n", i + 1 );
                                         failed_rules_elements_count++;
                                 }
@@ -1070,7 +1152,7 @@ static int parse_rules_config( const config_t *config, Rule **rules_config, unsi
         return failed_rules_count + failed_rules_elements_count;
 }
 
-static int parse_tags_config( const config_t *config, Configuration *master_config ) {
+static int _parse_tags_config( const config_t *config, Configuration *master_config ) {
 
         int tags_failed_count = 0;
 
@@ -1120,7 +1202,7 @@ static int parse_tags_config( const config_t *config, Configuration *master_conf
         return tags_failed_count;
 }
 
-static int parse_theme( const config_setting_t *theme, Configuration *master_config ) {
+static int _parse_theme( const config_setting_t *theme, Configuration *master_config ) {
 
         const char *tmp_string = NULL;
 
@@ -1151,7 +1233,7 @@ static int parse_theme( const config_setting_t *theme, Configuration *master_con
         return theme_elements_failed_count;
 }
 
-static int parse_theme_config( const config_t *config, Configuration *master_config ) {
+static int _parse_theme_config( const config_t *config, Configuration *master_config ) {
 
         int failed_themes_count = 0;
         int failed_theme_elements_count = 0;
@@ -1186,7 +1268,7 @@ static int parse_theme_config( const config_t *config, Configuration *master_con
                                 continue;
                         }
 
-                        failed_theme_elements_count += parse_theme( theme, master_config );
+                        failed_theme_elements_count += _parse_theme( theme, master_config );
                         log_debug( "%d elements failed to be parsed in theme number %d\n", failed_theme_elements_count, i + 1 );
                 }
 
@@ -1203,7 +1285,7 @@ static int parse_theme_config( const config_t *config, Configuration *master_con
 
 // Wrapper functions for compatability
 
-void parser_spawn( const Arg *arg ) {
+void spawn_simple( const Arg *arg ) {
 
         // Process argv to work with default spawn() behavior
         const char *cmd = arg->v;
@@ -1218,10 +1300,10 @@ void parser_spawn( const Arg *arg ) {
 static Arg find_layout( void ( *arrange )( Monitor * ) ) {
         for ( int i = 0; i < LENGTH( layouts ); i++ ) {
                 if ( layouts[ i ].arrange == arrange ) {
-                        return (Arg) { .v = &layouts[ i ] };
+                        return (Arg){ .v = &layouts[ i ] };
                 }
         }
-        return (Arg) { .i = 0 };
+        return (Arg){ .i = 0 };
 }
 
 static void setlayout_floating( const Arg *arg ) {
@@ -1249,4 +1331,170 @@ static void setlayout_tiled( const Arg *arg ) {
         } else {
                 setlayout( &tmp );
         }
+}
+
+// Derived from picom ( config.c::xdg_config_home() )
+char *get_xdg_config_home( void ) {
+        char *xdg_config_home = getenv( "XDG_CONFIG_HOME" );
+        char *user_home = getenv( "HOME" );
+
+        if ( !xdg_config_home ) {
+                const char *default_config_directory = "/.config";
+                if ( !user_home ) return NULL;
+                xdg_config_home = mstrjoin( user_home, default_config_directory );
+        } else {
+                xdg_config_home = strdup( xdg_config_home );
+        }
+
+        return xdg_config_home;
+}
+
+// Derived from picom ( config.c::xdg_config_home() )
+char *get_xdg_data_home( void ) {
+        char *xdg_data_home = getenv( "XDG_DATA_HOME" );
+        char *user_home = getenv( "HOME" );
+
+        if ( !xdg_data_home ) {
+                const char *default_data_directory = "/.local/share";
+                if ( !user_home ) return NULL;
+                xdg_data_home = mstrjoin( user_home, default_data_directory );
+        } else {
+                xdg_data_home = strdup( xdg_data_home );
+        }
+
+        return xdg_data_home;
+}
+
+int make_parent_directory( const char *path ) {
+        char *normal;
+        char *walk;
+        size_t normallen;
+
+        normalize_path( path, &normal );
+        normallen = strlen( normal );
+        walk = normal;
+
+        while ( walk < normal + normallen + 1 ) {
+                // Get length from walk to next /
+                size_t n = strcspn( walk, "/" );
+
+                // Skip path /
+                if ( n == 0 ) {
+                        walk++;
+                        continue;
+                }
+
+                // Length of current path segment
+                size_t curpathlen = walk - normal + n;
+                char curpath[ curpathlen + 1 ];
+                struct stat s;
+
+                // Copy path segment to stat
+                strncpy( curpath, normal, curpathlen );
+                strcpy( curpath + curpathlen, "" );
+                int res = stat( curpath, &s );
+
+                if ( res < 0 ) {
+                        if ( errno == ENOENT ) {
+                                log_debug( "Making directory %s\n", curpath );
+                                if ( mkdir( curpath, 0700 ) < 0 ) {
+                                        log_error( "Failed to make directory %s\n", curpath );
+                                        perror( "" );
+                                        free( normal );
+                                        return -1;
+                                }
+                        } else {
+                                log_error( "Error stat-ing directory %s\n", curpath );
+                                perror( "" );
+                                free( normal );
+                                return -1;
+                        }
+                }
+
+                // Continue to next path segment
+                walk += n;
+        }
+
+        free( normal );
+
+        return 0;
+}
+
+#ifndef __clang__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpragmas"
+#pragma GCC diagnostic ignored "-Wstringop-truncation"
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
+
+// gcc warns about legitimate truncation worries in strncpy in mstrjoin.
+// strncpy( joined_string, string_1, length_1 ) intentionally truncates the null byte
+// from string_1, however. strncpy( joined_string + length_1, string_2, length_2 )
+// uses bounds depending on the source argument, but joined_string is allocated with
+// length_1 + length_2 + 1, so this strncpy can't overflow.
+//
+// Allocate the space and join two strings. - Derived from picom ( str.c::mstrjoin() )
+char *mstrjoin( const char *string_1, const char *string_2 ) {
+        const size_t length_1 = strlen( string_1 );
+        const size_t length_2 = strlen( string_2 );
+        const size_t total_length = length_1 + length_2 + 1;
+        char *joined_string = ecalloc( total_length, sizeof( char ) );
+        strncpy( joined_string, string_1, length_1 );
+        strncpy( joined_string + length_1, string_2, length_2 );
+        joined_string[ total_length - 1 ] = '\0';
+        return joined_string;
+}
+
+// Concatenate a string on heap with another string. - Derived from picom ( str.c::mstrextend() )
+void mstrextend( char **source_string_pointer, const char *addition ) {
+        if ( !*source_string_pointer ) {
+                *source_string_pointer = strdup( addition );
+                return;
+        }
+        const size_t length_1 = strlen( *source_string_pointer );
+        const size_t length_2 = strlen( addition );
+        const size_t total_length = length_1 + length_2 + 1;
+        *source_string_pointer = realloc( *source_string_pointer, total_length );
+        strncpy( *source_string_pointer + length_1, addition, length_2 );
+        ( *source_string_pointer )[ total_length - 1 ] = '\0';
+}
+
+#ifndef __clang__
+#pragma GCC diagnostic pop
+#endif
+
+/**
+ * @param path
+ * @param normal
+ * @return
+ */
+int normalize_path( const char *path, char **normal ) {
+        size_t len = strlen( path );
+        *normal = (char *) malloc( ( len + 1 ) * sizeof( char ) );
+        const char *walk = path;
+        const char *match;
+        size_t newlen = 0;
+
+        while ( ( match = strchr( walk, '/' ) ) ) {
+                // Copy everything between match and walk
+                strncpy( *normal + newlen, walk, match - walk );
+                newlen += match - walk;
+                walk += match - walk;
+
+                // Skip all repeating slashes
+                while ( *walk == '/' ) walk++;
+
+                // If not last character in path
+                if ( walk != path + len ) ( *normal )[ newlen++ ] = '/';
+        }
+
+        ( *normal )[ newlen++ ] = '\0';
+
+        // Copy remaining path
+        strcat( *normal, walk );
+        newlen += strlen( walk );
+
+        *normal = (char *) realloc( *normal, newlen * sizeof( char ) );
+
+        return 0;
 }
