@@ -37,19 +37,19 @@ typedef struct Configuration {
         unsigned int borderpx, snap, nmaster, refreshrate;
         float mfact;
 
-        char *tags[ LENGTH( tags ) ];
+        char *tag_array[ LENGTH( tags ) ];
 
         const char *font;
-        const char *theme[ LENGTH( colors ) ][ LENGTH( colors[ 0 ] ) ];
+        const char *color_array[ LENGTH( colors ) ][ LENGTH( colors[ 0 ] ) ];
 
-        unsigned int rules_count;
-        Rule *rules;
+        unsigned int rule_array_size;
+        Rule *rule_array;
 
-        unsigned int keybinds_count;
-        Key *keybinds;
+        unsigned int keybind_array_size;
+        Key *keybind_array;
 
-        unsigned int buttonbinds_count;
-        Button *buttonbinds;
+        unsigned int buttonbind_array_size;
+        Button *buttonbind_array;
 } Configuration;
 
 static Configuration dwm_config = { 0 };
@@ -340,14 +340,14 @@ static void _load_default_master_config( Configuration *master_config ) {
         master_config->max_keys = 4;
         master_config->default_binds_loaded = false;
 
-        master_config->rules_count = 0;
-        master_config->rules = NULL;
+        master_config->rule_array_size = 0;
+        master_config->rule_array = NULL;
 
-        master_config->keybinds_count = 0;
-        master_config->keybinds = NULL;
+        master_config->keybind_array_size = 0;
+        master_config->keybind_array = NULL;
 
-        master_config->buttonbinds_count = 0;
-        master_config->buttonbinds = NULL;
+        master_config->buttonbind_array_size = 0;
+        master_config->buttonbind_array = NULL;
 
         // Values from config.h
         master_config->showbar = showbar;
@@ -365,12 +365,12 @@ static void _load_default_master_config( Configuration *master_config ) {
 
         for ( int i = 0; i < LENGTH( colors ); i++ ) {
                 for ( int j = 0; j < LENGTH( colors[ i ] ); j++ ) {
-                        master_config->theme[ i ][ j ] = strdup( colors[ i ][ j ] );
+                        master_config->color_array[ i ][ j ] = strdup( colors[ i ][ j ] );
                 }
         }
 
-        for ( int i = 0; i < LENGTH( master_config->tags ); i++ ) {
-                master_config->tags[ i ] = strdup( tags[ i ] );
+        for ( int i = 0; i < LENGTH( master_config->tag_array ); i++ ) {
+                master_config->tag_array[ i ] = strdup( tags[ i ] );
         }
 }
 
@@ -444,8 +444,8 @@ static int _open_config( config_t *config, char **config_filepath, Configuration
         }
 
         log_error( "Unable to load any configs. Loading hardcoded default config values and exiting parsing\n" );
-        _load_default_keybind_config( &master_config->keybinds, &master_config->keybinds_count );
-        _load_default_buttonbind_config( &master_config->buttonbinds, &master_config->buttonbinds_count );
+        _load_default_keybind_config( &master_config->keybind_array, &master_config->keybind_array_size );
+        _load_default_buttonbind_config( &master_config->buttonbind_array, &master_config->buttonbind_array_size );
 
         for ( i = 0; i < config_filepaths_length; i++ ) {
                 SAFE_FREE( config_filepaths[ i ] );
@@ -464,36 +464,36 @@ void config_cleanup( Configuration *master_config ) {
 
         SAFE_FREE( master_config->font );
 
-        for ( i = 0; i < LENGTH( master_config->tags ); i++ ) {
-                SAFE_FREE( master_config->tags[ i ] );
+        for ( i = 0; i < LENGTH( master_config->tag_array ); i++ ) {
+                SAFE_FREE( master_config->tag_array[ i ] );
         }
 
-        for ( i = 0; i < master_config->rules_count; i++ ) {
-                SAFE_FREE( master_config->rules[ i ].class );
-                SAFE_FREE( master_config->rules[ i ].instance );
-                SAFE_FREE( master_config->rules[ i ].title );
+        for ( i = 0; i < master_config->rule_array_size; i++ ) {
+                SAFE_FREE( master_config->rule_array[ i ].class );
+                SAFE_FREE( master_config->rule_array[ i ].instance );
+                SAFE_FREE( master_config->rule_array[ i ].title );
         }
 
-        for ( i = 0; i < LENGTH( master_config->theme ); i++ ) {
-                for ( int j = 0; j < LENGTH( master_config->theme[ i ] ); j++ ) {
-                        SAFE_FREE( master_config->theme[ i ][ j ] );
+        for ( i = 0; i < LENGTH( master_config->color_array ); i++ ) {
+                for ( int j = 0; j < LENGTH( master_config->color_array[ i ] ); j++ ) {
+                        SAFE_FREE( master_config->color_array[ i ][ j ] );
                 }
         }
 
         if ( !master_config->default_binds_loaded ) {
-                for ( i = 0; i < master_config->keybinds_count; i++ ) {
-                        if ( master_config->keybinds[ i ].argument_type == ARG_TYPE_POINTER ) {
-                                SAFE_FREE( master_config->keybinds[ i ].arg.v );
+                for ( i = 0; i < master_config->keybind_array_size; i++ ) {
+                        if ( master_config->keybind_array[ i ].argument_type == ARG_TYPE_POINTER ) {
+                                SAFE_FREE( master_config->keybind_array[ i ].arg.v );
                         }
                 }
-                SAFE_FREE( master_config->keybinds );
+                SAFE_FREE( master_config->keybind_array );
 
-                for ( i = 0; i < master_config->buttonbinds_count; i++ ) {
-                        if ( master_config->buttonbinds[ i ].argument_type == ARG_TYPE_POINTER ) {
-                                SAFE_FREE( master_config->buttonbinds[ i ].arg.v );
+                for ( i = 0; i < master_config->buttonbind_array_size; i++ ) {
+                        if ( master_config->buttonbind_array[ i ].argument_type == ARG_TYPE_POINTER ) {
+                                SAFE_FREE( master_config->buttonbind_array[ i ].arg.v );
                         }
                 }
-                SAFE_FREE( master_config->buttonbinds );
+                SAFE_FREE( master_config->buttonbind_array );
         }
 
         config_destroy( master_config->libconfig_config );
@@ -539,9 +539,9 @@ int parse_config( const char *custom_config_filepath, Configuration *master_conf
         // The return values from the functions aren't the greatest and I may want a threshold
         // or severity based on the error.
         total_errors += _parse_generic_settings( &libconfig_config, master_config );
-        total_errors += _parse_keybinds_config( &libconfig_config, &master_config->keybinds, &master_config->keybinds_count, master_config->max_keys );
-        total_errors += _parse_buttonbinds_config( &libconfig_config, &master_config->buttonbinds, &master_config->buttonbinds_count, master_config->max_keys );
-        total_errors += _parse_rules_config( &libconfig_config, &master_config->rules, &master_config->rules_count );
+        total_errors += _parse_keybinds_config( &libconfig_config, &master_config->keybind_array, &master_config->keybind_array_size, master_config->max_keys );
+        total_errors += _parse_buttonbinds_config( &libconfig_config, &master_config->buttonbind_array, &master_config->buttonbind_array_size, master_config->max_keys );
+        total_errors += _parse_rules_config( &libconfig_config, &master_config->rule_array, &master_config->rule_array_size );
         total_errors += _parse_tags_config( &libconfig_config, master_config );
         total_errors += _parse_theme_config( &libconfig_config, master_config );
 
@@ -1095,9 +1095,9 @@ static int _parse_rules_config( const config_t *config, Rule **rules_config, uns
         int failed_rules_count = 0;
         int failed_rules_elements_count = 0;
 
-        const config_setting_t *rules = config_lookup( config, "rules" );
-        if ( rules != NULL ) {
-                *rules_count = config_setting_length( rules );
+        const config_setting_t *rules_setting = config_lookup( config, "rules" );
+        if ( rules_setting != NULL ) {
+                *rules_count = config_setting_length( rules_setting );
 
                 if ( *rules_count == 0 ) {
                         log_warn( "No rules listed, exiting rules parsing\n" );
@@ -1112,7 +1112,7 @@ static int _parse_rules_config( const config_t *config, Rule **rules_config, uns
                 const config_setting_t *rule = NULL;
 
                 for ( int i = 0; i < *rules_count; i++ ) {
-                        rule = config_setting_get_elem( rules, i );
+                        rule = config_setting_get_elem( rules_setting, i );
                         if ( rule != NULL ) {
 
                                 libconfig_setting_lookup_string( rule, "class", &tmp_string, false );
@@ -1184,9 +1184,9 @@ static int _parse_tags_config( const config_t *config, Configuration *master_con
                                 continue;
                         }
 
-                        SAFE_FREE( master_config->tags[ i ] );
-                        master_config->tags[ i ] = strdup( tag_name );
-                        if ( master_config->tags[ i ] == NULL ) {
+                        SAFE_FREE( master_config->tag_array[ i ] );
+                        master_config->tag_array[ i ] = strdup( tag_name );
+                        if ( master_config->tag_array[ i ] == NULL ) {
                                 log_error( "strdup failed while copying parsed tag %d\n", i );
                                 tags_failed_count++;
                                 continue;
@@ -1213,12 +1213,12 @@ static int _parse_theme( const config_setting_t *theme, Configuration *master_co
                 const char **value;
         } Theme_Mapping[ ] = {
                 { "font", &master_config->font },
-                { "normal-foreground", &master_config->theme[ SchemeNorm ][ ColFg ] },
-                { "normal-background", &master_config->theme[ SchemeNorm ][ ColBg ] },
-                { "normal-border", &master_config->theme[ SchemeNorm ][ ColBorder ] },
-                { "selected-foreground", &master_config->theme[ SchemeSel ][ ColFg ] },
-                { "selected-background", &master_config->theme[ SchemeSel ][ ColBg ] },
-                { "selected-border", &master_config->theme[ SchemeSel ][ ColBorder ] },
+                { "normal-foreground", &master_config->color_array[ SchemeNorm ][ ColFg ] },
+                { "normal-background", &master_config->color_array[ SchemeNorm ][ ColBg ] },
+                { "normal-border", &master_config->color_array[ SchemeNorm ][ ColBorder ] },
+                { "selected-foreground", &master_config->color_array[ SchemeSel ][ ColFg ] },
+                { "selected-background", &master_config->color_array[ SchemeSel ][ ColBg ] },
+                { "selected-border", &master_config->color_array[ SchemeSel ][ ColBorder ] },
         };
 
         for ( int i = 0; i < LENGTH( Theme_Mapping ); i++ ) {
@@ -1331,6 +1331,17 @@ static void setlayout_tiled( const Arg *arg ) {
         } else {
                 setlayout( &tmp );
         }
+}
+
+static unsigned long _length_wrapper( const void *pointer, const unsigned long length ) {
+
+        // Return custom lengths if they match elements from dwm_config
+        if ( pointer == dwm_config.rule_array ) return dwm_config.rule_array_size;
+        if ( pointer == dwm_config.keybind_array ) return dwm_config.keybind_array_size;
+        if ( pointer == dwm_config.buttonbind_array ) return dwm_config.buttonbind_array_size;
+
+        // Else return the computed length from sizeof(pointer)/sizeof(pointer)[0]
+        return length;
 }
 
 // Derived from picom ( config.c::xdg_config_home() )
@@ -1498,3 +1509,38 @@ int normalize_path( const char *path, char **normal ) {
 
         return 0;
 }
+
+// This is to silence compiler warnings from the new length macro, feel free to remove this.
+#pragma GCC diagnostic ignored "-Wsizeof-pointer-div"
+
+// Undefine original length macro in favor of this modified wrapper. Lose compile
+// time calculation under most optimizations, but is required for how the parser
+// overrides the variables from config.h
+#undef LENGTH
+#define LENGTH( X ) _length_wrapper( X, ( sizeof( X ) / sizeof( X )[ 0 ] ) )
+static unsigned long _length_wrapper( const void *pointer, unsigned long length );
+
+// Override config.h variables with parsed values. This is done at the end of the file
+// to reduce the headaches above, where some values from config.h are used as fallbacks
+// if parsing fails.
+#define rules dwm_config.rule_array
+#define keys dwm_config.keybind_array
+#define buttons dwm_config.buttonbind_array
+#define colors dwm_config.color_array
+
+#define resizehints dwm_config.resizehints
+#define lockfullscreen dwm_config.lockfullscreen
+#define borderpx dwm_config.borderpx
+#define snap dwm_config.snap
+#define refreshrate dwm_config.refreshrate
+
+// TODO: Still need to be implemented under this new paradigm:
+//      - tags
+//      - font
+//      - showbar
+//      - topbar
+//      - nmaster
+//      - mfact
+//
+// These will prove much harder because their names also overlap
+// with struct members of the monitor and client structs.
