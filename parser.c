@@ -21,6 +21,7 @@
 #define log_error( ... ) fprintf( stdout, "ERROR: " __VA_ARGS__ );
 #define log_fatal( ... ) fprintf( stdout, "FATAL: " __VA_ARGS__ );
 
+// Simple wrappers for free/fclose to improve null safety. It is not flawless or a catch-all however
 #define SAFE_FREE( p )     do { if ( p ) { free( ( void * ) ( p ) ); ( p ) = NULL; } } while ( 0 )
 #define SAFE_FCLOSE( f )   do { if ( f ) { fclose( f ); ( f ) = NULL; } } while ( 0 )
 
@@ -53,11 +54,10 @@ typedef struct Configuration {
 } Configuration;
 
 static Configuration dwm_config = { 0 };
-static char *custom_config_path = NULL;
 
 // Public parser functions
 static void config_cleanup( Configuration *master_config );
-static int parse_config( const char *custom_config_filepath, Configuration *master_config );
+static int parse_config( Configuration *master_config );
 
 // Parser specific functions
 static void _backup_config( config_t *config );
@@ -444,6 +444,8 @@ static int _open_config( config_t *config, char **config_filepath, Configuration
         }
 
         log_error( "Unable to load any configs. Loading hardcoded default config values and exiting parsing\n" );
+
+        master_config->default_binds_loaded = true;
         _load_default_keybind_config( &master_config->keybind_array, &master_config->keybind_array_size );
         _load_default_buttonbind_config( &master_config->buttonbind_array, &master_config->buttonbind_array_size );
 
@@ -499,7 +501,7 @@ void config_cleanup( Configuration *master_config ) {
         config_destroy( master_config->libconfig_config );
 }
 
-int parse_config( const char *custom_config_filepath, Configuration *master_config ) {
+int parse_config( Configuration *master_config ) {
 
         static config_t libconfig_config;
         char *config_filepath = NULL;
@@ -509,12 +511,12 @@ int parse_config( const char *custom_config_filepath, Configuration *master_conf
         config_init( &libconfig_config );
         master_config->libconfig_config = &libconfig_config;
 
-        // Populate master dwm configuration with default values
-        _load_default_master_config( master_config );
-
         // Simple way of passing users custom config to open_config()
         // This strdup is freed at the start of open_config()
-        if ( custom_config_filepath != NULL ) config_filepath = strdup( custom_config_filepath );
+        if ( dwm_config.config_filepath != NULL ) config_filepath = strdup( dwm_config.config_filepath );
+
+        // Populate master dwm configuration with default values
+        _load_default_master_config( master_config );
 
         if ( _open_config( &libconfig_config, &config_filepath, master_config ) ) return -1;
 

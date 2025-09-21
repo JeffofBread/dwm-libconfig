@@ -1572,7 +1572,7 @@ setup(void)
 	sh = DisplayHeight(dpy, screen);
 	root = RootWindow(dpy, screen);
 	drw = drw_create(dpy, screen, root, sw, sh);
-	parse_config( custom_config_path, &dwm_config );
+	parse_config( &dwm_config );
 	if (!drw_fontset_create(drw, &dwm_config.font, 1 ))
 		die("no fonts could be loaded.");
 	lrpad = drw->fonts->h;
@@ -2160,7 +2160,7 @@ main(int argc, char *argv[])
 	if (argc == 2 && !strcmp("-v", argv[1]))
 		die("dwm-"VERSION);
 	else if ( argc == 3 && !strcmp("-c", argv[1]) )
-	        custom_config_path = argv[2];
+	        dwm_config.config_filepath = argv[2];
 	else if (argc != 1)
 		die("usage: dwm [-v] [-c PATH]");
 	if (!setlocale(LC_CTYPE, "") || !XSupportsLocale())
