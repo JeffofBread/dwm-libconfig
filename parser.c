@@ -1162,7 +1162,7 @@ static int _parse_tags_config( const config_t *config, Configuration *master_con
         if ( tag_names != NULL ) {
                 int i = 0;
                 const char *tag_name = NULL;
-                const int tags_count = config_setting_length( tag_names );
+                int tags_count = config_setting_length( tag_names );
 
                 if ( tags_count == 0 ) {
                         log_warn( "No tag names detected while parsing config, default tag names will be used\n" );
@@ -1173,11 +1173,12 @@ static int _parse_tags_config( const config_t *config, Configuration *master_con
 
                 if ( tags_count > LENGTH( tags ) ) {
                         log_warn( "More than %lu tag names detected (%d were detected) while parsing config, only the first %lu will be used\n", LENGTH( tags ), tags_count, LENGTH( tags ) );
+                        tags_count = LENGTH( tags );
                 } else if ( tags_count < LENGTH( tags ) ) {
                         log_warn( "Less than %lu tag names detected while parsing config, filler tags will be used for the remainder\n", LENGTH( tags ) );
                 }
 
-                for ( i = 0; i < tags_count && i < 9; i++ ) {
+                for ( i = 0; i < tags_count; i++ ) {
                         tag_name = config_setting_get_string_elem( tag_names, i );
 
                         if ( tag_name == NULL ) {
