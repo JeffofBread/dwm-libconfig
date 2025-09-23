@@ -75,7 +75,7 @@ There are still a few things I want to adjust before releasing this as a proper 
 - [ ] Complete documentation. I have about 50% of it already elsewhere, it just needs to be completed and adapted to this version of the parser
 - [x] Fix the very clumsy logging. `print_log()` is just a placeholder macro to bridge the gap between my fully fledged logger and dwm's original source. It needs a little more polish.
 - [x] If I can, I want to remove the need for most functions called by a bind to be made a non-const `Arg`. If I can solve this, it will reduce the codebase impact of the patch and reduce conflicts with other patches a little.
-- [ ] Reduce codebase impact as much as possible to improve patch compatability. It is close, and im pretty happy with it as is, but it can be taken further.
+- [x] Reduce codebase impact as much as possible to improve patch compatability.
 - [ ] Add an extra diff(s) to support patches like [restartsig](https://dwm.suckless.org/patches/restartsig/) out of the box
 
 ## Reaching Out
