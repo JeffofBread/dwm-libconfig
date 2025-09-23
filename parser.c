@@ -63,9 +63,9 @@ static int _parse_keybind_keysym( const char *keysym_string, KeySym *keysym );
 static int _parse_keybinds_config( const config_t *config, Key **keybind_config, unsigned int *keybinds_count, unsigned int max_keys );
 static int _parse_rules_string( const char *input_string, char **output_string );
 static int _parse_rules_config( const config_t *config, Rule **rules_config, unsigned int *rules_count );
-static int _parse_tags_config( const config_t *config, Configuration *master_config );
-static int _parse_theme( const config_setting_t *theme, Configuration *master_config );
-static int _parse_theme_config( const config_t *config, Configuration *master_config );
+static int _parse_tags_config( const config_t *config );
+static int _parse_theme( const config_setting_t *theme );
+static int _parse_theme_config( const config_t *config );
 
 // Wrapper functions for better compatability
 static void spawn_simple( const Arg *arg );
@@ -74,12 +74,12 @@ static void setlayout_monocle( const Arg *arg );
 static void setlayout_tiled( const Arg *arg );
 
 // Utility functions
-static char *get_xdg_config_home( void );
-static char *get_xdg_data_home( void );
-static int make_parent_directory( const char *path );
-static char *mstrjoin( const char *string_1, const char *string_2 );
-static void mstrextend( char **source_string_pointer, const char *addition );
-static int normalize_path( const char *path, char **normal );
+static char *_get_xdg_config_home( void );
+static char *_get_xdg_data_home( void );
+static int _make_parent_directory( const char *path );
+static char *_join_strings( const char *string_1, const char *string_2 );
+static void _extend_string( char **source_string_pointer, const char *addition );
+static int _normalize_path( const char *path, char **normal );
 
 // Inline helper functions
 static inline int normalize_range_int( const int i, const int min, const int max ) {
@@ -278,7 +278,7 @@ static inline char *trim_whitespace( char *string ) {
 static void _backup_config( config_t *config ) {
 
         // Save xdg data folder to buffer (~/.local/share)
-        char *buffer = get_xdg_data_home();
+        char *buffer = _get_xdg_data_home();
 
         if ( buffer == NULL ) {
                 log_error( "Unable to get necessary directory to backup config\n" );
@@ -288,9 +288,9 @@ static void _backup_config( config_t *config ) {
                 // with the directory we want to backup the config to, create the directory
                 // if it doesn't exist, and then append with the filename we want to backup
                 // to config in.
-                mstrextend( &buffer, "/dwm/" );
-                make_parent_directory( buffer );
-                mstrextend( &buffer, "dwm_last.conf" );
+                _extend_string( &buffer, "/dwm/" );
+                _make_parent_directory( buffer );
+                _extend_string( &buffer, "dwm_last.conf" );
 
                 if ( config_write_file( config, buffer ) == CONFIG_FALSE ) {
                         log_error( "Problem backing up current config to \"%s\"\n", buffer );
@@ -358,18 +358,18 @@ static int _open_config( config_t *config, char **config_filepath, Configuration
         }
 
         // ~/.config/dwm.conf
-        char *config_top_directory = get_xdg_config_home();
-        mstrextend( &config_top_directory, "/dwm.conf" );
+        char *config_top_directory = _get_xdg_config_home();
+        _extend_string( &config_top_directory, "/dwm.conf" );
         config_filepaths[ config_filepaths_length++ ] = config_top_directory;
 
         // ~/.config/dwm/dwm.conf
-        char *config_sub_directory = get_xdg_config_home();
-        mstrextend( &config_sub_directory, "/dwm/dwm.conf" );
+        char *config_sub_directory = _get_xdg_config_home();
+        _extend_string( &config_sub_directory, "/dwm/dwm.conf" );
         config_filepaths[ config_filepaths_length++ ] = config_sub_directory;
 
         // ~/.local/share/dwm/dwm_last.conf
-        char *config_backup = get_xdg_data_home();
-        mstrextend( &config_backup, "/dwm/dwm_last.conf" );
+        char *config_backup = _get_xdg_data_home();
+        _extend_string( &config_backup, "/dwm/dwm_last.conf" );
         config_filepaths[ config_filepaths_length++ ] = config_backup;
 
         // /etc/dwm/dwm.conf
@@ -514,8 +514,8 @@ int parse_config( Configuration *master_config ) {
         total_errors += _parse_keybinds_config( &libconfig_config, &master_config->keybind_array, &master_config->keybind_array_size, master_config->max_keys );
         total_errors += _parse_buttonbinds_config( &libconfig_config, &master_config->buttonbind_array, &master_config->buttonbind_array_size, master_config->max_keys );
         total_errors += _parse_rules_config( &libconfig_config, &master_config->rule_array, &master_config->rule_array_size );
-        total_errors += _parse_tags_config( &libconfig_config, master_config );
-        total_errors += _parse_theme_config( &libconfig_config, master_config );
+        total_errors += _parse_tags_config( &libconfig_config );
+        total_errors += _parse_theme_config( &libconfig_config );
 
         // The error requirement being 0 may be a bit strict, I am not sure yet. May need
         // some relaxing or possibly come up with a better way of calculating if a config
@@ -1124,7 +1124,7 @@ static int _parse_rules_config( const config_t *config, Rule **rules_config, uns
         return failed_rules_count + failed_rules_elements_count;
 }
 
-static int _parse_tags_config( const config_t *config, Configuration *master_config ) {
+static int _parse_tags_config( const config_t *config ) {
 
         int tags_failed_count = 0;
 
@@ -1177,7 +1177,7 @@ static int _parse_tags_config( const config_t *config, Configuration *master_con
         return tags_failed_count;
 }
 
-static int _parse_theme( const config_setting_t *theme, Configuration *master_config ) {
+static int _parse_theme( const config_setting_t *theme ) {
 
         const char *tmp_string = NULL;
 
@@ -1208,7 +1208,7 @@ static int _parse_theme( const config_setting_t *theme, Configuration *master_co
         return theme_elements_failed_count;
 }
 
-static int _parse_theme_config( const config_t *config, Configuration *master_config ) {
+static int _parse_theme_config( const config_t *config ) {
 
         int failed_themes_count = 0;
         int failed_theme_elements_count = 0;
@@ -1245,7 +1245,7 @@ static int _parse_theme_config( const config_t *config, Configuration *master_co
                                 continue;
                         }
 
-                        failed_theme_elements_count += _parse_theme( theme, master_config );
+                        failed_theme_elements_count += _parse_theme( theme );
                         log_debug( "%d elements failed to be parsed in theme number %d\n", failed_theme_elements_count, i + 1 );
                 }
 
@@ -1322,14 +1322,14 @@ static unsigned long _length_wrapper( const Configuration *master_config, const 
 }
 
 // Derived from picom ( config.c::xdg_config_home() )
-char *get_xdg_config_home( void ) {
+char *_get_xdg_config_home( void ) {
         char *xdg_config_home = getenv( "XDG_CONFIG_HOME" );
         char *user_home = getenv( "HOME" );
 
         if ( !xdg_config_home ) {
                 const char *default_config_directory = "/.config";
                 if ( !user_home ) return NULL;
-                xdg_config_home = mstrjoin( user_home, default_config_directory );
+                xdg_config_home = _join_strings( user_home, default_config_directory );
         } else {
                 xdg_config_home = strdup( xdg_config_home );
         }
@@ -1338,14 +1338,14 @@ char *get_xdg_config_home( void ) {
 }
 
 // Derived from picom ( config.c::xdg_config_home() )
-char *get_xdg_data_home( void ) {
+char *_get_xdg_data_home( void ) {
         char *xdg_data_home = getenv( "XDG_DATA_HOME" );
         char *user_home = getenv( "HOME" );
 
         if ( !xdg_data_home ) {
                 const char *default_data_directory = "/.local/share";
                 if ( !user_home ) return NULL;
-                xdg_data_home = mstrjoin( user_home, default_data_directory );
+                xdg_data_home = _join_strings( user_home, default_data_directory );
         } else {
                 xdg_data_home = strdup( xdg_data_home );
         }
@@ -1353,12 +1353,20 @@ char *get_xdg_data_home( void ) {
         return xdg_data_home;
 }
 
-int make_parent_directory( const char *path ) {
+/**
+ * @param path
+ * @return
+ *
+ * @author Mihir Lad - <mihirlad55@gmail>
+ * @see https://github.com/mihirlad55/dwm-ipc
+ */
+// Derived from dwm-ipc ( util.c::mkdirp() )
+int _make_parent_directory( const char *path ) {
         char *normal;
         char *walk;
         size_t normallen;
 
-        normalize_path( path, &normal );
+        _normalize_path( path, &normal );
         normallen = strlen( normal );
         walk = normal;
 
@@ -1415,14 +1423,14 @@ int make_parent_directory( const char *path ) {
 #pragma GCC diagnostic ignored "-Wstringop-overflow"
 #endif
 
-// gcc warns about legitimate truncation worries in strncpy in mstrjoin.
+// gcc warns about legitimate truncation worries in strncpy in _join_strings.
 // strncpy( joined_string, string_1, length_1 ) intentionally truncates the null byte
 // from string_1, however. strncpy( joined_string + length_1, string_2, length_2 )
 // uses bounds depending on the source argument, but joined_string is allocated with
 // length_1 + length_2 + 1, so this strncpy can't overflow.
 //
 // Allocate the space and join two strings. - Derived from picom ( str.c::mstrjoin() )
-char *mstrjoin( const char *string_1, const char *string_2 ) {
+char *_join_strings( const char *string_1, const char *string_2 ) {
         const size_t length_1 = strlen( string_1 );
         const size_t length_2 = strlen( string_2 );
         const size_t total_length = length_1 + length_2 + 1;
@@ -1434,7 +1442,7 @@ char *mstrjoin( const char *string_1, const char *string_2 ) {
 }
 
 // Concatenate a string on heap with another string. - Derived from picom ( str.c::mstrextend() )
-void mstrextend( char **source_string_pointer, const char *addition ) {
+void _extend_string( char **source_string_pointer, const char *addition ) {
         if ( !*source_string_pointer ) {
                 *source_string_pointer = strdup( addition );
                 return;
@@ -1455,8 +1463,12 @@ void mstrextend( char **source_string_pointer, const char *addition ) {
  * @param path
  * @param normal
  * @return
+ *
+ * @author Mihir Lad - <mihirlad55@gmail>
+ * @see https://github.com/mihirlad55/dwm-ipc
  */
-int normalize_path( const char *path, char **normal ) {
+// Derived from dwm-ipc ( util.c::normalizepath() )
+int _normalize_path( const char *path, char **normal ) {
         size_t len = strlen( path );
         *normal = (char *) malloc( ( len + 1 ) * sizeof( char ) );
         const char *walk = path;
