@@ -26,31 +26,16 @@
 #define SAFE_FCLOSE( f )   do { if ( f ) { fclose( f ); ( f ) = NULL; } } while ( 0 )
 
 typedef struct Configuration {
-
-        // Parser internal values
-        config_t *libconfig_config;
-        char *config_filepath;
-        unsigned int max_keys;
         bool default_binds_loaded;
-
-        // dwm configuration values
-        bool showbar, topbar, resizehints, lockfullscreen;
-        unsigned int borderpx, snap, nmaster, refreshrate;
-        float mfact;
-
-        char *tag_array[ LENGTH( tags ) ];
-
-        const char *font;
-        const char *color_array[ LENGTH( colors ) ][ LENGTH( colors[ 0 ] ) ];
-
+        unsigned int max_keys;
         unsigned int rule_array_size;
-        Rule *rule_array;
-
-        unsigned int keybind_array_size;
-        Key *keybind_array;
-
         unsigned int buttonbind_array_size;
+        unsigned int keybind_array_size;
+        char *config_filepath;
+        Rule *rule_array;
+        Key *keybind_array;
         Button *buttonbind_array;
+        config_t *libconfig_config;
 } Configuration;
 
 static Configuration dwm_config = { 0 };
@@ -349,28 +334,15 @@ static void _load_default_master_config( Configuration *master_config ) {
         master_config->buttonbind_array_size = 0;
         master_config->buttonbind_array = NULL;
 
-        // Values from config.h
-        master_config->showbar = showbar;
-        master_config->topbar = topbar;
-        master_config->resizehints = resizehints;
-        master_config->lockfullscreen = lockfullscreen;
-
-        master_config->borderpx = borderpx;
-        master_config->snap = snap;
-        master_config->nmaster = nmaster;
-        master_config->mfact = mfact;
-        master_config->refreshrate = refreshrate;
-
-        master_config->font = strdup( fonts[ 0 ] );
-
+        // This is a bit lazy, but simplifies cleanup logic.
+        // We dynamically allocate all the values here so they
+        // can universally be freed instead of having to keep
+        // track of which are dynamic and which are static.
+        fonts[ 0 ] = strdup( fonts[ 0 ] );
         for ( int i = 0; i < LENGTH( colors ); i++ ) {
                 for ( int j = 0; j < LENGTH( colors[ i ] ); j++ ) {
-                        master_config->color_array[ i ][ j ] = strdup( colors[ i ][ j ] );
+                        colors[ i ][ j ] = strdup( colors[ i ][ j ] );
                 }
-        }
-
-        for ( int i = 0; i < LENGTH( master_config->tag_array ); i++ ) {
-                master_config->tag_array[ i ] = strdup( tags[ i ] );
         }
 }
 
@@ -464,10 +436,8 @@ void config_cleanup( Configuration *master_config ) {
 
         SAFE_FREE( master_config->config_filepath );
 
-        SAFE_FREE( master_config->font );
-
-        for ( i = 0; i < LENGTH( master_config->tag_array ); i++ ) {
-                SAFE_FREE( master_config->tag_array[ i ] );
+        for ( i = 0; i < LENGTH( tags ); i++ ) {
+                SAFE_FREE( tags[ i ] );
         }
 
         for ( i = 0; i < master_config->rule_array_size; i++ ) {
@@ -476,9 +446,9 @@ void config_cleanup( Configuration *master_config ) {
                 SAFE_FREE( master_config->rule_array[ i ].title );
         }
 
-        for ( i = 0; i < LENGTH( master_config->color_array ); i++ ) {
-                for ( int j = 0; j < LENGTH( master_config->color_array[ i ] ); j++ ) {
-                        SAFE_FREE( master_config->color_array[ i ][ j ] );
+        for ( i = 0; i < LENGTH( colors ); i++ ) {
+                for ( int j = 0; j < LENGTH( colors[ i ] ); j++ ) {
+                        SAFE_FREE( colors[ i ][ j ] );
                 }
         }
 
@@ -513,7 +483,7 @@ int parse_config( Configuration *master_config ) {
 
         // Simple way of passing users custom config to open_config()
         // This strdup is freed at the start of open_config()
-        if ( dwm_config.config_filepath != NULL ) config_filepath = strdup( dwm_config.config_filepath );
+        if ( master_config->config_filepath != NULL ) config_filepath = strdup( master_config->config_filepath );
 
         // Populate master dwm configuration with default values
         _load_default_master_config( master_config );
@@ -897,15 +867,15 @@ static int _parse_generic_settings( const config_t *config, Configuration *maste
                 const long double range_min, range_max;
         } setting_map[ ] = {
                 // General
-                { "showbar", &master_config->showbar, TYPE_BOOL, true },
-                { "topbar", &master_config->topbar, TYPE_BOOL, true },
-                { "resizehints", &master_config->resizehints, TYPE_BOOL, true },
-                { "lockfullscreen", &master_config->lockfullscreen, TYPE_BOOL, true },
-                { "borderpx", &master_config->borderpx, TYPE_UINT, true, 0, 9999 },
-                { "snap", &master_config->snap, TYPE_UINT, true, 0, 9999 },
-                { "nmaster", &master_config->nmaster, TYPE_UINT, true, 0, 99 },
-                { "refreshrate", &master_config->refreshrate, TYPE_UINT, true, 0, 999 },
-                { "mfact", &master_config->mfact, TYPE_FLOAT, true, 0.05f, 0.95f },
+                { "showbar", &showbar, TYPE_BOOL, true },
+                { "topbar", &topbar, TYPE_BOOL, true },
+                { "resizehints", &resizehints, TYPE_BOOL, true },
+                { "lockfullscreen", &lockfullscreen, TYPE_BOOL, true },
+                { "borderpx", &borderpx, TYPE_UINT, true, 0, 9999 },
+                { "snap", &snap, TYPE_UINT, true, 0, 9999 },
+                { "nmaster", &nmaster, TYPE_UINT, true, 0, 99 },
+                { "refreshrate", &refreshrate, TYPE_UINT, true, 0, 999 },
+                { "mfact", &mfact, TYPE_FLOAT, true, 0.05f, 0.95f },
 
                 // Advanced
                 { "max-keys", &master_config->max_keys, TYPE_INT, true, 1, 10 },
@@ -1186,10 +1156,13 @@ static int _parse_tags_config( const config_t *config, Configuration *master_con
                                 continue;
                         }
 
-                        SAFE_FREE( master_config->tag_array[ i ] );
-                        master_config->tag_array[ i ] = strdup( tag_name );
-                        if ( master_config->tag_array[ i ] == NULL ) {
+                        char fallback_tag_name[ 32 ];
+                        snprintf( fallback_tag_name, sizeof( fallback_tag_name ), "%d", i + 1 );
+
+                        tags[ i ] = strdup( tag_name );
+                        if ( tags[ i ] == NULL ) {
                                 log_error( "strdup failed while copying parsed tag %d\n", i );
+                                tags[ i ] = strdup( fallback_tag_name );
                                 tags_failed_count++;
                                 continue;
                         }
@@ -1214,13 +1187,13 @@ static int _parse_theme( const config_setting_t *theme, Configuration *master_co
                 const char *path;
                 const char **value;
         } Theme_Mapping[ ] = {
-                { "font", &master_config->font },
-                { "normal-foreground", &master_config->color_array[ SchemeNorm ][ ColFg ] },
-                { "normal-background", &master_config->color_array[ SchemeNorm ][ ColBg ] },
-                { "normal-border", &master_config->color_array[ SchemeNorm ][ ColBorder ] },
-                { "selected-foreground", &master_config->color_array[ SchemeSel ][ ColFg ] },
-                { "selected-background", &master_config->color_array[ SchemeSel ][ ColBg ] },
-                { "selected-border", &master_config->color_array[ SchemeSel ][ ColBorder ] },
+                { "font", &fonts[ 0 ] },
+                { "normal-foreground", &colors[ SchemeNorm ][ ColFg ] },
+                { "normal-background", &colors[ SchemeNorm ][ ColBg ] },
+                { "normal-border", &colors[ SchemeNorm ][ ColBorder ] },
+                { "selected-foreground", &colors[ SchemeSel ][ ColFg ] },
+                { "selected-background", &colors[ SchemeSel ][ ColBg ] },
+                { "selected-border", &colors[ SchemeSel ][ ColBorder ] },
         };
 
         for ( int i = 0; i < LENGTH( Theme_Mapping ); i++ ) {
@@ -1253,6 +1226,8 @@ static int _parse_theme_config( const config_t *config, Configuration *master_co
 
                 log_debug( "Themes detected: %d\n", detected_theme_count );
 
+                // TODO: Add a simple config setting to choose what theme index to load
+                // Example: "theme-to-use = 2;" will use theme number 2
                 if ( detected_theme_count > 1 ) {
                         log_warn( "More than 1 theme detected. dwm can only use the first theme in list \"themes\"\n" );
                         detected_theme_count = 1;
@@ -1335,15 +1310,15 @@ static void setlayout_tiled( const Arg *arg ) {
         }
 }
 
-static unsigned long _length_wrapper( const void *pointer, const unsigned long length ) {
+static unsigned long _length_wrapper( const Configuration *master_config, const void *pointer, const unsigned long precalculated_length ) {
 
-        // Return custom lengths if they match elements from dwm_config
-        if ( pointer == dwm_config.rule_array ) return dwm_config.rule_array_size;
-        if ( pointer == dwm_config.keybind_array ) return dwm_config.keybind_array_size;
-        if ( pointer == dwm_config.buttonbind_array ) return dwm_config.buttonbind_array_size;
+        // Return custom lengths if they match elements from the master configuration
+        if ( pointer == master_config->rule_array ) return master_config->rule_array_size;
+        if ( pointer == master_config->keybind_array ) return master_config->keybind_array_size;
+        if ( pointer == master_config->buttonbind_array ) return master_config->buttonbind_array_size;
 
         // Else return the computed length from sizeof(pointer)/sizeof(pointer)[0]
-        return length;
+        return precalculated_length;
 }
 
 // Derived from picom ( config.c::xdg_config_home() )
@@ -1519,8 +1494,8 @@ int normalize_path( const char *path, char **normal ) {
 // time calculation under most optimizations, but is required for how the parser
 // overrides the variables from config.h
 #undef LENGTH
-#define LENGTH( X ) _length_wrapper( X, ( sizeof( X ) / sizeof( X )[ 0 ] ) )
-static unsigned long _length_wrapper( const void *pointer, unsigned long length );
+#define LENGTH( X ) _length_wrapper( &dwm_config, X, ( sizeof( X ) / sizeof( X )[ 0 ] ) )
+static unsigned long _length_wrapper( const Configuration *master_config, const void *pointer, unsigned long precalculated_length );
 
 // Override config.h variables with parsed values. This is done at the end of the file
 // to reduce the headaches above, where some values from config.h are used as fallbacks
@@ -1528,21 +1503,3 @@ static unsigned long _length_wrapper( const void *pointer, unsigned long length 
 #define rules dwm_config.rule_array
 #define keys dwm_config.keybind_array
 #define buttons dwm_config.buttonbind_array
-#define colors dwm_config.color_array
-
-#define resizehints dwm_config.resizehints
-#define lockfullscreen dwm_config.lockfullscreen
-#define borderpx dwm_config.borderpx
-#define snap dwm_config.snap
-#define refreshrate dwm_config.refreshrate
-
-// TODO: Still need to be implemented under this new paradigm:
-//      - tags
-//      - font
-//      - showbar
-//      - topbar
-//      - nmaster
-//      - mfact
-//
-// These will prove much harder because their names also overlap
-// with struct members of the monitor and client structs.
