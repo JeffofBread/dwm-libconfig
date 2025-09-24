@@ -878,7 +878,7 @@ static int _parse_generic_settings( const config_t *config, Configuration *maste
                 { "mfact", &mfact, TYPE_FLOAT, true, 0.05f, 0.95f },
 
                 // Advanced
-                { "max-keys", &master_config->max_keys, TYPE_INT, true, 1, 10 },
+                { "max-keys", &master_config->max_keys, TYPE_UINT, true, 1, 10 },
         };
 
         log_debug( "Generic settings available: %lu\n", LENGTH( setting_map ) );
