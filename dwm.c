@@ -66,14 +66,6 @@ enum { WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast }; /* default atoms *
 enum { ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWinTitle,
        ClkClientWin, ClkRootWin, ClkLast }; /* clicks */
 
-enum Argument_Type {
-        ARG_TYPE_NONE,
-        ARG_TYPE_INT,
-        ARG_TYPE_UINT,
-        ARG_TYPE_FLOAT,
-        ARG_TYPE_POINTER,
-};
-
 typedef union {
 	int i;
 	unsigned int ui;
@@ -86,8 +78,7 @@ typedef struct {
 	unsigned int mask;
 	unsigned int button;
 	void (*func)(const Arg *arg);
-	Arg arg;
-	enum Argument_Type argument_type;
+	const Arg arg;
 } Button;
 
 typedef struct Monitor Monitor;
@@ -111,8 +102,7 @@ typedef struct {
 	unsigned int mod;
 	KeySym keysym;
 	void (*func)(const Arg *);
-	Arg arg;
-	enum Argument_Type argument_type;
+	const Arg arg;
 } Key;
 
 typedef struct {
@@ -142,9 +132,9 @@ struct Monitor {
 };
 
 typedef struct {
-	char *class;
-	char *instance;
-	char *title;
+	const char *class;
+	const char *instance;
+	const char *title;
 	unsigned int tags;
 	int isfloating;
 	int monitor;
@@ -282,9 +272,6 @@ static Window root, wmcheckwin;
 
 /* compile-time check if all tags fit into an unsigned int bit array. */
 struct NumTags { char limitexceeded[LENGTH(tags) > 31 ? -1 : 1]; };
-
-/* parser, allows for parsing dwm.conf at runtime */
-#include "parser.c"
 
 /* function implementations */
 void
@@ -501,7 +488,6 @@ cleanup(void)
 	for (i = 0; i < LENGTH(colors); i++)
 		free(scheme[i]);
 	free(scheme);
-	config_cleanup( &dwm_config );
 	XDestroyWindow(dpy, wmcheckwin);
 	drw_free(drw);
 	XSync(dpy, False);
@@ -1572,7 +1558,6 @@ setup(void)
 	sh = DisplayHeight(dpy, screen);
 	root = RootWindow(dpy, screen);
 	drw = drw_create(dpy, screen, root, sw, sh);
-	parse_config( &dwm_config );
 	if (!drw_fontset_create(drw, fonts, LENGTH(fonts)))
 		die("no fonts could be loaded.");
 	lrpad = drw->fonts->h;
@@ -2159,10 +2144,8 @@ main(int argc, char *argv[])
 {
 	if (argc == 2 && !strcmp("-v", argv[1]))
 		die("dwm-"VERSION);
-	else if ( argc == 3 && !strcmp("-c", argv[1]) )
-	        dwm_config.config_filepath = argv[2];
 	else if (argc != 1)
-		die("usage: dwm [-v] [-c PATH]");
+		die("usage: dwm [-v]");
 	if (!setlocale(LC_CTYPE, "") || !XSupportsLocale())
 		fputs("warning: no locale support\n", stderr);
 	if (!(dpy = XOpenDisplay(NULL)))
