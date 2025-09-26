@@ -1,3 +1,24 @@
+/**
+ * @file parser.c
+ * @brief Runtime configuration parser using [libconfig](https://github.com/hyperrealm/libconfig).
+ *
+ * This file replaces the need to edit @ref config.h or @ref config.def.h and recompile to make changes to
+ * dwm's configuration by parsing a configuration file (see example @ref dwm.conf) at runtime. That configuration
+ * file contains all the configuration values traditionally found in @ref config.h or @ref config.def.h, and can
+ * be edited at any time without the need to change dwm's source code, allowing you to install dwm once and
+ * configure it any time you wish without the source code. For more information, please see the patch's GitHub
+ * page: https://github.com/JeffofBread/dwm-libconfig.
+ *
+ * @authors JeffOfBread <jeffofbreadcoding@gmail.com>
+ * @authors TODO: Add authors of specific code/functions
+ *
+ * @see https://github.com/JeffofBread/dwm-libconfig
+ *
+ * @note I (JeffOfBread) did not write every bit of code present in this file. Though I have made minor changes,
+ * it's still not fair to say I wrote the code. Specific credit has been given to each author for their respective
+ * functions/code where it is present.
+ */
+
 #include <ctype.h>
 #include <errno.h>
 #include <libconfig.h>
@@ -142,6 +163,23 @@ static inline float normalize_range_float( const float i, const float min, const
         return i;
 }
 
+/**
+ * @brief Look up a boolean value in a libconfig configuration.
+ *
+ * This function searches the libconfig configuration @p config for a boolean
+ * value at the location @p path using libconfig's config_lookup_bool().
+ * If the lookup succeeds, the result is stored in @p value and 0 is returned.
+ * If the lookup fails (value not found or wrong type), a warning is logged,
+ * @p value is left unchanged, and -1 is returned.
+ *
+ * @param[in] config Pointer to the libconfig configuration.
+ * @param[in] path Path expression to search within @p config.
+ * @param[out] value Pointer to where the parsed value will be stored on success.
+ * @param[in] optional If the value being looked up is optional.
+ * @return 0 on success, -1 on failure.
+ *
+ * @see config_lookup_bool() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005flookup_005fbool)
+ */
 static inline int libconfig_lookup_bool( const config_t *config, const char *path, bool *value, const bool optional ) {
         int tmp = 0;
         if ( config_lookup_bool( config, path, &tmp ) != CONFIG_TRUE ) {
@@ -156,6 +194,23 @@ static inline int libconfig_lookup_bool( const config_t *config, const char *pat
         return 0;
 }
 
+/**
+ * @brief Look up a boolean value in a libconfig setting.
+ *
+ * This function searches the libconfig setting context @p setting for a boolean
+ * value at the location @p path using libconfig's config_setting_lookup_bool().
+ * If the lookup succeeds, the result is stored in @p value and 0 is returned.
+ * If the lookup fails (value not found or wrong type), a warning is logged,
+ * @p value is left unchanged, and -1 is returned.
+ *
+ * @param[in] setting Pointer to the libconfig setting.
+ * @param[in] path Path expression to search within @p setting.
+ * @param[out] value Pointer to where the parsed value will be stored on success.
+ * @param[in] optional If the value being looked up is optional.
+ * @return 0 on success, -1 on failure.
+ *
+ * @see config_setting_lookup_bool() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005fsetting_005flookup_005fbool)
+ */
 static inline int libconfig_setting_lookup_bool( const config_setting_t *setting, const char *path, bool *value, const bool optional ) {
         int tmp = 0;
         if ( config_setting_lookup_bool( setting, path, &tmp ) != CONFIG_TRUE ) {
@@ -170,6 +225,26 @@ static inline int libconfig_setting_lookup_bool( const config_setting_t *setting
         return 0;
 }
 
+/**
+ * @brief Look up an integer value in a libconfig configuration.
+ *
+ * This function searches the libconfig configuration @p config for an integer
+ * value at the location @p path using libconfig's config_lookup_int().
+ * If the lookup succeeds, the result is clamped to a minimum of @p range_min
+ * and maximum of @p range_max, then stored in @p value and 0 is returned.
+ * If the lookup fails (value not found or wrong type), a warning is logged,
+ * @p value is left unchanged, and -1 is returned.
+ *
+ * @param[in] config Pointer to the libconfig config.
+ * @param[in] path Path expression to search within @p config.
+ * @param[out] value Pointer to where the parsed value will be stored on success.
+ * @param[in] optional If the value being looked up is optional.
+ * @param[in] range_min Minimum value that can be saved to @p value.
+ * @param[in] range_max Maximum value that can be saved to @p value.
+ * @return 0 on success, -1 on failure.
+ *
+ * @see config_lookup_int() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005fsetting_005flookup_005fint)
+ */
 static inline int libconfig_lookup_int( const config_t *config, const char *path, int *value, const bool optional, const int range_min, const int range_max ) {
         if ( config_lookup_int( config, path, value ) != CONFIG_TRUE ) {
                 if ( optional ) {
@@ -183,6 +258,26 @@ static inline int libconfig_lookup_int( const config_t *config, const char *path
         return 0;
 }
 
+/**
+ * @brief Look up an integer value in a libconfig setting.
+ *
+ * This function searches the libconfig setting context @p setting for an integer
+ * value at the location @p path using libconfig's config_setting_lookup_int().
+ * If the lookup succeeds, the result is clamped to a minimum of @p range_min
+ * and maximum of @p range_max, then stored in @p value and 0 is returned.
+ * If the lookup fails (value not found or wrong type), a warning is logged,
+ * @p value is left unchanged, and -1 is returned.
+ *
+ * @param[in] setting Pointer to the libconfig setting.
+ * @param[in] path Path expression to search within @p setting.
+ * @param[out] value Pointer to where the parsed value will be stored on success.
+ * @param[in] optional If the value being looked up is optional.
+ * @param[in] range_min Minimum value that can be saved to @p value.
+ * @param[in] range_max Maximum value that can be saved to @p value.
+ * @return 0 on success, -1 on failure.
+ *
+ * @see config_setting_lookup_int() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005flookup_005fint)
+ */
 static inline int libconfig_setting_lookup_int( const config_setting_t *setting, const char *path, int *value, const bool optional, const int range_min, const int range_max ) {
         if ( config_setting_lookup_int( setting, path, value ) != CONFIG_TRUE ) {
                 if ( optional ) {
@@ -196,6 +291,26 @@ static inline int libconfig_setting_lookup_int( const config_setting_t *setting,
         return 0;
 }
 
+/**
+ * @brief Look up an unsigned integer value in a libconfig configuration.
+ *
+ * This function searches the libconfig configuration @p config for an unsigned
+ * integer value at the location @p path using libconfig's config_lookup_int().
+ * If the lookup succeeds, the result is clamped to a minimum of @p range_min
+ * and maximum of @p range_max, then stored in @p value and 0 is returned.
+ * If the lookup fails (value not found or wrong type), a warning is logged,
+ * @p value is left unchanged, and -1 is returned.
+ *
+ * @param[in] config Pointer to the libconfig config.
+ * @param[in] path Path expression to search within @p config.
+ * @param[out] value Pointer to where the parsed value will be stored on success.
+ * @param[in] optional If the value being looked up is optional.
+ * @param[in] range_min Minimum value that can be saved to @p value.
+ * @param[in] range_max Maximum value that can be saved to @p value.
+ * @return 0 on success, -1 on failure.
+ *
+ * @see config_lookup_int() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005fsetting_005flookup_005fint)
+ */
 static inline int libconfig_lookup_uint( const config_t *config, const char *path, unsigned int *value, const bool optional, const unsigned int range_min, const unsigned int range_max ) {
         int tmp = 0;
         if ( config_lookup_int( config, path, &tmp ) != CONFIG_TRUE ) {
@@ -210,6 +325,26 @@ static inline int libconfig_lookup_uint( const config_t *config, const char *pat
         return 0;
 }
 
+/**
+ * @brief Look up an unsigned integer value in a libconfig setting.
+ *
+ * This function searches the libconfig setting context @p setting for an unsigned
+ * integer value at the location @p path using libconfig's config_setting_lookup_int().
+ * If the lookup succeeds, the result is clamped to a minimum of @p range_min
+ * and maximum of @p range_max, then stored in @p value and 0 is returned.
+ * If the lookup fails (value not found or wrong type), a warning is logged,
+ * @p value is left unchanged, and -1 is returned.
+ *
+ * @param[in] setting Pointer to the libconfig setting.
+ * @param[in] path Path expression to search within @p setting.
+ * @param[out] value Pointer to where the parsed value will be stored on success.
+ * @param[in] optional If the value being looked up is optional.
+ * @param[in] range_min Minimum value that can be saved to @p value.
+ * @param[in] range_max Maximum value that can be saved to @p value.
+ * @return 0 on success, -1 on failure.
+ *
+ * @see config_setting_lookup_int() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005flookup_005fint)
+ */
 static inline int libconfig_setting_lookup_uint( const config_setting_t *setting, const char *path, unsigned int *value, const bool optional, const unsigned int range_min,
                                                  const unsigned int range_max ) {
         int tmp = 0;
@@ -225,6 +360,26 @@ static inline int libconfig_setting_lookup_uint( const config_setting_t *setting
         return 0;
 }
 
+/**
+ * @brief Look up a float value in a libconfig configuration.
+ *
+ * This function searches the libconfig configuration @p config for a floating
+ * point value at the location @p path using libconfig's config_lookup_float().
+ * If the lookup succeeds, the result is clamped to a minimum of @p range_min
+ * and maximum of @p range_max, then stored in @p value and 0 is returned.
+ * If the lookup fails (value not found or wrong type), a warning is logged,
+ * @p value is left unchanged, and -1 is returned.
+ *
+ * @param[in] config Pointer to the libconfig config.
+ * @param[in] path Path expression to search within @p config.
+ * @param[out] value Pointer to where the parsed value will be stored on success.
+ * @param[in] optional If the value being looked up is optional.
+ * @param[in] range_min Minimum value that can be saved to @p value.
+ * @param[in] range_max Maximum value that can be saved to @p value.
+ * @return 0 on success, -1 on failure.
+ *
+ * @see config_lookup_float() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005fsetting_005flookup_005ffloat)
+ */
 static inline int libconfig_lookup_float( const config_t *config, const char *path, float *value, const bool optional, const float range_min, const float range_max ) {
         double tmp = 0;
         if ( config_lookup_float( config, path, &tmp ) != CONFIG_TRUE ) {
@@ -239,6 +394,23 @@ static inline int libconfig_lookup_float( const config_t *config, const char *pa
         return 0;
 }
 
+/**
+ * @brief Look up a string value in a libconfig configuration.
+ *
+ * This function searches the libconfig configuration @p config for a string
+ * value at the location @p path using libconfig's config_lookup_string().
+ * If the lookup succeeds, the result is stored in @p value and 0 is returned.
+ * If the lookup fails (value not found or wrong type), a warning is logged,
+ * @p value is left unchanged, and -1 is returned.
+ *
+ * @param[in] config Pointer to the libconfig configuration.
+ * @param[in] path Path expression to search within @p config.
+ * @param[out] value Pointer to where the parsed value will be stored on success.
+ * @param[in] optional If the value being looked up is optional.
+ * @return 0 on success, -1 on failure.
+ *
+ * @see config_lookup_string() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005flookup_005fstring)
+ */
 static inline int libconfig_lookup_string( const config_t *config, const char *path, const char **value, const bool optional ) {
         if ( config_lookup_string( config, path, value ) != CONFIG_TRUE ) {
                 if ( optional ) {
@@ -251,6 +423,23 @@ static inline int libconfig_lookup_string( const config_t *config, const char *p
         return 0;
 }
 
+/**
+ * @brief Look up a string value in a libconfig setting.
+ *
+ * This function searches the libconfig setting context @p setting for a string
+ * value at the location @p path using libconfig's config_setting_lookup_string().
+ * If the lookup succeeds, the result is stored in @p value and 0 is returned.
+ * If the lookup fails (value not found or wrong type), a warning is logged,
+ * @p value is left unchanged, and -1 is returned.
+ *
+ * @param[in] setting Pointer to the libconfig setting.
+ * @param[in] path Path expression to search within @p setting.
+ * @param[out] value Pointer to where the parsed value will be stored on success.
+ * @param[in] optional If the value being looked up is optional.
+ * @return 0 on success, -1 on failure.
+ *
+ * @see config_setting_lookup_string() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005fsetting_005flookup_005fstring)
+ */
 static inline int libconfig_setting_lookup_string( const config_setting_t *setting, const char *path, const char **value, const bool optional ) {
         if ( config_setting_lookup_string( setting, path, value ) == CONFIG_FALSE ) {
                 if ( optional ) {
@@ -263,6 +452,19 @@ static inline int libconfig_setting_lookup_string( const config_setting_t *setti
         return 0;
 }
 
+/**
+ * @brief Removes the whitespace before and after @p string.
+ *
+ * This function trims the whitespace before and after @p string.
+ * The trim is performed in place on @p string, and assumes it is
+ * both mutable and null-terminated.
+ *
+ * @param string[in,out] Null-terminated, mutable string to be trimmed.
+ *
+ * @return On success, a pointer to the first non-space character in
+ * the string is returned. If @p string was entirely whitespace, an
+ * empty string is returned. If @p string was NULL, NULL is returned.
+ */
 static inline char *trim_whitespace( char *string ) {
         if ( !string ) return NULL;
         while ( isspace( (unsigned char) *string ) ) string++;
@@ -275,6 +477,23 @@ static inline char *trim_whitespace( char *string ) {
 
 // ----- Function Definitions -----
 
+/**
+ * @brief Backs up a libconfig configuration to disk.
+ *
+ * This function backs up the given libconfig configuration
+ * context @p config following the XDG specification. If
+ * @ref _get_xdg_data_home() fails to find the XDG data directory
+ * (which is likely), we will default to using "~/.local/share/"
+ * instead. Meaning that, in the latter case, the filepath to
+ * the backup file will be "~/.local/share/dwm/dwm_last.conf".
+ * "/dwm/dwm_last.conf" will always be appended to the end of
+ * whatever path is returned by @ref _get_xdg_data_home().
+ * The backup file is then created and written to by libconfig's
+ * config_write_file().
+ *
+ * @param config[in] Pointer to the libconfig configuration to be
+ * backed up.
+ */
 static void _backup_config( config_t *config ) {
 
         // Save xdg data folder to buffer (~/.local/share)
