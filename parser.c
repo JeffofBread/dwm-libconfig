@@ -103,7 +103,21 @@ static void _extend_string( char **source_string_pointer, const char *addition )
 static int _normalize_path( const char *path, char **normal );
 
 // Inline helper functions
-static inline int normalize_range_int( const int i, const int min, const int max ) {
+
+/**
+ * @brief Clamp an integer value to an inclusive range.
+ *
+ * This function takes in a value @p i to be clamped between
+ * the inclusive ranges @p min and @p max. If the value is
+ * outside this range, the value is clamped and a warning
+ * is logged.
+ *
+ * @param i Value to be clamped.
+ * @param min Inclusive range minimum.
+ * @param max Inclusive range maximum.
+ * @return Clamped value of @p i.
+ */
+static inline int clamp_range_int( const int i, const int min, const int max ) {
         if ( i > max ) {
                 log_warn( "Value %d above max of %d, value clamped to %d\n", i, max, max );
                 return max;
@@ -115,7 +129,20 @@ static inline int normalize_range_int( const int i, const int min, const int max
         return i;
 }
 
-static inline unsigned int normalize_range_uint( const unsigned int i, const unsigned int min, const unsigned int max ) {
+/**
+ * @brief Clamp an unsigned integer value to an inclusive range.
+ *
+ * This function takes in a value @p i to be clamped between
+ * the inclusive ranges @p min and @p max. If the value is
+ * outside this range, the value is clamped and a warning
+ * is logged.
+ *
+ * @param i Value to be clamped.
+ * @param min Inclusive range minimum.
+ * @param max Inclusive range maximum.
+ * @return Clamped value of @p i.
+ */
+static inline unsigned int clamp_range_uint( const unsigned int i, const unsigned int min, const unsigned int max ) {
         if ( i > max ) {
                 log_warn( "Value %u above max of %u, value clamped to %u\n", i, max, max );
                 return max;
@@ -127,7 +154,20 @@ static inline unsigned int normalize_range_uint( const unsigned int i, const uns
         return i;
 }
 
-static inline long normalize_range_long( const long i, const long min, const long max ) {
+/**
+ * @brief Clamp a long integer value to an inclusive range.
+ *
+ * This function takes in a value @p i to be clamped between
+ * the inclusive ranges @p min and @p max. If the value is
+ * outside this range, the value is clamped and a warning
+ * is logged.
+ *
+ * @param i Value to be clamped.
+ * @param min Inclusive range minimum.
+ * @param max Inclusive range maximum.
+ * @return Clamped value of @p i.
+ */
+static inline long clamp_range_long( const long i, const long min, const long max ) {
         if ( i > max ) {
                 log_warn( "Value %ld above max of %ld, value clamped to %ld\n", i, max, max );
                 return max;
@@ -139,7 +179,20 @@ static inline long normalize_range_long( const long i, const long min, const lon
         return i;
 }
 
-static inline unsigned long normalize_range_ulong( const unsigned long i, const unsigned long min, const unsigned long max ) {
+/**
+ * @brief Clamp an unsigned long integer value to an inclusive range.
+ *
+ * This function takes in a value @p i to be clamped between
+ * the inclusive ranges @p min and @p max. If the value is
+ * outside this range, the value is clamped and a warning
+ * is logged.
+ *
+ * @param i Value to be clamped.
+ * @param min Inclusive range minimum.
+ * @param max Inclusive range maximum.
+ * @return Clamped value of @p i.
+ */
+static inline unsigned long clamp_range_ulong( const unsigned long i, const unsigned long min, const unsigned long max ) {
         if ( i > max ) {
                 log_warn( "Value %lu above max of %lu, value clamped to %lu\n", i, max, max );
                 return max;
@@ -151,7 +204,20 @@ static inline unsigned long normalize_range_ulong( const unsigned long i, const 
         return i;
 }
 
-static inline float normalize_range_float( const float i, const float min, const float max ) {
+/**
+ * @brief Clamp a float value to an inclusive range.
+ *
+ * This function takes in a value @p i to be clamped between
+ * the inclusive ranges @p min and @p max. If the value is
+ * outside this range, the value is clamped and a warning
+ * is logged.
+ *
+ * @param i Value to be clamped.
+ * @param min Inclusive range minimum.
+ * @param max Inclusive range maximum.
+ * @return Clamped value of @p i.
+ */
+static inline float clamp_range_float( const float i, const float min, const float max ) {
         if ( i > max ) {
                 log_warn( "Value %f above max of %f, value clamped to %f\n", i, max, max );
                 return max;
@@ -254,7 +320,7 @@ static inline int libconfig_lookup_int( const config_t *config, const char *path
                 log_warn( "Problem reading required config value \"%s\": Not found or of wrong type\n", path );
                 return -1;
         }
-        *value = normalize_range_int( *value, range_min, range_max );
+        *value = clamp_range_int( *value, range_min, range_max );
         return 0;
 }
 
@@ -287,7 +353,7 @@ static inline int libconfig_setting_lookup_int( const config_setting_t *setting,
                 log_warn( "Problem reading required config value \"%s\": Not found or of wrong type\n", path );
                 return -1;
         }
-        *value = normalize_range_int( *value, range_min, range_max );
+        *value = clamp_range_int( *value, range_min, range_max );
         return 0;
 }
 
@@ -321,7 +387,7 @@ static inline int libconfig_lookup_uint( const config_t *config, const char *pat
                 log_warn( "Problem reading required config value \"%s\": Not found or of wrong type\n", path );
                 return -1;
         }
-        *value = normalize_range_uint( tmp, range_min, range_max );
+        *value = clamp_range_uint( tmp, range_min, range_max );
         return 0;
 }
 
@@ -356,7 +422,7 @@ static inline int libconfig_setting_lookup_uint( const config_setting_t *setting
                 log_warn( "Problem reading required config value \"%s\": Not found or of wrong type\n", path );
                 return -1;
         }
-        *value = normalize_range_uint( tmp, range_min, range_max );
+        *value = clamp_range_uint( tmp, range_min, range_max );
         return 0;
 }
 
@@ -390,7 +456,7 @@ static inline int libconfig_lookup_float( const config_t *config, const char *pa
                 log_warn( "Problem reading required config value \"%s\": Not found or of wrong type\n", path );
                 return -1;
         }
-        *value = normalize_range_float( tmp, range_min, range_max );
+        *value = clamp_range_float( tmp, range_min, range_max );
         return 0;
 }
 
@@ -767,17 +833,17 @@ static int _parse_bind_argument( const char *argument_string, const enum Argumen
         char *end_pointer;
         switch ( *arg_type ) {
                 case ARG_TYPE_INT:
-                        arg->i = normalize_range_long( strtol( argument_string, &end_pointer, 10 ), (long) range_min, (long) range_max );
+                        arg->i = clamp_range_long( strtol( argument_string, &end_pointer, 10 ), (long) range_min, (long) range_max );
                         if ( *end_pointer != '\0' ) return -1;
                         log_trace( "Argument type int: %d\n", arg->i );
                         break;
                 case ARG_TYPE_UINT:
-                        arg->ui = normalize_range_ulong( strtoul( argument_string, &end_pointer, 10 ), (long) range_min, (long) range_max );
+                        arg->ui = clamp_range_ulong( strtoul( argument_string, &end_pointer, 10 ), (long) range_min, (long) range_max );
                         if ( *end_pointer != '\0' ) return -1;
                         log_trace( "Argument type unsigned int: %u\n", arg->ui );
                         break;
                 case ARG_TYPE_FLOAT:
-                        arg->f = normalize_range_float( strtof( argument_string, &end_pointer ), (float) range_min, (float) range_max );
+                        arg->f = clamp_range_float( strtof( argument_string, &end_pointer ), (float) range_min, (float) range_max );
                         if ( *end_pointer != '\0' ) return -1;
                         log_trace( "Argument type float: %f\n", arg->f );
                         break;
