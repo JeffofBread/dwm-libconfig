@@ -10,13 +10,17 @@
  * page: https://github.com/JeffofBread/dwm-libconfig.
  *
  * @authors JeffOfBread <jeffofbreadcoding@gmail.com>
- * @authors TODO: Add authors of specific code/functions
+ * @authors Yuxuan Shui - <yshuiv7@gmail.com>, author of [picom](https://github.com/yshui/picom), which I copied code from.
+ * @authors Mihir Lad - <mihirlad55@gmail>, author of [dwm-ipc](https://github.com/mihirlad55/dwm-ipc), which I copied code from.
  *
+ * @see https://github.com/hyperrealm/libconfig
  * @see https://github.com/JeffofBread/dwm-libconfig
+ * @see https://github.com/yshui/picom
+ * @see https://github.com/mihirlad55/dwm-ipc
  *
  * @note I (JeffOfBread) did not write every bit of code present in this file. Though I have made minor changes,
- * it's still not fair to say I wrote the code. Specific credit has been given to each author for their respective
- * functions/code where it is present.
+ * it's still not fair to say I wrote the code. I have listed them above as authors, and all code I used from
+ * them has been credited where it is used.
  */
 
 #include <ctype.h>
@@ -1547,6 +1551,12 @@ static int _parse_theme_config( const config_t *config ) {
 
 // Wrapper functions for compatability
 
+/**
+ * @brief
+ *
+ * @param arg Pointer to the Arg struct containing the string
+ * containing the name and arguments of the program to spawn.
+ */
 void spawn_simple( const Arg *arg ) {
 
         // Process argv to work with default spawn() behavior
@@ -1606,6 +1616,11 @@ static unsigned long _length_wrapper( const Configuration *master_config, const 
         return precalculated_length;
 }
 
+/**
+ * @return
+ * @author Yuxuan Shui - <yshuiv7@gmail.com>
+ * @see https://github.com/yshui/picom
+ */
 // Derived from picom ( config.c::xdg_config_home() )
 char *_get_xdg_config_home( void ) {
         char *xdg_config_home = getenv( "XDG_CONFIG_HOME" );
@@ -1622,6 +1637,12 @@ char *_get_xdg_config_home( void ) {
         return xdg_config_home;
 }
 
+/**
+ * @return
+ *
+ * @author Yuxuan Shui - <yshuiv7@gmail.com>
+ * @see https://github.com/yshui/picom
+ */
 // Derived from picom ( config.c::xdg_config_home() )
 char *_get_xdg_data_home( void ) {
         char *xdg_data_home = getenv( "XDG_DATA_HOME" );
@@ -1713,7 +1734,15 @@ int _make_parent_directory( const char *path ) {
 // from string_1, however. strncpy( joined_string + length_1, string_2, length_2 )
 // uses bounds depending on the source argument, but joined_string is allocated with
 // length_1 + length_2 + 1, so this strncpy can't overflow.
-//
+
+/**
+ * @param string_1
+ * @param string_2
+ * @return
+ *
+ * @author Yuxuan Shui - <yshuiv7@gmail.com>
+ * @see https://github.com/yshui/picom
+ */
 // Allocate the space and join two strings. - Derived from picom ( str.c::mstrjoin() )
 char *_join_strings( const char *string_1, const char *string_2 ) {
         const size_t length_1 = strlen( string_1 );
@@ -1726,6 +1755,13 @@ char *_join_strings( const char *string_1, const char *string_2 ) {
         return joined_string;
 }
 
+/**
+ * @param source_string_pointer
+ * @param addition
+ *
+ * @author Yuxuan Shui - <yshuiv7@gmail.com>
+ * @see https://github.com/yshui/picom
+ */
 // Concatenate a string on heap with another string. - Derived from picom ( str.c::mstrextend() )
 void _extend_string( char **source_string_pointer, const char *addition ) {
         if ( !*source_string_pointer ) {
