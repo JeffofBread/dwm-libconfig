@@ -786,7 +786,7 @@ static int _parse_buttonbind_click( const char *click_string, unsigned int *clic
         const struct {
                 const char *name;
                 const int click;
-        } click_alias_map[ ] = { { "tag", ClkTagBar }, { "layout", ClkLtSymbol }, { "status", ClkStatusText }, { "title", ClkWinTitle }, { "window", ClkClientWin }, { "desktop", ClkRootWin }, };
+        } click_alias_map[ ] = { { "tag", ClkTagBar }, { "layout", ClkLtSymbol }, { "status", ClkStatusText }, { "title", ClkWinTitle }, { "client", ClkClientWin }, { "desktop", ClkRootWin }, };
 
         log_trace( "Click string to parse: \"%s\"\n", click_string );
         for ( int i = 0; i < LENGTH( click_alias_map ); i++ ) {

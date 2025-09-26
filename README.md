@@ -35,8 +35,6 @@ sudo zypper install libconfig-devel
 
 ## Configuration
 
-NOTE: Documentation in `dwm.conf` is not complete, I know. I have not finished all the documentation for the file yet, apologies.
-
 dwm-libconfig will search for a configuration in a few places. It will first look for any configuration file passed from the CLI using 
 `-c PATH`. If it finds no file or an invalid configuration file, it will continue. It will then search `~/.config/`, `~/.config/dwm/`.
 If it is still unable to find a configuration, it will try and locate a backup of your latest successfully parsed configuration. 
