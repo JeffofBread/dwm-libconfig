@@ -401,6 +401,7 @@ int _parse_bind_argument( const char *argument_string, const enum Argument_Type 
                 return -1;
         }
 
+        // @formatter:off
         char *end_pointer;
         switch ( *arg_type ) {
                 case ARG_TYPE_INT:
@@ -408,16 +409,19 @@ int _parse_bind_argument( const char *argument_string, const enum Argument_Type 
                         if ( *end_pointer != '\0' ) return -1;
                         log_trace( "Argument type int: %d\n", arg->i );
                         break;
+
                 case ARG_TYPE_UINT:
                         arg->ui = clamp_range_ulong( strtoul( argument_string, &end_pointer, 10 ), (long) range_min, (long) range_max );
                         if ( *end_pointer != '\0' ) return -1;
                         log_trace( "Argument type unsigned int: %u\n", arg->ui );
                         break;
+
                 case ARG_TYPE_FLOAT:
                         arg->f = clamp_range_float( strtof( argument_string, &end_pointer ), (float) range_min, (float) range_max );
                         if ( *end_pointer != '\0' ) return -1;
                         log_trace( "Argument type float: %f\n", arg->f );
                         break;
+
                 case ARG_TYPE_POINTER:
                         arg->v = strdup( argument_string );
                         if ( !arg->v ) {
@@ -426,9 +430,12 @@ int _parse_bind_argument( const char *argument_string, const enum Argument_Type 
                         }
                         log_trace( "Argument type pointer (string): \"%s\", (pointer): %p\n", argument_string, arg->v );
                         break;
-                default: log_error( "Unknown argument type during bind parsing: %d\n", *arg_type );
+
+                default:
+                        log_error( "Unknown argument type during bind parsing: %d\n", *arg_type );
                         return -1;
         }
+        // @formatter:on
 
         return 0;
 }
@@ -465,6 +472,7 @@ int _parse_bind_function( const char *function_string, enum Argument_Type *arg_t
         };
 
         log_trace( "Function being parsed: \"%s\"\n", function_string );
+
         for ( int i = 0; i < LENGTH( function_alias_map ); i++ ) {
                 if ( strcasecmp( function_string, function_alias_map[ i ].name ) == 0 ) {
                         *function = function_alias_map[ i ].func;
@@ -603,16 +611,16 @@ int _parse_buttonbind_button( const char *button_string, unsigned int *button ) 
                 const char *name;
                 const int button;
         } button_alias_map[ ] = {
-                { "leftclick", 1 },
-                { "left-click", 1 },
-                { "middleclick", 2 },
-                { "middle-click", 2 },
-                { "rightclick", 3 },
-                { "right-click", 3 },
-                { "scrollup", 4 },
-                { "scroll-up", 4 },
-                { "scrolldown", 5 },
-                { "scroll-down", 5 },
+                { "leftclick", Button1 },
+                { "left-click", Button1 },
+                { "middleclick", Button2 },
+                { "middle-click", Button2 },
+                { "rightclick", Button3 },
+                { "right-click", Button3 },
+                { "scrollup", Button4 },
+                { "scroll-up", Button4 },
+                { "scrolldown", Button5 },
+                { "scroll-down", Button5 },
         };
 
         log_trace( "Button string to parse: \"%s\"\n", button_string );
@@ -639,12 +647,22 @@ int _parse_buttonbind_button( const char *button_string, unsigned int *button ) 
 
 int _parse_buttonbind_click( const char *click_string, unsigned int *click ) {
 
+        // @formatter:off
         const struct {
                 const char *name;
                 const int click;
-        } click_alias_map[ ] = { { "tag", ClkTagBar }, { "layout", ClkLtSymbol }, { "status", ClkStatusText }, { "title", ClkWinTitle }, { "client", ClkClientWin }, { "desktop", ClkRootWin }, };
+        } click_alias_map[ ] = {
+                { "tag", ClkTagBar },
+                { "layout", ClkLtSymbol },
+                { "status", ClkStatusText },
+                { "title", ClkWinTitle },
+                { "client", ClkClientWin },
+                { "desktop", ClkRootWin },
+        };
+        // @formatter:on
 
         log_trace( "Click string to parse: \"%s\"\n", click_string );
+
         for ( int i = 0; i < LENGTH( click_alias_map ); i++ ) {
                 if ( strcasecmp( click_string, click_alias_map[ i ].name ) == 0 ) {
                         *click = click_alias_map[ i ].click;
@@ -652,6 +670,7 @@ int _parse_buttonbind_click( const char *click_string, unsigned int *click ) {
                         return 0;
                 }
         }
+
         return -1;
 }
 
@@ -664,6 +683,7 @@ int _parse_buttonbinds_config( const config_t *config, Button **buttonbind_confi
         // memory waste, but still something to consider.
 
         int failed_buttonbinds_count = 0;
+
         const config_setting_t *buttonbinds = config_lookup( config, "buttonbinds" );
         if ( buttonbinds != NULL ) {
                 *buttonbind_count = config_setting_length( buttonbinds );
@@ -865,6 +885,7 @@ int _parse_keybinds_config( const config_t *config, Key **keybind_config, unsign
         // memory waste, but still something to consider.
 
         int failed_keybinds = 0;
+
         const config_setting_t *keybinds = config_lookup( config, "keybinds" );
         if ( keybinds != NULL ) {
                 *keybinds_count = config_setting_length( keybinds );
@@ -1035,10 +1056,6 @@ int _parse_tags_config( const config_t *config ) {
 
 int _parse_theme( const config_setting_t *theme ) {
 
-        const char *tmp_string = NULL;
-
-        int theme_elements_failed_count = 0;
-
         const struct {
                 const char *path;
                 const char **value;
@@ -1052,6 +1069,8 @@ int _parse_theme( const config_setting_t *theme ) {
                 { "selected-border", &colors[ SchemeSel ][ ColBorder ] },
         };
 
+        const char *tmp_string = NULL;
+        int theme_elements_failed_count = 0;
         for ( int i = 0; i < LENGTH( Theme_Mapping ); i++ ) {
                 if ( !libconfig_setting_lookup_string( theme, Theme_Mapping[ i ].path, &tmp_string,false ) ) {
                         SAFE_FREE( *Theme_Mapping[ i ].value );
