@@ -2170,8 +2170,8 @@ main(int argc, char *argv[])
 {
 	if (argc == 2 && !strcmp("-v", argv[1]))
 		die("dwm-"VERSION);
-	else if ( argc == 3 && !strcmp("-c", argv[1]) )
-	        dwm_config.config_filepath = argv[2];
+	else if (argc == 3 && !strcmp("-c", argv[1]))
+	        dwm_config.config_filepath = strdup(argv[2]);
 	else if (argc != 1)
 		die("usage: dwm [-v] [-c PATH]");
 	if (!setlocale(LC_CTYPE, "") || !XSupportsLocale())

@@ -46,7 +46,7 @@ typedef struct Configuration {
         Rule *rule_array;
         Key *keybind_array;
         Button *buttonbind_array;
-        config_t *libconfig_config;
+        config_t libconfig_config;
 } Configuration;
 
 // Struct to hold some parser internal data and

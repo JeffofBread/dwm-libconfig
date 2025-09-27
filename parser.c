@@ -43,12 +43,12 @@
 // be written to variables in `config.(def.).h`
 Configuration dwm_config = { 0 };
 
-/// Parser internal functions ///
+/// Parser internal functions definitions ///
 void _backup_config( config_t *config );
 void _load_default_buttonbind_config( Button **buttonbind_config, unsigned int *buttonbind_count );
 void _load_default_keybind_config( Key **keybind_config, unsigned int *keybind_count );
 void _load_default_master_config( Configuration *master_config );
-int _open_config( config_t *config, char **config_filepath, Configuration *master_config );
+int _open_config( Configuration *master_config );
 int _parse_bind_argument( const char *argument_string, const enum Argument_Type *arg_type, Arg *arg, long double range_min, long double range_max );
 int _parse_bind_function( const char *function_string, enum Argument_Type *arg_type, void ( **function )( const Arg * ), long double *range_min, long double *range_max );
 int _parse_bind_modifier( const char *modifier_string, unsigned int *modifier );
@@ -66,7 +66,7 @@ int _parse_tags_config( const config_t *config );
 int _parse_theme( const config_setting_t *theme );
 int _parse_theme_config( const config_t *config );
 
-/// Utility functions ///
+/// Utility functions definitions ///
 void _extend_string( char **source_string_pointer, const char *addition );
 Arg _find_layout( void ( *arrange )( Monitor * ) );
 char *_get_xdg_config_home( void );
@@ -115,60 +115,47 @@ void config_cleanup( Configuration *master_config ) {
                 SAFE_FREE( master_config->buttonbind_array );
         }
 
-        config_destroy( master_config->libconfig_config );
+        config_destroy( &master_config->libconfig_config );
 }
 
 int parse_config( Configuration *master_config ) {
-
-        static config_t libconfig_config;
-        char *config_filepath = NULL;
-        int total_errors = 0;
-
-        // Initialize libconfig context
-        config_init( &libconfig_config );
-        master_config->libconfig_config = &libconfig_config;
-
-        // Simple way of passing users custom config to open_config()
-        // This strdup is freed at the start of open_config()
-        if ( master_config->config_filepath != NULL ) config_filepath = strdup( master_config->config_filepath );
-
-        // Populate master dwm configuration with default values
+        config_init( &master_config->libconfig_config );
         _load_default_master_config( master_config );
 
-        if ( _open_config( &libconfig_config, &config_filepath, master_config ) ) return -1;
+        if ( _open_config( master_config ) ) return -1;
 
-        log_info( "Path to config file: \"%s\"\n", config_filepath );
-        master_config->config_filepath = strdup( config_filepath );
+        log_info( "Path to config file: \"%s\"\n", master_config->config_filepath );
 
-        char *absolute_config_filepath = realpath( config_filepath, NULL );
-        const char *config_include_directory = dirname( absolute_config_filepath );
+        char *config_include_directory = realpath( master_config->config_filepath, NULL );
+        config_include_directory = dirname( config_include_directory );
 
         if ( config_include_directory ) {
-                config_set_include_dir( &libconfig_config, config_include_directory );
+                config_set_include_dir( &master_config->libconfig_config, config_include_directory );
         } else {
                 log_error( "Unable to resolve configuration include directory\n" );
         }
 
-        SAFE_FREE( absolute_config_filepath );
+        SAFE_FREE( config_include_directory );
 
-        config_set_options( &libconfig_config, CONFIG_OPTION_AUTOCONVERT | CONFIG_OPTION_SEMICOLON_SEPARATORS );
-        config_set_tab_width( &libconfig_config, 4 );
+        config_set_options( &master_config->libconfig_config, CONFIG_OPTION_AUTOCONVERT | CONFIG_OPTION_SEMICOLON_SEPARATORS );
+        config_set_tab_width( &master_config->libconfig_config, 4 );
 
         // Note: I may want to come back to this and think about how I handle these returns.
         // The return values from the functions aren't the greatest and I may want a threshold
         // or severity based on the error.
-        total_errors += _parse_generic_settings( &libconfig_config, master_config );
-        total_errors += _parse_keybinds_config( &libconfig_config, &master_config->keybind_array, &master_config->keybind_array_size, master_config->max_keys );
-        total_errors += _parse_buttonbinds_config( &libconfig_config, &master_config->buttonbind_array, &master_config->buttonbind_array_size, master_config->max_keys );
-        total_errors += _parse_rules_config( &libconfig_config, &master_config->rule_array, &master_config->rule_array_size );
-        total_errors += _parse_tags_config( &libconfig_config );
-        total_errors += _parse_theme_config( &libconfig_config );
+        int total_errors = 0;
+        total_errors += _parse_generic_settings( &master_config->libconfig_config, master_config );
+        total_errors += _parse_keybinds_config( &master_config->libconfig_config, &master_config->keybind_array, &master_config->keybind_array_size, master_config->max_keys );
+        total_errors += _parse_buttonbinds_config( &master_config->libconfig_config, &master_config->buttonbind_array, &master_config->buttonbind_array_size, master_config->max_keys );
+        total_errors += _parse_rules_config( &master_config->libconfig_config, &master_config->rule_array, &master_config->rule_array_size );
+        total_errors += _parse_tags_config( &master_config->libconfig_config );
+        total_errors += _parse_theme_config( &master_config->libconfig_config );
 
         // The error requirement being 0 may be a bit strict, I am not sure yet. May need
         // some relaxing or possibly come up with a better way of calculating if a config
         // passes, or is valid enough to warrant backing up.
         if ( total_errors == 0 && !master_config->default_binds_loaded ) {
-                _backup_config( &libconfig_config );
+                _backup_config( &master_config->libconfig_config );
         } else {
                 if ( master_config->default_binds_loaded ) {
                         log_warn( "Not saving config as backup, as current working config is not the user's\n" );
@@ -178,7 +165,7 @@ int parse_config( Configuration *master_config ) {
                 }
         }
 
-        SAFE_FREE( config_filepath );
+        SAFE_FREE( master_config->config_filepath );
 
         return 0;
 }
@@ -293,7 +280,6 @@ void _load_default_master_config( Configuration *master_config ) {
         }
 
         // Unique values to the Configuration struct
-        master_config->config_filepath = NULL;
         master_config->max_keys = 4;
         master_config->default_binds_loaded = false;
 
@@ -318,15 +304,16 @@ void _load_default_master_config( Configuration *master_config ) {
         }
 }
 
-int _open_config( config_t *config, char **config_filepath, Configuration *master_config ) {
+int _open_config( Configuration *master_config ) {
 
         int i, config_filepaths_length = 0;
         char *config_filepaths[ 5 ];
 
-        // Check if a custom user config was passed in and copy it if it was
-        if ( *config_filepath != NULL ) {
-                config_filepaths[ config_filepaths_length++ ] = strdup( *config_filepath );
-                SAFE_FREE( *config_filepath );
+        // Check if a custom user config was passed through the CLI.
+        // If a path was given, copy it to the first index of out filepaths array
+        if ( master_config->config_filepath != NULL ) {
+                config_filepaths[ config_filepaths_length++ ] = strdup( master_config->config_filepath );
+                SAFE_FREE( master_config->config_filepath );
         }
 
         // ~/.config/dwm.conf
@@ -364,14 +351,16 @@ int _open_config( config_t *config, char **config_filepath, Configuration *maste
                         continue;
                 }
 
-                if ( config_read( config, tmp_file ) == CONFIG_FALSE ) {
-                        log_warn( "Problem parsing config file \"%s\", line %d: %s\n", config_filepaths[ i ], config_error_line( config ), config_error_text( config ) );
+                if ( config_read( &master_config->libconfig_config, tmp_file ) == CONFIG_FALSE ) {
+                        log_warn( "Problem parsing config file \"%s\", line %d: %s\n", config_filepaths[ i ], config_error_line( &master_config->libconfig_config ),
+                                  config_error_text( &master_config->libconfig_config ) );
                         SAFE_FCLOSE( tmp_file );
                         continue;
                 }
 
                 // Save found config filepath
-                *config_filepath = strdup( config_filepaths[ i ] );
+                SAFE_FREE( master_config->config_filepath );
+                master_config->config_filepath = strdup( config_filepaths[ i ] );
 
                 // Check if it's a user's custom configuration
                 if ( strcmp( config_filepaths[ i ], config_backup ) == 0 || strcmp( config_filepaths[ i ], config_fallback ) == 0 ) {
@@ -397,7 +386,7 @@ int _open_config( config_t *config, char **config_filepath, Configuration *maste
                 SAFE_FREE( config_filepaths[ i ] );
         }
 
-        config_destroy( config );
+        config_destroy( &master_config->libconfig_config );
         SAFE_FCLOSE( tmp_file );
 
         return -1;
