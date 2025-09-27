@@ -1082,8 +1082,6 @@ int _parse_theme_config( const config_t *config ) {
 
                 log_debug( "Themes detected: %d\n", detected_theme_count );
 
-                // TODO: Add a simple config setting to choose what theme index to load
-                // Example: "theme-to-use = 2;" will use theme number 2
                 if ( detected_theme_count > 1 ) {
                         log_warn( "More than 1 theme detected. dwm can only use the first theme in list \"themes\"\n" );
                         detected_theme_count = 1;
