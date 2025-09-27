@@ -519,7 +519,7 @@ int _parse_buttonbind( const char *buttonbind_string, Button *buttonbind, const 
 
         log_debug( "Buttonbind string to parse: \"%s\"\n", buttonbind_string );
 
-        char buttonbind_string_copy[ 128 ];
+        static char buttonbind_string_copy[ 512 ];
         snprintf( buttonbind_string_copy, LENGTH( buttonbind_string_copy ), "%s", buttonbind_string );
 
         char *modifier_token_list = strtok( buttonbind_string_copy, "," );
@@ -772,7 +772,7 @@ int _parse_keybind( const char *keybind_string, Key *keybind, const unsigned int
 
         log_debug( "Keybind string to parse: \"%s\"\n", keybind_string );
 
-        char keybind_string_copy[ 128 ];
+        static char keybind_string_copy[ 512 ];
         snprintf( keybind_string_copy, LENGTH( keybind_string_copy ), "%s", keybind_string );
 
         char *modifier_token_list = strtok( keybind_string_copy, "," );
