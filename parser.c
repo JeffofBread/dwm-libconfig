@@ -534,7 +534,7 @@ int _parse_buttonbind( const char *buttonbind_string, Button *buttonbind, const 
         if ( argument_token ) argument_token = trim_whitespace( argument_token );
 
         if ( !modifier_token_list || !function_token || !click_token || modifier_token_list[ 0 ] == '\0' || function_token[ 0 ] == '\0' || click_token[ 0 ] == '\0' ) {
-                log_error( "Invalid buttonbind string (expected format: \"mod+key, click, function, arg (if necessary)\" and got \"%s\"\n", buttonbind_string );
+                log_error( "Invalid buttonbind string. Expected format: \"mod+key, click, function, arg (if necessary)\" and got \"%s\"\n", buttonbind_string );
                 return -1;
         }
 
@@ -784,7 +784,7 @@ int _parse_keybind( const char *keybind_string, Key *keybind, const unsigned int
         if ( argument_token ) argument_token = trim_whitespace( argument_token );
 
         if ( !modifier_token_list || !function_token || modifier_token_list[ 0 ] == '\0' || function_token[ 0 ] == '\0' ) {
-                log_error( "Invalid keybind string (expected format: \"mod+key, function, arg (if necessary)\" and got \"%s\"\n", keybind_string );
+                log_error( "Invalid keybind string. Expected format: \"mod+key, function, arg (if necessary)\" and got \"%s\"\n", keybind_string );
                 return -1;
         }
 
