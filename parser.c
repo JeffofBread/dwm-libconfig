@@ -431,6 +431,10 @@ int _parse_bind_argument( const char *argument_string, const enum Argument_Type 
                         log_trace( "Argument type pointer (string): \"%s\", (pointer): %p\n", argument_string, arg->v );
                         break;
 
+                case ARG_TYPE_NONE:
+                        log_trace( "Argument type none\n" );
+                        return 0;
+
                 default:
                         log_error( "Unknown argument type during bind parsing: %d\n", *arg_type );
                         return -1;
