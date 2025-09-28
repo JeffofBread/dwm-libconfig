@@ -37,7 +37,10 @@
 #define SAFE_FCLOSE( f ) do { if ( f ) { fclose( f ); ( f ) = NULL; } } while ( 0 )
 
 typedef struct Configuration {
-        bool default_binds_loaded;
+        bool is_fallback_config;
+        bool default_keybinds_loaded;
+        bool default_buttonbinds_loaded;
+        bool default_rules_loaded;
         unsigned int max_keys;
         unsigned int rule_array_size;
         unsigned int buttonbind_array_size;
@@ -69,9 +72,9 @@ extern void spawn_simple( const Arg *arg );
  * outside this range, the value is clamped and a warning
  * is logged.
  *
- * @param i Value to be clamped.
- * @param min Inclusive range minimum.
- * @param max Inclusive range maximum.
+ * @param[in] i Value to be clamped.
+ * @param[in] min Inclusive range minimum.
+ * @param[in] max Inclusive range maximum.
  * @return Clamped value of @p i.
  */
 static inline int clamp_range_int( const int i, const int min, const int max ) {
@@ -94,9 +97,9 @@ static inline int clamp_range_int( const int i, const int min, const int max ) {
  * outside this range, the value is clamped and a warning
  * is logged.
  *
- * @param i Value to be clamped.
- * @param min Inclusive range minimum.
- * @param max Inclusive range maximum.
+ * @param[in] i Value to be clamped.
+ * @param[in] min Inclusive range minimum.
+ * @param[in] max Inclusive range maximum.
  * @return Clamped value of @p i.
  */
 static inline unsigned int clamp_range_uint( const unsigned int i, const unsigned int min, const unsigned int max ) {
@@ -119,9 +122,9 @@ static inline unsigned int clamp_range_uint( const unsigned int i, const unsigne
  * outside this range, the value is clamped and a warning
  * is logged.
  *
- * @param i Value to be clamped.
- * @param min Inclusive range minimum.
- * @param max Inclusive range maximum.
+ * @param[in] i Value to be clamped.
+ * @param[in] min Inclusive range minimum.
+ * @param[in] max Inclusive range maximum.
  * @return Clamped value of @p i.
  */
 static inline long clamp_range_long( const long i, const long min, const long max ) {
@@ -144,9 +147,9 @@ static inline long clamp_range_long( const long i, const long min, const long ma
  * outside this range, the value is clamped and a warning
  * is logged.
  *
- * @param i Value to be clamped.
- * @param min Inclusive range minimum.
- * @param max Inclusive range maximum.
+ * @param[in] i Value to be clamped.
+ * @param[in] min Inclusive range minimum.
+ * @param[in] max Inclusive range maximum.
  * @return Clamped value of @p i.
  */
 static inline unsigned long clamp_range_ulong( const unsigned long i, const unsigned long min, const unsigned long max ) {
@@ -169,9 +172,9 @@ static inline unsigned long clamp_range_ulong( const unsigned long i, const unsi
  * outside this range, the value is clamped and a warning
  * is logged.
  *
- * @param i Value to be clamped.
- * @param min Inclusive range minimum.
- * @param max Inclusive range maximum.
+ * @param[in] i Value to be clamped.
+ * @param[in] min Inclusive range minimum.
+ * @param[in] max Inclusive range maximum.
  * @return Clamped value of @p i.
  */
 static inline float clamp_range_float( const float i, const float min, const float max ) {
@@ -482,7 +485,7 @@ static inline int libconfig_setting_lookup_string( const config_setting_t *setti
  * The trim is performed in place on @p string, and assumes it is
  * both mutable and null-terminated.
  *
- * @param string[in,out] Null-terminated, mutable string to be trimmed.
+ * @param[in,out] string Null-terminated, mutable string to be trimmed.
  *
  * @return On success, a pointer to the first non-space character in
  * the string is returned. If @p string was entirely whitespace, an
