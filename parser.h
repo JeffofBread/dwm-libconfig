@@ -25,12 +25,16 @@
 // Uncomment to enable log printing for debugging. This is just
 // a crude compatability macro between my own logging system,
 // which I didn't want to bring over just for the config parser.
-#define log_trace( ... ) //fprintf( stdout, "TRACE: " __VA_ARGS__ );
-#define log_debug( ... ) fprintf( stdout, "DEBUG: " __VA_ARGS__ );
-#define log_info( ... ) fprintf( stdout, "INFO: " __VA_ARGS__ );
-#define log_warn( ... ) fprintf( stdout, "WARN: " __VA_ARGS__ );
-#define log_error( ... ) fprintf( stdout, "ERROR: " __VA_ARGS__ );
-#define log_fatal( ... ) fprintf( stdout, "FATAL: " __VA_ARGS__ );
+#define log_trace( ... ) //_log( "TRACE", __VA_ARGS__ )
+#define log_debug( ... ) _log( "DEBUG", __VA_ARGS__ )
+#define log_info( ... ) _log( "INFO", __VA_ARGS__ )
+#define log_warn( ... ) _log( "WARN", __VA_ARGS__ )
+#define log_error( ... ) _log( "ERROR", __VA_ARGS__ )
+#define log_fatal( ... ) _log( "FATAL", __VA_ARGS__ )
+
+#define _TOSTRING( X ) #X
+#define TOSTRING( X ) _TOSTRING( X )
+#define _log( LEVEL, ... ) fprintf( stdout, LEVEL ": [" __FILE__ "::" TOSTRING(__LINE__) "]: "  __VA_ARGS__ )
 
 // Simple wrappers for free/fclose to improve null safety. It is not flawless or a catch-all however
 #define SAFE_FREE( p ) do { if ( p ) { free( ( void * ) ( p ) ); ( p ) = NULL; } } while ( 0 )
@@ -410,6 +414,7 @@ static inline int libconfig_setting_lookup_uint( const config_setting_t *setting
         *value = clamp_range_uint( tmp, range_min, range_max );
         return 0;
 }
+
 // @formatter: on
 
 /**
