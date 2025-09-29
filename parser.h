@@ -207,6 +207,10 @@ static inline float clamp_range_float( const float i, const float min, const flo
  * @see config_lookup_bool() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005flookup_005fbool)
  */
 static inline int libconfig_lookup_bool( const config_t *config, const char *path, bool *value, const bool optional ) {
+        if ( !config ) {
+                log_error( "libconfig configuration context is NULL, cannot perform lookup of \"%s\"\n", path );
+                return -1;
+        }
         int tmp = 0;
         if ( config_lookup_bool( config, path, &tmp ) != CONFIG_TRUE ) {
                 if ( optional ) {
@@ -238,6 +242,10 @@ static inline int libconfig_lookup_bool( const config_t *config, const char *pat
  * @see config_setting_lookup_bool() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005fsetting_005flookup_005fbool)
  */
 static inline int libconfig_setting_lookup_bool( const config_setting_t *setting, const char *path, bool *value, const bool optional ) {
+        if ( !setting ) {
+                log_error( "libconfig setting context is NULL, cannot perform lookup of \"%s\"\n", path );
+                return -1;
+        }
         int tmp = 0;
         if ( config_setting_lookup_bool( setting, path, &tmp ) != CONFIG_TRUE ) {
                 if ( optional ) {
@@ -272,6 +280,10 @@ static inline int libconfig_setting_lookup_bool( const config_setting_t *setting
  * @see config_lookup_int() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005fsetting_005flookup_005fint)
  */
 static inline int libconfig_lookup_int( const config_t *config, const char *path, int *value, const bool optional, const int range_min, const int range_max ) {
+        if ( !config ) {
+                log_error( "libconfig configuration context is NULL, cannot perform lookup of \"%s\"\n", path );
+                return -1;
+        }
         if ( config_lookup_int( config, path, value ) != CONFIG_TRUE ) {
                 if ( optional ) {
                         log_debug( "Optional value \"%s\" not found, skipping\n", path );
@@ -305,6 +317,10 @@ static inline int libconfig_lookup_int( const config_t *config, const char *path
  * @see config_setting_lookup_int() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005flookup_005fint)
  */
 static inline int libconfig_setting_lookup_int( const config_setting_t *setting, const char *path, int *value, const bool optional, const int range_min, const int range_max ) {
+        if ( !setting ) {
+                log_error( "libconfig setting context is NULL, cannot perform lookup of \"%s\"\n", path );
+                return -1;
+        }
         if ( config_setting_lookup_int( setting, path, value ) != CONFIG_TRUE ) {
                 if ( optional ) {
                         log_debug( "Optional value \"%s\" not found, skipping\n", path );
@@ -338,6 +354,10 @@ static inline int libconfig_setting_lookup_int( const config_setting_t *setting,
  * @see config_lookup_int() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005fsetting_005flookup_005fint)
  */
 static inline int libconfig_lookup_uint( const config_t *config, const char *path, unsigned int *value, const bool optional, const unsigned int range_min, const unsigned int range_max ) {
+        if ( !config ) {
+                log_error( "libconfig configuration context is NULL, cannot perform lookup of \"%s\"\n", path );
+                return -1;
+        }
         int tmp = 0;
         if ( config_lookup_int( config, path, &tmp ) != CONFIG_TRUE ) {
                 if ( optional ) {
@@ -371,8 +391,13 @@ static inline int libconfig_lookup_uint( const config_t *config, const char *pat
  *
  * @see config_setting_lookup_int() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005flookup_005fint)
  */
+// @formatter: off
 static inline int libconfig_setting_lookup_uint( const config_setting_t *setting, const char *path, unsigned int *value, const bool optional, const unsigned int range_min,
                                                  const unsigned int range_max ) {
+        if ( !setting ) {
+                log_error( "libconfig setting context is NULL, cannot perform lookup of \"%s\"\n", path );
+                return -1;
+        }
         int tmp = 0;
         if ( config_setting_lookup_int( setting, path, &tmp ) != CONFIG_TRUE ) {
                 if ( optional ) {
@@ -385,6 +410,7 @@ static inline int libconfig_setting_lookup_uint( const config_setting_t *setting
         *value = clamp_range_uint( tmp, range_min, range_max );
         return 0;
 }
+// @formatter: on
 
 /**
  * @brief Look up a float value in a libconfig configuration.
@@ -407,6 +433,10 @@ static inline int libconfig_setting_lookup_uint( const config_setting_t *setting
  * @see config_lookup_float() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005fsetting_005flookup_005ffloat)
  */
 static inline int libconfig_lookup_float( const config_t *config, const char *path, float *value, const bool optional, const float range_min, const float range_max ) {
+        if ( !config ) {
+                log_error( "libconfig configuration context is NULL, cannot perform lookup of \"%s\"\n", path );
+                return -1;
+        }
         double tmp = 0;
         if ( config_lookup_float( config, path, &tmp ) != CONFIG_TRUE ) {
                 if ( optional ) {
@@ -438,6 +468,10 @@ static inline int libconfig_lookup_float( const config_t *config, const char *pa
  * @see config_lookup_string() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005flookup_005fstring)
  */
 static inline int libconfig_lookup_string( const config_t *config, const char *path, const char **value, const bool optional ) {
+        if ( !config ) {
+                log_error( "libconfig configuration context is NULL, cannot perform lookup of \"%s\"\n", path );
+                return -1;
+        }
         if ( config_lookup_string( config, path, value ) != CONFIG_TRUE ) {
                 if ( optional ) {
                         log_debug( "Optional value \"%s\" not found, skipping\n", path );
@@ -467,6 +501,10 @@ static inline int libconfig_lookup_string( const config_t *config, const char *p
  * @see config_setting_lookup_string() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005fsetting_005flookup_005fstring)
  */
 static inline int libconfig_setting_lookup_string( const config_setting_t *setting, const char *path, const char **value, const bool optional ) {
+        if ( !setting ) {
+                log_error( "libconfig setting context is NULL, cannot perform lookup of \"%s\"\n", path );
+                return -1;
+        }
         if ( config_setting_lookup_string( setting, path, value ) == CONFIG_FALSE ) {
                 if ( optional ) {
                         log_debug( "Optional value \"%s\" not found, skipping\n", path );
