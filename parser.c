@@ -1191,7 +1191,7 @@ int _parse_theme_config( const config_t *config ) {
         return failed_themes_count + failed_theme_elements_count;
 }
 
-/// Utility function definitons ///
+/// Utility function definitions ///
 
 /**
  * @param source_string_pointer
