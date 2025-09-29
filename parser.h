@@ -40,6 +40,25 @@
 #define SAFE_FREE( p ) do { if ( p ) { free( ( void * ) ( p ) ); ( p ) = NULL; } } while ( 0 )
 #define SAFE_FCLOSE( f ) do { if ( f ) { fclose( f ); ( f ) = NULL; } } while ( 0 )
 
+// Define some repetitive clamping functions using a macro
+#define DEFINE_CLAMP_FUNCTION( NAME, TYPE, FORMAT )                                                     \
+        static inline TYPE clamp_range_##NAME( TYPE input, TYPE min, TYPE max ) {                       \
+                if ( input < min ) {                                                                    \
+                        log_warn( "Clamped \"" FORMAT "\" to a min of \"" FORMAT "\"\n", input, min );  \
+                        return min;                                                                     \
+                } else if ( input > max ) {                                                             \
+                        log_warn( "Clamped \"" FORMAT "\" to a max of \"" FORMAT "\"\n", input, max );  \
+                        return max;                                                                     \
+                }                                                                                       \
+                return input;                                                                           \
+        }
+
+DEFINE_CLAMP_FUNCTION( int, int, "%d" )
+DEFINE_CLAMP_FUNCTION( uint, unsigned int, "%d" )
+DEFINE_CLAMP_FUNCTION( long, long, "%ld" )
+DEFINE_CLAMP_FUNCTION( ulong, unsigned long, "%ld" )
+DEFINE_CLAMP_FUNCTION( float, float, "%f" )
+
 typedef struct Configuration {
         bool is_fallback_config;
         bool default_keybinds_loaded;
@@ -67,131 +86,6 @@ extern void setlayout_floating( const Arg *arg );
 extern void setlayout_monocle( const Arg *arg );
 extern void setlayout_tiled( const Arg *arg );
 extern void spawn_simple( const Arg *arg );
-
-/**
- * @brief Clamp an integer value to an inclusive range.
- *
- * This function takes in a value @p i to be clamped between
- * the inclusive ranges @p min and @p max. If the value is
- * outside this range, the value is clamped and a warning
- * is logged.
- *
- * @param[in] i Value to be clamped.
- * @param[in] min Inclusive range minimum.
- * @param[in] max Inclusive range maximum.
- * @return Clamped value of @p i.
- */
-static inline int clamp_range_int( const int i, const int min, const int max ) {
-        if ( i > max ) {
-                log_warn( "Value %d above max of %d, value clamped to %d\n", i, max, max );
-                return max;
-        }
-        if ( i < min ) {
-                log_warn( "Value %d under min of %d, value clamped to %d\n", i, min, min );
-                return min;
-        }
-        return i;
-}
-
-/**
- * @brief Clamp an unsigned integer value to an inclusive range.
- *
- * This function takes in a value @p i to be clamped between
- * the inclusive ranges @p min and @p max. If the value is
- * outside this range, the value is clamped and a warning
- * is logged.
- *
- * @param[in] i Value to be clamped.
- * @param[in] min Inclusive range minimum.
- * @param[in] max Inclusive range maximum.
- * @return Clamped value of @p i.
- */
-static inline unsigned int clamp_range_uint( const unsigned int i, const unsigned int min, const unsigned int max ) {
-        if ( i > max ) {
-                log_warn( "Value %u above max of %u, value clamped to %u\n", i, max, max );
-                return max;
-        }
-        if ( i < min ) {
-                log_warn( "Value %u under min of %u, value clamped to %u\n", i, min, min );
-                return min;
-        }
-        return i;
-}
-
-/**
- * @brief Clamp a long integer value to an inclusive range.
- *
- * This function takes in a value @p i to be clamped between
- * the inclusive ranges @p min and @p max. If the value is
- * outside this range, the value is clamped and a warning
- * is logged.
- *
- * @param[in] i Value to be clamped.
- * @param[in] min Inclusive range minimum.
- * @param[in] max Inclusive range maximum.
- * @return Clamped value of @p i.
- */
-static inline long clamp_range_long( const long i, const long min, const long max ) {
-        if ( i > max ) {
-                log_warn( "Value %ld above max of %ld, value clamped to %ld\n", i, max, max );
-                return max;
-        }
-        if ( i < min ) {
-                log_warn( "Value %ld under min of %ld, value clamped to %ld\n", i, min, min );
-                return min;
-        }
-        return i;
-}
-
-/**
- * @brief Clamp an unsigned long integer value to an inclusive range.
- *
- * This function takes in a value @p i to be clamped between
- * the inclusive ranges @p min and @p max. If the value is
- * outside this range, the value is clamped and a warning
- * is logged.
- *
- * @param[in] i Value to be clamped.
- * @param[in] min Inclusive range minimum.
- * @param[in] max Inclusive range maximum.
- * @return Clamped value of @p i.
- */
-static inline unsigned long clamp_range_ulong( const unsigned long i, const unsigned long min, const unsigned long max ) {
-        if ( i > max ) {
-                log_warn( "Value %lu above max of %lu, value clamped to %lu\n", i, max, max );
-                return max;
-        }
-        if ( i < min ) {
-                log_warn( "Value %lu under min of %lu, value clamped to %lu\n", i, min, min );
-                return min;
-        }
-        return i;
-}
-
-/**
- * @brief Clamp a float value to an inclusive range.
- *
- * This function takes in a value @p i to be clamped between
- * the inclusive ranges @p min and @p max. If the value is
- * outside this range, the value is clamped and a warning
- * is logged.
- *
- * @param[in] i Value to be clamped.
- * @param[in] min Inclusive range minimum.
- * @param[in] max Inclusive range maximum.
- * @return Clamped value of @p i.
- */
-static inline float clamp_range_float( const float i, const float min, const float max ) {
-        if ( i > max ) {
-                log_warn( "Value %f above max of %f, value clamped to %f\n", i, max, max );
-                return max;
-        }
-        if ( i < min ) {
-                log_warn( "Value %f under min of %f, value clamped to %f\n", i, min, min );
-                return min;
-        }
-        return i;
-}
 
 /**
  * @brief Look up a boolean value in a libconfig configuration.
