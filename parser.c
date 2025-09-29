@@ -1014,6 +1014,16 @@ int _parse_rules_config( const config_t *config, Rule **rules_config, unsigned i
                 *rules_config = ecalloc( *rules_count, sizeof( Rule ) );
                 *default_rules_loaded = false;
 
+                // Set some sane default values
+                for ( int i = 0; i < *rules_count; i++ ) {
+                        ( *rules_config )[ i ].class = NULL;
+                        ( *rules_config )[ i ].instance = NULL;
+                        ( *rules_config )[ i ].title = NULL;
+                        ( *rules_config )[ i ].tags = 0;
+                        ( *rules_config )[ i ].isfloating = 0;
+                        ( *rules_config )[ i ].monitor = -1;
+                }
+
                 const char *tmp_string = NULL;
                 const config_setting_t *rule = NULL;
 
