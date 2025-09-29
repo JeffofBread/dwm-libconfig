@@ -130,13 +130,25 @@ void config_cleanup( Configuration *master_config ) {
 }
 
 /**
- * @brief Parse runtime configuration file
+ * @brief Parse program configuration from a configuration file.
+ *
+ * This function serves as the entry point into the configuration parser of the
+ * [dwm-libconfig patch](https://github.com/JeffofBread/dwm-libconfig). This function
+ * serves as a high level entry to the parser, calling helper functions to handle the
+ * actual parsing of the configuration file in various segmented steps.
+ *
+ * For more information on the specific details on what actions the parser performs,
+ * please reference the helper function related to the functionality you want to learn
+ * more about, they all have their own documentation and comments.
  *
  * @param[in,out] master_config Pointer to the master @ref Configuration struct.
  * It is expected to be a valid and mutable pointer to an already allocated struct.
  *
  * @return -1 if no configuration file is successfully found or parsed, else
  * the number of invalid configuration elements is returned (0 = no errors = success).
+ *
+ * @authors JeffOfBread <jeffofbreadcoding@gmail.com>
+ * @see https://github.com/JeffofBread/dwm-libconfig
  */
 int parse_config( Configuration *master_config ) {
         _load_default_master_config( master_config );
@@ -159,9 +171,6 @@ int parse_config( Configuration *master_config ) {
         config_set_options( &master_config->libconfig_config, CONFIG_OPTION_AUTOCONVERT | CONFIG_OPTION_SEMICOLON_SEPARATORS );
         config_set_tab_width( &master_config->libconfig_config, 4 );
 
-        // I may want to come back to this and think about how I handle these returns. The return values from the
-        // functions aren't the greatest and I may want a threshold or severity based on the error.
-        //
         // @formatter:off
         int total_errors = 0;
         total_errors += _parse_generic_settings( &master_config->libconfig_config, &master_config->max_keys );
@@ -189,11 +198,18 @@ int parse_config( Configuration *master_config ) {
                 }
         }
 
-        SAFE_FREE( master_config->config_filepath );
-
         return total_errors;
 }
 
+/**
+ * @brief Set current layout to floating.
+ *
+ * This is a wrapper for the @ref setlayout() function. It sets the
+ * currently focused monitor's layout to the floating layout found
+ * in the @ref layouts array.
+ *
+ * @param arg Unused.
+ */
 void setlayout_floating( const Arg *arg ) {
         Arg tmp = _find_layout( NULL );
         if ( !tmp.i ) {
@@ -203,6 +219,15 @@ void setlayout_floating( const Arg *arg ) {
         }
 }
 
+/**
+ * @brief Set current layout to monocle.
+ *
+ * This is a wrapper for the @ref setlayout() function. It sets the
+ * currently focused monitor's layout to the monocle layout found in
+ * the @ref layouts array.
+ *
+ * @param arg Unused.
+ */
 void setlayout_monocle( const Arg *arg ) {
         Arg tmp = _find_layout( monocle );
         if ( !tmp.i ) {
@@ -212,6 +237,15 @@ void setlayout_monocle( const Arg *arg ) {
         }
 }
 
+/**
+ * @brief Set current layout to tile.
+ *
+ * This is a wrapper for the @ref setlayout() function. It sets the
+ * currently focused monitor's layout to the tile layout found in the
+ * @ref layouts array.
+ *
+ * @param arg Unused.
+ */
 void setlayout_tiled( const Arg *arg ) {
         Arg tmp = _find_layout( tile );
         if ( !tmp.i ) {
@@ -222,10 +256,12 @@ void setlayout_tiled( const Arg *arg ) {
 }
 
 /**
- * @brief
+ * @brief Wrapper around @ref spawn() for simpler program spawning.
  *
- * @param arg Pointer to the Arg struct containing the string
- * containing the name and arguments of the program to spawn.
+ * TODO
+ *
+ * @param[in] arg Pointer to the Arg struct containing a null terminated
+ * string containing the name and arguments of the program to spawn.
  */
 void spawn_simple( const Arg *arg ) {
 
