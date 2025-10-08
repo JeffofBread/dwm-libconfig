@@ -70,7 +70,6 @@ Arg _find_layout( void ( *arrange )( Monitor * ) );
 char *_get_xdg_config_home( void );
 char *_get_xdg_data_home( void );
 char *_join_strings( const char *string_1, const char *string_2 );
-unsigned long _length_wrapper( const Configuration *master_config, const void *pointer, unsigned long precalculated_length );
 int _make_parent_directory( const char *path );
 int _normalize_path( const char *path, char **normal );
 
@@ -258,10 +257,14 @@ void setlayout_tiled( const Arg *arg ) {
 /**
  * @brief Wrapper around @ref spawn() for simpler program spawning.
  *
- * TODO
+ * This wrapper is to simplify the parsers interaction with the
+ * @ref spawn() function. It takes in the program name and arguments
+ * as a string from @p arg, prepares them with the necessary shell
+ * executable and flag, and then passes it all to @ref spawn().
  *
- * @param[in] arg Pointer to the Arg struct containing a null terminated
- * string containing the name and arguments of the program to spawn.
+ * @param[in] arg Pointer to the @ref Arg struct containing a null
+ * terminated string containing the name and arguments of the program
+ * to spawn.
  */
 void spawn_simple( const Arg *arg ) {
 
@@ -291,7 +294,7 @@ void spawn_simple( const Arg *arg ) {
  * The backup file is then created and written to by libconfig's
  * config_write_file().
  *
- * @param config[in] Pointer to the libconfig configuration to be
+ * @param[in] config Pointer to the libconfig configuration to be
  * backed up.
  */
 void _backup_config( config_t *config ) {
@@ -344,7 +347,8 @@ void _load_default_master_config( Configuration *master_config ) {
         master_config->buttonbind_array_size = LENGTH( buttons );
         master_config->buttonbind_array = (Button *) buttons;
 
-        // TODO: Replace
+        // TODO: Replace with a system that doesn't need to always
+        // dynamically allocate, like the other above arrays.
         //
         // This is a bit lazy, but simplifies cleanup logic.
         // We dynamically allocate all the values here so they
@@ -1313,17 +1317,6 @@ char *_join_strings( const char *string_1, const char *string_2 ) {
 #pragma GCC diagnostic pop
 #endif
 
-unsigned long _length_wrapper( const Configuration *master_config, const void *pointer, const unsigned long precalculated_length ) {
-
-        // Return custom lengths if they match elements from the master configuration
-        if ( pointer == master_config->rule_array ) return master_config->rule_array_size;
-        if ( pointer == master_config->keybind_array ) return master_config->keybind_array_size;
-        if ( pointer == master_config->buttonbind_array ) return master_config->buttonbind_array_size;
-
-        // Else return the computed length from sizeof(pointer)/sizeof(pointer)[0]
-        return precalculated_length;
-}
-
 /**
  * @param path
  * @return
@@ -1429,19 +1422,32 @@ int _normalize_path( const char *path, char **normal ) {
 
 /// Compatability macros ///
 
+// Note, if you can, I would recommend manually going and replacing these values instead
+// of using these macros. The below helps with patch compatability out of the box but
+// with more custom builds or invasive patches could cause issues. This exists for those
+// who don't really know C or don't really want to mess with the source at all.
+
 // This is to silence compiler warnings from the new length macro, feel free to remove this.
 #pragma GCC diagnostic ignored "-Wsizeof-pointer-div"
 
 // Undefine original length macro in favor of this modified wrapper. Lose compile
-// time calculation under most optimizations, but is required for how the parser
-// overrides the variables from config.h
+// time calculation under most optimizations, but this is required for how the below
+// macros replace the variables from config.h with values from `master_config`.
 #undef LENGTH
 #define LENGTH( X ) _length_wrapper( &dwm_config, X, ( sizeof( X ) / sizeof( X )[ 0 ] ) )
-unsigned long _length_wrapper( const Configuration *master_config, const void *pointer, unsigned long precalculated_length );
 
-// Override config.h variables with parsed values. This is done at the end of the file
-// to reduce the headaches above, where some values from config.h are used as fallbacks
-// if parsing fails.
+unsigned long _length_wrapper( const Configuration *master_config, const void *pointer, const unsigned long precalculated_length ) {
+
+        // Return custom lengths if they match elements from the master configuration
+        if ( pointer == master_config->rule_array ) return master_config->rule_array_size;
+        if ( pointer == master_config->keybind_array ) return master_config->keybind_array_size;
+        if ( pointer == master_config->buttonbind_array ) return master_config->buttonbind_array_size;
+
+        // Else return the computed length from `sizeof(pointer)/sizeof(pointer)[0]`
+        return precalculated_length;
+}
+
+// Replace config.h variables with parsed values
 #define rules dwm_config.rule_array
 #define keys dwm_config.keybind_array
 #define buttons dwm_config.buttonbind_array
