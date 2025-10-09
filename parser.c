@@ -21,6 +21,8 @@
  * @note I (JeffOfBread) did not write every bit of code present in this file. Though I have made minor changes,
  * it's still not fair to say I wrote the code. I have listed them above as authors, and all code I used from
  * them has been credited where it is used.
+ *
+ * @todo Cleanup or make more consistent the use of trace logs
  */
 
 #include "parser.h"
@@ -324,14 +326,35 @@ void _backup_config( config_t *config ) {
         }
 }
 
+/**
+ * @brief Loads default values from @ref config.h into a @ref Configuration struct.
+ *
+ * Initializes the given @ref Configuration struct with default values from
+ * @ref config.h and other misc hardcoded default values. This is intended to
+ * proceed any use of the configuration to ensure consistent behavior.
+ *
+ * @param[in,out] master_config Pointer to the master @ref Configuration struct to
+ * load default values into. If the pointer is null, the program will exit with a
+ * failure exit code.
+ *
+ * @note This function is an exit point in the program. If @p master_config
+ * is null, the program will be unable to continue. Later attempts to access
+ * values in @p master_config would just cause the program to either enter
+ * undefined behavior or crash. Instead, the program will log the fatal error
+ * and return a failure exit code.
+ *
+ * @todo Replace current colors array with a better solution. It should follow
+ * a similar system to that of the other rules, keys, and buttons arrays, in that
+ * it uses the original arrays from @ref config.h alongside a boolean to keep track
+ * of the this until it is later dynamically allocated in the parser.
+ */
 void _load_default_master_config( Configuration *master_config ) {
 
         if ( master_config == NULL ) {
-                log_fatal( "master_config is NULL, can't load default configuration\n" );
+                log_fatal( "master_config is null, can't load default configuration\n" );
                 exit( EXIT_FAILURE );
         }
 
-        // Unique values to the Configuration struct
         master_config->max_keys = 4;
         master_config->is_fallback_config = false;
 
@@ -347,9 +370,6 @@ void _load_default_master_config( Configuration *master_config ) {
         master_config->buttonbind_array_size = LENGTH( buttons );
         master_config->buttonbind_array = (Button *) buttons;
 
-        // TODO: Replace with a system that doesn't need to always
-        // dynamically allocate, like the other above arrays.
-        //
         // This is a bit lazy, but simplifies cleanup logic.
         // We dynamically allocate all the values here so they
         // can universally be freed instead of having to keep
@@ -367,10 +387,14 @@ void _load_default_master_config( Configuration *master_config ) {
 int _open_config( Configuration *master_config ) {
 
         int i, config_filepaths_length = 0;
+
+        // Yes this uses a "magic number", but I didn't see a way that was less
+        // cumbersome than just hardcoding this value. 5 is just the 1 CLI custom
+        // filepath + 4 fallback config locations created a few lines later.
         char *config_filepaths[ 5 ];
 
         // Check if a custom user config was passed through the CLI.
-        // If a path was given, copy it to the first index of out filepaths array
+        // If a path was given, copy it to the first index of the filepaths array.
         if ( master_config->config_filepath != NULL ) {
                 config_filepaths[ config_filepaths_length++ ] = strdup( master_config->config_filepath );
                 SAFE_FREE( master_config->config_filepath );
@@ -453,7 +477,7 @@ int _parse_bind_argument( const char *argument_string, const enum Argument_Type 
         log_trace( "Argument being parsed: \"%s\"\n", argument_string );
 
         if ( !argument_string || argument_string[ 0 ] == '\0' ) {
-                log_error( "NULL or empty string passed to parse_bind_argument()\n" );
+                log_error( "Null or empty string passed to parse_bind_argument()\n" );
                 return -1;
         }
 
@@ -928,8 +952,10 @@ int _parse_keybind_keysym( const char *keysym_string, KeySym *keysym ) {
         *keysym = XStringToKeysym( keysym_string );
         if ( *keysym == NoSymbol ) return -1;
 
-        KeySym dummy = 0; // Unused, just needs to exist to satisfy compiler
-        XConvertCase( *keysym, keysym, &dummy );
+        // The upper case return of XConvertCase(), which we don't use.
+        KeySym unused = 0;
+
+        XConvertCase( *keysym, keysym, &unused );
 
         log_trace( "Keysym successfully parsed as parsed: \"%s\" -> 0x%lx\n", XKeysymToString( *keysym ), *keysym );
         return 0;
@@ -1132,7 +1158,7 @@ int _parse_theme( const config_setting_t *theme ) {
         const struct {
                 const char *path;
                 const char **value;
-        } Theme_Mapping[ ] = {
+        } theme_map[ ] = {
                 { "font", &fonts[ 0 ] },
                 { "normal-foreground", &colors[ SchemeNorm ][ ColFg ] },
                 { "normal-background", &colors[ SchemeNorm ][ ColBg ] },
@@ -1144,10 +1170,10 @@ int _parse_theme( const config_setting_t *theme ) {
 
         const char *tmp_string = NULL;
         int theme_elements_failed_count = 0;
-        for ( int i = 0; i < LENGTH( Theme_Mapping ); i++ ) {
-                if ( !libconfig_setting_lookup_string( theme, Theme_Mapping[ i ].path, &tmp_string,false ) ) {
-                        SAFE_FREE( *Theme_Mapping[ i ].value );
-                        *Theme_Mapping[ i ].value = strdup( tmp_string );
+        for ( int i = 0; i < LENGTH( theme_map ); i++ ) {
+                if ( !libconfig_setting_lookup_string( theme, theme_map[ i ].path, &tmp_string,false ) ) {
+                        SAFE_FREE( *theme_map[ i ].value );
+                        *theme_map[ i ].value = strdup( tmp_string );
                 } else {
                         theme_elements_failed_count++;
                 }
