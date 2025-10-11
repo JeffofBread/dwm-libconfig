@@ -23,6 +23,7 @@
  * them has been credited where it is used.
  *
  * @todo Cleanup or make more consistent the use of trace logs
+ * @todo Finish documentation
  */
 
 #include "parser.h"
@@ -46,28 +47,28 @@
 Configuration dwm_config = { 0 };
 
 /// Parser internal functions definitions ///
-void _backup_config( config_t *config );
-void _load_default_master_config( Configuration *master_config );
-int _open_config( Configuration *master_config );
+void _backup_config( config_t *libconfig_config );
+void _load_default_config( Configuration *config );
+int _open_config( Configuration *config );
 int _parse_bind_argument( const char *argument_string, const enum Argument_Type *arg_type, Arg *arg, long double range_min, long double range_max );
 int _parse_bind_function( const char *function_string, enum Argument_Type *arg_type, void ( **function )( const Arg * ), long double *range_min, long double *range_max );
 int _parse_bind_modifier( const char *modifier_string, unsigned int *modifier );
 int _parse_buttonbind( const char *buttonbind_string, Button *buttonbind, unsigned int max_keys );
 int _parse_buttonbind_button( const char *button_string, unsigned int *button );
 int _parse_buttonbind_click( const char *click_string, unsigned int *click );
-int _parse_buttonbinds_config( const config_t *config, Button **buttonbind_config, unsigned int *buttonbind_count, bool *default_buttonbinds_loaded, unsigned int max_keys );
-int _parse_generic_settings( const config_t *config, unsigned int *max_keys );
+int _parse_buttonbinds_config( const config_t *libconfig_config, Button **buttonbind_config, unsigned int *buttonbind_count, bool *default_buttonbinds_loaded, unsigned int max_keys );
+int _parse_generic_settings( const config_t *libconfig_config, unsigned int *max_keys );
 int _parse_keybind( const char *keybind_string, Key *keybind, unsigned int max_keys );
 int _parse_keybind_keysym( const char *keysym_string, KeySym *keysym );
-int _parse_keybinds_config( const config_t *config, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded, unsigned int max_keys );
+int _parse_keybinds_config( const config_t *libconfig_config, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded, unsigned int max_keys );
 int _parse_rules_string( const char *input_string, char **output_string );
-int _parse_rules_config( const config_t *config, Rule **rules_config, unsigned int *rules_count, bool *default_rules_loaded );
-int _parse_tags_config( const config_t *config );
-int _parse_theme( const config_setting_t *theme );
-int _parse_theme_config( const config_t *config );
+int _parse_rules_config( const config_t *libconfig_config, Rule **rules_config, unsigned int *rules_count, bool *default_rules_loaded );
+int _parse_tags_config( const config_t *libconfig_config );
+int _parse_theme( const config_setting_t *theme_libconfig_setting );
+int _parse_theme_config( const config_t *libconfig_config );
 
 /// Utility functions definitions ///
-void _extend_string( char **source_string_pointer, const char *addition );
+void _concatenate_string( char **source_string_pointer, const char *addition );
 Arg _find_layout( void ( *arrange )( Monitor * ) );
 char *_get_xdg_config_home( void );
 char *_get_xdg_data_home( void );
@@ -83,13 +84,13 @@ int _normalize_path( const char *path, char **normal );
  * Frees all members of a @ref Configuration struct. Intended
  * for use after @ref parse_config().
  *
- * @param[in,out] master_config Pointer to the @ref Configuration
+ * @param[in,out] config Pointer to the @ref Configuration
  * struct to be cleaned.
  */
-void config_cleanup( Configuration *master_config ) {
+void config_cleanup( Configuration *config ) {
         int i;
 
-        SAFE_FREE( master_config->config_filepath );
+        SAFE_FREE( config->config_filepath );
 
         for ( i = 0; i < LENGTH( tags ); i++ ) {
                 SAFE_FREE( tags[ i ] );
@@ -101,33 +102,33 @@ void config_cleanup( Configuration *master_config ) {
                 }
         }
 
-        if ( !master_config->default_rules_loaded ) {
-                for ( i = 0; i < master_config->rule_array_size; i++ ) {
-                        SAFE_FREE( master_config->rule_array[ i ].class );
-                        SAFE_FREE( master_config->rule_array[ i ].instance );
-                        SAFE_FREE( master_config->rule_array[ i ].title );
+        if ( !config->default_rules_loaded ) {
+                for ( i = 0; i < config->rule_array_size; i++ ) {
+                        SAFE_FREE( config->rule_array[ i ].class );
+                        SAFE_FREE( config->rule_array[ i ].instance );
+                        SAFE_FREE( config->rule_array[ i ].title );
                 }
         }
 
-        if ( !master_config->default_keybinds_loaded ) {
-                for ( i = 0; i < master_config->keybind_array_size; i++ ) {
-                        if ( master_config->keybind_array[ i ].argument_type == ARG_TYPE_POINTER ) {
-                                SAFE_FREE( master_config->keybind_array[ i ].arg.v );
+        if ( !config->default_keybinds_loaded ) {
+                for ( i = 0; i < config->keybind_array_size; i++ ) {
+                        if ( config->keybind_array[ i ].argument_type == ARG_TYPE_POINTER ) {
+                                SAFE_FREE( config->keybind_array[ i ].arg.v );
                         }
                 }
-                SAFE_FREE( master_config->keybind_array );
+                SAFE_FREE( config->keybind_array );
         }
 
-        if ( !master_config->default_buttonbinds_loaded ) {
-                for ( i = 0; i < master_config->buttonbind_array_size; i++ ) {
-                        if ( master_config->buttonbind_array[ i ].argument_type == ARG_TYPE_POINTER ) {
-                                SAFE_FREE( master_config->buttonbind_array[ i ].arg.v );
+        if ( !config->default_buttonbinds_loaded ) {
+                for ( i = 0; i < config->buttonbind_array_size; i++ ) {
+                        if ( config->buttonbind_array[ i ].argument_type == ARG_TYPE_POINTER ) {
+                                SAFE_FREE( config->buttonbind_array[ i ].arg.v );
                         }
                 }
-                SAFE_FREE( master_config->buttonbind_array );
+                SAFE_FREE( config->buttonbind_array );
         }
 
-        config_destroy( &master_config->libconfig_config );
+        config_destroy( &config->libconfig_config );
 }
 
 /**
@@ -142,8 +143,8 @@ void config_cleanup( Configuration *master_config ) {
  * please reference the helper function related to the functionality you want to learn
  * more about, they all have their own documentation and comments.
  *
- * @param[in,out] master_config Pointer to the master @ref Configuration struct.
- * It is expected to be a valid and mutable pointer to an already allocated struct.
+ * @param[in,out] config Pointer to the @ref Configuration struct. It is expected to be
+ * a valid and mutable pointer to an already allocated struct.
  *
  * @return -1 if no configuration file is successfully found or parsed, else
  * the number of invalid configuration elements is returned (0 = no errors = success).
@@ -151,47 +152,45 @@ void config_cleanup( Configuration *master_config ) {
  * @authors JeffOfBread <jeffofbreadcoding@gmail.com>
  * @see https://github.com/JeffofBread/dwm-libconfig
  */
-int parse_config( Configuration *master_config ) {
-        _load_default_master_config( master_config );
+int parse_config( Configuration *config ) {
+        _load_default_config( config );
 
-        if ( _open_config( master_config ) ) return -1;
+        if ( _open_config( config ) ) return -1;
 
-        log_info( "Path to config file: \"%s\"\n", master_config->config_filepath );
+        log_info( "Path to config file: \"%s\"\n", config->config_filepath );
 
-        char *config_include_directory = realpath( master_config->config_filepath, NULL );
+        char *config_include_directory = realpath( config->config_filepath, NULL );
         config_include_directory = dirname( config_include_directory );
 
         if ( config_include_directory ) {
-                config_set_include_dir( &master_config->libconfig_config, config_include_directory );
+                config_set_include_dir( &config->libconfig_config, config_include_directory );
         } else {
                 log_error( "Unable to resolve configuration include directory\n" );
         }
 
         SAFE_FREE( config_include_directory );
 
-        config_set_options( &master_config->libconfig_config, CONFIG_OPTION_AUTOCONVERT | CONFIG_OPTION_SEMICOLON_SEPARATORS );
-        config_set_tab_width( &master_config->libconfig_config, 4 );
+        config_set_options( &config->libconfig_config, CONFIG_OPTION_AUTOCONVERT | CONFIG_OPTION_SEMICOLON_SEPARATORS );
+        config_set_tab_width( &config->libconfig_config, 4 );
 
-        // @formatter:off
         int total_errors = 0;
-        total_errors += _parse_generic_settings( &master_config->libconfig_config, &master_config->max_keys );
-        total_errors += _parse_keybinds_config( &master_config->libconfig_config, &master_config->keybind_array, &master_config->keybind_array_size, &master_config->default_keybinds_loaded, master_config->max_keys );
-        total_errors += _parse_buttonbinds_config( &master_config->libconfig_config, &master_config->buttonbind_array, &master_config->buttonbind_array_size, &master_config->default_buttonbinds_loaded, master_config->max_keys );
-        total_errors += _parse_rules_config( &master_config->libconfig_config, &master_config->rule_array, &master_config->rule_array_size, &master_config->default_rules_loaded );
-        total_errors += _parse_tags_config( &master_config->libconfig_config );
-        total_errors += _parse_theme_config( &master_config->libconfig_config );
-        // @formatter:on
+        total_errors += _parse_generic_settings( &config->libconfig_config, &config->max_keys );
+        total_errors += _parse_keybinds_config( &config->libconfig_config, &config->keybind_array, &config->keybind_array_size, &config->default_keybinds_loaded, config->max_keys );
+        total_errors += _parse_buttonbinds_config( &config->libconfig_config, &config->buttonbind_array, &config->buttonbind_array_size, &config->default_buttonbinds_loaded, config->max_keys );
+        total_errors += _parse_rules_config( &config->libconfig_config, &config->rule_array, &config->rule_array_size, &config->default_rules_loaded );
+        total_errors += _parse_tags_config( &config->libconfig_config );
+        total_errors += _parse_theme_config( &config->libconfig_config );
 
         // The error requirement being 0 may be a bit strict, I am not sure. May need
         // some relaxing or possibly come up with a better way of calculating if a config
         // passes, or is valid enough to warrant backing up.
-        if ( total_errors == 0 && !( master_config->default_keybinds_loaded || master_config->default_buttonbinds_loaded || master_config->is_fallback_config ) ) {
-                _backup_config( &master_config->libconfig_config );
+        if ( total_errors == 0 && !( config->default_keybinds_loaded || config->default_buttonbinds_loaded || config->is_fallback_config ) ) {
+                _backup_config( &config->libconfig_config );
         } else {
-                if ( master_config->default_keybinds_loaded || master_config->default_buttonbinds_loaded ) {
+                if ( config->default_keybinds_loaded || config->default_buttonbinds_loaded ) {
                         log_warn( "Not saving config as backup, as hardcoded default bind values were used, not the user's\n" );
                 }
-                if ( master_config->is_fallback_config ) {
+                if ( config->is_fallback_config ) {
                         log_warn( "Not saving config as backup, as the parsed configuration file is a system fallback configuration\n" );
                 }
                 if ( total_errors != 0 ) {
@@ -286,7 +285,7 @@ void spawn_simple( const Arg *arg ) {
  * @brief Backs up a libconfig configuration to disk.
  *
  * This function backs up the given libconfig configuration
- * context @p config following the XDG specification. If
+ * context @p libconfig_config following the XDG specification. If
  * @ref _get_xdg_data_home() fails to find the XDG data directory
  * (which is likely), we will default to using "~/.local/share/"
  * instead. Meaning that, in the latter case, the filepath to
@@ -296,10 +295,10 @@ void spawn_simple( const Arg *arg ) {
  * The backup file is then created and written to by libconfig's
  * config_write_file().
  *
- * @param[in] config Pointer to the libconfig configuration to be
- * backed up.
+ * @param[in] libconfig_config Pointer to the libconfig configuration
+ * to be backed up.
  */
-void _backup_config( config_t *config ) {
+void _backup_config( config_t *libconfig_config ) {
 
         // Save xdg data folder to buffer (~/.local/share)
         char *buffer = _get_xdg_data_home();
@@ -312,11 +311,11 @@ void _backup_config( config_t *config ) {
                 // with the directory we want to backup the config to, create the directory
                 // if it doesn't exist, and then append with the filename we want to backup
                 // to config in.
-                _extend_string( &buffer, "/dwm/" );
+                _concatenate_string( &buffer, "/dwm/" );
                 _make_parent_directory( buffer );
-                _extend_string( &buffer, "dwm_last.conf" );
+                _concatenate_string( &buffer, "dwm_last.conf" );
 
-                if ( config_write_file( config, buffer ) == CONFIG_FALSE ) {
+                if ( config_write_file( libconfig_config, buffer ) == CONFIG_FALSE ) {
                         log_error( "Problem backing up current config to \"%s\"\n", buffer );
                 } else {
                         log_info( "Current config backed up to \"%s\"\n", buffer );
@@ -333,13 +332,12 @@ void _backup_config( config_t *config ) {
  * @ref config.h and other misc hardcoded default values. This is intended to
  * proceed any use of the configuration to ensure consistent behavior.
  *
- * @param[in,out] master_config Pointer to the master @ref Configuration struct to
- * load default values into. If the pointer is null, the program will exit with a
- * failure exit code.
+ * @param[in,out] config Pointer to the @ref Configuration struct to load default values
+ * into. If the pointer is null, the program will exit with a failure exit code.
  *
- * @note This function is an exit point in the program. If @p master_config
+ * @note This function is an exit point in the program. If @p config
  * is null, the program will be unable to continue. Later attempts to access
- * values in @p master_config would just cause the program to either enter
+ * values in @p config would just cause the program to either enter
  * undefined behavior or crash. Instead, the program will log the fatal error
  * and return a failure exit code.
  *
@@ -348,27 +346,27 @@ void _backup_config( config_t *config ) {
  * it uses the original arrays from @ref config.h alongside a boolean to keep track
  * of the this until it is later dynamically allocated in the parser.
  */
-void _load_default_master_config( Configuration *master_config ) {
+void _load_default_config( Configuration *config ) {
 
-        if ( master_config == NULL ) {
-                log_fatal( "master_config is null, can't load default configuration\n" );
+        if ( config == NULL ) {
+                log_fatal( "config is null, can't load default configuration\n" );
                 exit( EXIT_FAILURE );
         }
 
-        master_config->max_keys = 4;
-        master_config->is_fallback_config = false;
+        config->max_keys = 4;
+        config->is_fallback_config = false;
 
-        master_config->default_rules_loaded = true;
-        master_config->rule_array_size = LENGTH( rules );
-        master_config->rule_array = (Rule *) rules;
+        config->default_rules_loaded = true;
+        config->rule_array_size = LENGTH( rules );
+        config->rule_array = (Rule *) rules;
 
-        master_config->default_keybinds_loaded = true;
-        master_config->keybind_array_size = LENGTH( keys );
-        master_config->keybind_array = (Key *) keys;
+        config->default_keybinds_loaded = true;
+        config->keybind_array_size = LENGTH( keys );
+        config->keybind_array = (Key *) keys;
 
-        master_config->default_buttonbinds_loaded = true;
-        master_config->buttonbind_array_size = LENGTH( buttons );
-        master_config->buttonbind_array = (Button *) buttons;
+        config->default_buttonbinds_loaded = true;
+        config->buttonbind_array_size = LENGTH( buttons );
+        config->buttonbind_array = (Button *) buttons;
 
         // This is a bit lazy, but simplifies cleanup logic.
         // We dynamically allocate all the values here so they
@@ -381,10 +379,10 @@ void _load_default_master_config( Configuration *master_config ) {
                 }
         }
 
-        config_init( &master_config->libconfig_config );
+        config_init( &config->libconfig_config );
 }
 
-int _open_config( Configuration *master_config ) {
+int _open_config( Configuration *config ) {
 
         int i, config_filepaths_length = 0;
 
@@ -395,24 +393,24 @@ int _open_config( Configuration *master_config ) {
 
         // Check if a custom user config was passed through the CLI.
         // If a path was given, copy it to the first index of the filepaths array.
-        if ( master_config->config_filepath != NULL ) {
-                config_filepaths[ config_filepaths_length++ ] = strdup( master_config->config_filepath );
-                SAFE_FREE( master_config->config_filepath );
+        if ( config->config_filepath != NULL ) {
+                config_filepaths[ config_filepaths_length++ ] = strdup( config->config_filepath );
+                SAFE_FREE( config->config_filepath );
         }
 
         // ~/.config/dwm.conf
         char *config_top_directory = _get_xdg_config_home();
-        _extend_string( &config_top_directory, "/dwm.conf" );
+        _concatenate_string( &config_top_directory, "/dwm.conf" );
         config_filepaths[ config_filepaths_length++ ] = config_top_directory;
 
         // ~/.config/dwm/dwm.conf
         char *config_sub_directory = _get_xdg_config_home();
-        _extend_string( &config_sub_directory, "/dwm/dwm.conf" );
+        _concatenate_string( &config_sub_directory, "/dwm/dwm.conf" );
         config_filepaths[ config_filepaths_length++ ] = config_sub_directory;
 
         // ~/.local/share/dwm/dwm_last.conf
         char *config_backup = _get_xdg_data_home();
-        _extend_string( &config_backup, "/dwm/dwm_last.conf" );
+        _concatenate_string( &config_backup, "/dwm/dwm_last.conf" );
         config_filepaths[ config_filepaths_length++ ] = config_backup;
 
         // /etc/dwm/dwm.conf
@@ -435,20 +433,20 @@ int _open_config( Configuration *master_config ) {
                         continue;
                 }
 
-                if ( config_read( &master_config->libconfig_config, tmp_file ) == CONFIG_FALSE ) {
-                        log_warn( "Problem parsing config file \"%s\", line %d: %s\n", config_filepaths[ i ], config_error_line( &master_config->libconfig_config ),
-                                  config_error_text( &master_config->libconfig_config ) );
+                if ( config_read( &config->libconfig_config, tmp_file ) == CONFIG_FALSE ) {
+                        log_warn( "Problem parsing config file \"%s\", line %d: %s\n", config_filepaths[ i ], config_error_line( &config->libconfig_config ),
+                                  config_error_text( &config->libconfig_config ) );
                         SAFE_FCLOSE( tmp_file );
                         continue;
                 }
 
                 // Save found config filepath
-                SAFE_FREE( master_config->config_filepath );
-                master_config->config_filepath = strdup( config_filepaths[ i ] );
+                SAFE_FREE( config->config_filepath );
+                config->config_filepath = strdup( config_filepaths[ i ] );
 
                 // Check if it's a user's custom configuration
                 if ( strcmp( config_filepaths[ i ], config_backup ) == 0 || strcmp( config_filepaths[ i ], config_fallback ) == 0 ) {
-                        master_config->is_fallback_config = true;
+                        config->is_fallback_config = true;
                 }
 
                 for ( i = 0; i < config_filepaths_length; i++ ) {
@@ -466,7 +464,7 @@ int _open_config( Configuration *master_config ) {
                 SAFE_FREE( config_filepaths[ i ] );
         }
 
-        config_destroy( &master_config->libconfig_config );
+        config_destroy( &config->libconfig_config );
         SAFE_FCLOSE( tmp_file );
 
         return -1;
@@ -758,7 +756,7 @@ int _parse_buttonbind_click( const char *click_string, unsigned int *click ) {
         return -1;
 }
 
-int _parse_buttonbinds_config( const config_t *config, Button **buttonbind_config, unsigned int *buttonbind_count, bool *default_buttonbinds_loaded, const unsigned int max_keys ) {
+int _parse_buttonbinds_config( const config_t *libconfig_config, Button **buttonbind_config, unsigned int *buttonbind_count, bool *default_buttonbinds_loaded, const unsigned int max_keys ) {
 
         // I may look at adjusting how memory is allocated and used here. For example,
         // if a bind fails and is assigned. This just leaves empty unused memory. Not
@@ -768,9 +766,9 @@ int _parse_buttonbinds_config( const config_t *config, Button **buttonbind_confi
 
         int failed_buttonbinds_count = 0;
 
-        const config_setting_t *buttonbinds = config_lookup( config, "buttonbinds" );
-        if ( buttonbinds != NULL ) {
-                *buttonbind_count = config_setting_length( buttonbinds );
+        const config_setting_t *buttonbinds_libconfig_setting = config_lookup( libconfig_config, "buttonbinds" );
+        if ( buttonbinds_libconfig_setting != NULL ) {
+                *buttonbind_count = config_setting_length( buttonbinds_libconfig_setting );
 
                 if ( *buttonbind_count == 0 ) {
                         log_warn( "No buttonbinds listed, minimal default buttonbinds will be used. Exiting buttonbind parsing\n" );
@@ -782,22 +780,22 @@ int _parse_buttonbinds_config( const config_t *config, Button **buttonbind_confi
                 *buttonbind_config = ecalloc( *buttonbind_count, sizeof( Button ) );
                 *default_buttonbinds_loaded = false;
 
-                const config_setting_t *buttonbind = NULL;
+                const config_setting_t *buttonbind_libconfig_setting = NULL;
                 for ( int i = 0; i < *buttonbind_count; i++ ) {
-                        buttonbind = config_setting_get_elem( buttonbinds, i );
+                        buttonbind_libconfig_setting = config_setting_get_elem( buttonbinds_libconfig_setting, i );
 
-                        if ( buttonbind == NULL ) {
+                        if ( buttonbind_libconfig_setting == NULL ) {
                                 log_error( "Buttonbind element %d returned null, unable to parse\n", i + 1 );
                                 failed_buttonbinds_count++;
                                 continue;
                         }
 
-                        if ( _parse_buttonbind( config_setting_get_string( buttonbind ), &( *buttonbind_config )[ i ], max_keys ) == -1 ) {
+                        if ( _parse_buttonbind( config_setting_get_string( buttonbind_libconfig_setting ), &( *buttonbind_config )[ i ], max_keys ) == -1 ) {
                                 ( *buttonbind_config )[ i ].button = 0;
                                 failed_buttonbinds_count++;
                         }
 
-                        buttonbind = NULL;
+                        buttonbind_libconfig_setting = NULL;
                 }
                 log_debug( "%d buttonbinds failed to be parsed\n", failed_buttonbinds_count );
         } else {
@@ -808,7 +806,7 @@ int _parse_buttonbinds_config( const config_t *config, Button **buttonbind_confi
         return failed_buttonbinds_count;
 }
 
-int _parse_generic_settings( const config_t *config, unsigned int *max_keys ) {
+int _parse_generic_settings( const config_t *libconfig_config, unsigned int *max_keys ) {
 
         enum Setting_Type {
                 TYPE_BOOL,
@@ -846,22 +844,22 @@ int _parse_generic_settings( const config_t *config, unsigned int *max_keys ) {
         for ( int i = 0; i < LENGTH( setting_map ); ++i ) {
                 switch ( setting_map[ i ].type ) {
                         case TYPE_BOOL:
-                                settings_failed_count -= libconfig_lookup_bool( config, setting_map[ i ].name, setting_map[ i ].value, setting_map[ i ].optional );
+                                settings_failed_count -= libconfig_lookup_bool( libconfig_config, setting_map[ i ].name, setting_map[ i ].value, setting_map[ i ].optional );
                                 break;
                         case TYPE_INT:
-                                settings_failed_count -= libconfig_lookup_int( config, setting_map[ i ].name, setting_map[ i ].value, setting_map[ i ].optional, (int) setting_map[ i ].range_min,
-                                                                               (int) setting_map[ i ].range_max );
+                                settings_failed_count -= libconfig_lookup_int( libconfig_config, setting_map[ i ].name, setting_map[ i ].value, setting_map[ i ].optional,
+                                                                               (int) setting_map[ i ].range_min, (int) setting_map[ i ].range_max );
                                 break;
                         case TYPE_UINT:
-                                settings_failed_count -= libconfig_lookup_uint( config, setting_map[ i ].name, setting_map[ i ].value, setting_map[ i ].optional,
+                                settings_failed_count -= libconfig_lookup_uint( libconfig_config, setting_map[ i ].name, setting_map[ i ].value, setting_map[ i ].optional,
                                                                                 (unsigned int) setting_map[ i ].range_min, (unsigned int) setting_map[ i ].range_max );
                                 break;
                         case TYPE_FLOAT:
-                                settings_failed_count -= libconfig_lookup_float( config, setting_map[ i ].name, setting_map[ i ].value, setting_map[ i ].optional, (float) setting_map[ i ].range_min,
-                                                                                 (float) setting_map[ i ].range_max );
+                                settings_failed_count -= libconfig_lookup_float( libconfig_config, setting_map[ i ].name, setting_map[ i ].value, setting_map[ i ].optional,
+                                                                                 (float) setting_map[ i ].range_min, (float) setting_map[ i ].range_max );
                                 break;
                         case TYPE_STRING:
-                                settings_failed_count -= libconfig_lookup_string( config, setting_map[ i ].name, setting_map[ i ].value, setting_map[ i ].optional );
+                                settings_failed_count -= libconfig_lookup_string( libconfig_config, setting_map[ i ].name, setting_map[ i ].value, setting_map[ i ].optional );
                                 break;
                 }
         }
@@ -961,7 +959,7 @@ int _parse_keybind_keysym( const char *keysym_string, KeySym *keysym ) {
         return 0;
 }
 
-int _parse_keybinds_config( const config_t *config, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded, const unsigned int max_keys ) {
+int _parse_keybinds_config( const config_t *libconfig_config, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded, const unsigned int max_keys ) {
 
         // I may look at adjusting how memory is allocated and used here. For example,
         // if a bind fails and is assigned. This just leaves empty unused memory. Not
@@ -971,9 +969,9 @@ int _parse_keybinds_config( const config_t *config, Key **keybind_config, unsign
 
         int failed_keybinds = 0;
 
-        const config_setting_t *keybinds = config_lookup( config, "keybinds" );
-        if ( keybinds != NULL ) {
-                *keybinds_count = config_setting_length( keybinds );
+        const config_setting_t *keybinds_libconfig_setting = config_lookup( libconfig_config, "keybinds" );
+        if ( keybinds_libconfig_setting != NULL ) {
+                *keybinds_count = config_setting_length( keybinds_libconfig_setting );
 
                 if ( *keybinds_count == 0 ) {
                         log_warn( "No keybinds listed, minimal default keybinds will be used. Exiting keybinds parsing\n" );
@@ -985,22 +983,22 @@ int _parse_keybinds_config( const config_t *config, Key **keybind_config, unsign
                 *keybind_config = ecalloc( *keybinds_count, sizeof( Key ) );
                 *default_keybinds_loaded = false;
 
-                const config_setting_t *keybind = NULL;
+                const config_setting_t *keybind_libconfig_setting = NULL;
                 for ( int i = 0; i < *keybinds_count; i++ ) {
-                        keybind = config_setting_get_elem( keybinds, i );
+                        keybind_libconfig_setting = config_setting_get_elem( keybinds_libconfig_setting, i );
 
-                        if ( keybind == NULL ) {
+                        if ( keybind_libconfig_setting == NULL ) {
                                 log_error( "Keybind element %d returned null, unable to parse\n", i + 1 );
                                 failed_keybinds++;
                                 continue;
                         }
 
-                        if ( _parse_keybind( config_setting_get_string( keybind ), &( *keybind_config )[ i ], max_keys ) == -1 ) {
+                        if ( _parse_keybind( config_setting_get_string( keybind_libconfig_setting ), &( *keybind_config )[ i ], max_keys ) == -1 ) {
                                 ( *keybind_config )[ i ].keysym = NoSymbol;
                                 failed_keybinds++;
                         }
 
-                        keybind = NULL;
+                        keybind_libconfig_setting = NULL;
                 }
                 log_debug( "%d keybinds failed to be parsed\n", failed_keybinds );
         } else {
@@ -1025,14 +1023,14 @@ int _parse_rules_string( const char *input_string, char **output_string ) {
         return 0;
 }
 
-int _parse_rules_config( const config_t *config, Rule **rules_config, unsigned int *rules_count, bool *default_rules_loaded ) {
+int _parse_rules_config( const config_t *libconfig_config, Rule **rules_config, unsigned int *rules_count, bool *default_rules_loaded ) {
 
         int failed_rules_count = 0;
         int failed_rules_elements_count = 0;
 
-        const config_setting_t *rules_setting = config_lookup( config, "rules" );
-        if ( rules_setting != NULL ) {
-                *rules_count = config_setting_length( rules_setting );
+        const config_setting_t *rules_libconfig_setting = config_lookup( libconfig_config, "rules" );
+        if ( rules_libconfig_setting != NULL ) {
+                *rules_count = config_setting_length( rules_libconfig_setting );
 
                 if ( *rules_count == 0 ) {
                         log_warn( "No rules listed, exiting rules parsing\n" );
@@ -1055,33 +1053,33 @@ int _parse_rules_config( const config_t *config, Rule **rules_config, unsigned i
                 }
 
                 const char *tmp_string = NULL;
-                const config_setting_t *rule = NULL;
+                const config_setting_t *rule_libconfig_setting = NULL;
 
                 for ( int i = 0; i < *rules_count; i++ ) {
-                        rule = config_setting_get_elem( rules_setting, i );
-                        if ( rule != NULL ) {
+                        rule_libconfig_setting = config_setting_get_elem( rules_libconfig_setting, i );
+                        if ( rule_libconfig_setting != NULL ) {
 
-                                libconfig_setting_lookup_string( rule, "class", &tmp_string, false );
+                                libconfig_setting_lookup_string( rule_libconfig_setting, "class", &tmp_string, false );
                                 if ( _parse_rules_string( tmp_string, &( *rules_config )[ i ].class ) ) {
                                         log_error( "Problem parsing \"class\" value of rule %d\n", i + 1 );
                                         failed_rules_elements_count++;
                                 }
 
-                                libconfig_setting_lookup_string( rule, "instance", &tmp_string, false );
+                                libconfig_setting_lookup_string( rule_libconfig_setting, "instance", &tmp_string, false );
                                 if ( _parse_rules_string( tmp_string, &( *rules_config )[ i ].instance ) ) {
                                         log_error( "Problem parsing \"instance\" value of rule %d\n", i + 1 );
                                         failed_rules_elements_count++;
                                 }
 
-                                libconfig_setting_lookup_string( rule, "title", &tmp_string,false );
+                                libconfig_setting_lookup_string( rule_libconfig_setting, "title", &tmp_string,false );
                                 if ( _parse_rules_string( tmp_string, &( *rules_config )[ i ].title ) ) {
                                         log_error( "Problem parsing \"title\" value of rule %d\n", i + 1 );
                                         failed_rules_elements_count++;
                                 }
 
-                                failed_rules_elements_count -= libconfig_setting_lookup_uint( rule, "tag-mask", &( *rules_config )[ i ].tags, false, 0, TAGMASK );
-                                failed_rules_elements_count -= libconfig_setting_lookup_int( rule, "monitor", &( *rules_config )[ i ].monitor, false, -1, 99 );
-                                failed_rules_elements_count -= libconfig_setting_lookup_int( rule, "floating", &( *rules_config )[ i ].isfloating, false, 0, 1 );
+                                failed_rules_elements_count -= libconfig_setting_lookup_uint( rule_libconfig_setting, "tag-mask", &( *rules_config )[ i ].tags, false, 0, TAGMASK );
+                                failed_rules_elements_count -= libconfig_setting_lookup_int( rule_libconfig_setting, "monitor", &( *rules_config )[ i ].monitor, false, -1, 99 );
+                                failed_rules_elements_count -= libconfig_setting_lookup_int( rule_libconfig_setting, "floating", &( *rules_config )[ i ].isfloating, false, 0, 1 );
                         } else {
                                 log_error( "Rule %d returned null, unable to parse\n", i + 1 );
                                 failed_rules_count++;
@@ -1099,14 +1097,14 @@ int _parse_rules_config( const config_t *config, Rule **rules_config, unsigned i
         return failed_rules_count + failed_rules_elements_count;
 }
 
-int _parse_tags_config( const config_t *config ) {
+int _parse_tags_config( const config_t *libconfig_config ) {
 
         int tags_failed_count = 0;
 
-        const config_setting_t *tag_names = config_lookup( config, "tag-names" );
-        if ( tag_names != NULL ) {
+        const config_setting_t *tag_names_libconfig_setting = config_lookup( libconfig_config, "tag-names" );
+        if ( tag_names_libconfig_setting != NULL ) {
                 const char *tag_name = NULL;
-                int tags_count = config_setting_length( tag_names );
+                int tags_count = config_setting_length( tag_names_libconfig_setting );
 
                 if ( tags_count == 0 ) {
                         log_warn( "No tag names detected while parsing config, default tag names will be used\n" );
@@ -1123,7 +1121,7 @@ int _parse_tags_config( const config_t *config ) {
                 }
 
                 for ( int i = 0; i < tags_count; i++ ) {
-                        tag_name = config_setting_get_string_elem( tag_names, i );
+                        tag_name = config_setting_get_string_elem( tag_names_libconfig_setting, i );
 
                         if ( tag_name == NULL ) {
                                 log_error( "Problem reading tag array element %d: Value doesn't exist or isn't a string\n", i + 1 );
@@ -1153,7 +1151,7 @@ int _parse_tags_config( const config_t *config ) {
         return tags_failed_count;
 }
 
-int _parse_theme( const config_setting_t *theme ) {
+int _parse_theme( const config_setting_t *theme_libconfig_setting ) {
 
         const struct {
                 const char *path;
@@ -1171,7 +1169,7 @@ int _parse_theme( const config_setting_t *theme ) {
         const char *tmp_string = NULL;
         int theme_elements_failed_count = 0;
         for ( int i = 0; i < LENGTH( theme_map ); i++ ) {
-                if ( !libconfig_setting_lookup_string( theme, theme_map[ i ].path, &tmp_string,false ) ) {
+                if ( !libconfig_setting_lookup_string( theme_libconfig_setting, theme_map[ i ].path, &tmp_string,false ) ) {
                         SAFE_FREE( *theme_map[ i ].value );
                         *theme_map[ i ].value = strdup( tmp_string );
                 } else {
@@ -1182,15 +1180,15 @@ int _parse_theme( const config_setting_t *theme ) {
         return theme_elements_failed_count;
 }
 
-int _parse_theme_config( const config_t *config ) {
+int _parse_theme_config( const config_t *libconfig_config ) {
 
         int failed_themes_count = 0;
         int failed_theme_elements_count = 0;
 
-        const config_setting_t *themes = config_lookup( config, "themes" );
-        if ( themes != NULL ) {
+        const config_setting_t *themes_libconfig_setting = config_lookup( libconfig_config, "themes" );
+        if ( themes_libconfig_setting != NULL ) {
 
-                int detected_theme_count = config_setting_length( themes );
+                int detected_theme_count = config_setting_length( themes_libconfig_setting );
 
                 if ( detected_theme_count == 0 ) {
                         log_warn( "No themes detected while parsing config, the default theme will be used\n" );
@@ -1204,19 +1202,19 @@ int _parse_theme_config( const config_t *config ) {
                         detected_theme_count = 1;
                 }
 
-                config_setting_t *theme = NULL;
+                const config_setting_t *theme_libconfig_setting = NULL;
 
                 for ( int i = 0; i < detected_theme_count; i++ ) {
 
-                        theme = config_setting_get_elem( themes, i );
+                        theme_libconfig_setting = config_setting_get_elem( themes_libconfig_setting, i );
 
-                        if ( theme == NULL ) {
+                        if ( theme_libconfig_setting == NULL ) {
                                 log_error( "Theme %d returned null, unable to parse\n", i + 1 );
                                 failed_themes_count++;
                                 continue;
                         }
 
-                        failed_theme_elements_count += _parse_theme( theme );
+                        failed_theme_elements_count += _parse_theme( theme_libconfig_setting );
                         log_debug( "%d elements failed to be parsed in theme number %d\n", failed_theme_elements_count, i + 1 );
                 }
 
@@ -1234,22 +1232,33 @@ int _parse_theme_config( const config_t *config ) {
 /// Utility function definitions ///
 
 /**
- * @param source_string_pointer
- * @param addition
+ * @brief Concatenate one string with another.
+ *
+ * TODO
+ *
+ * @param[in,out] source_string_pointer Pointer to where the new (reallocated) concatenated string will be stored.
+ * @param[in] addition Additional string to be concatenated with the string pointed to by @p source_string_pointer.
+ *
+ * @note This function is derived from [picom's](https://github.com/yshui/picom/) mstrextend().
+ * Credit more or less goes to [Yuxuan Shui](yshuiv7@gmail.com), I just made some minor adjustments.
  *
  * @author Yuxuan Shui - <yshuiv7@gmail.com>
+ *
  * @see https://github.com/yshui/picom
+ * @see https://github.com/yshui/picom/blob/69539edc0638019e3dd88c67007e90ce7f51174e/src/utils/str.c#L54
  */
-// Concatenate a string on heap with another string. - Derived from picom ( str.c::mstrextend() )
-void _extend_string( char **source_string_pointer, const char *addition ) {
+void _concatenate_string( char **source_string_pointer, const char *addition ) {
         if ( !*source_string_pointer ) {
                 *source_string_pointer = strdup( addition );
                 return;
         }
+
         const size_t length_1 = strlen( *source_string_pointer );
         const size_t length_2 = strlen( addition );
         const size_t total_length = length_1 + length_2 + 1;
+
         *source_string_pointer = realloc( *source_string_pointer, total_length );
+
         strncpy( *source_string_pointer + length_1, addition, length_2 );
         ( *source_string_pointer )[ total_length - 1 ] = '\0';
 }
@@ -1264,11 +1273,18 @@ Arg _find_layout( void ( *arrange )( Monitor * ) ) {
 }
 
 /**
+ * @brief
+ *
  * @return
+ *
+ * @note This function is derived from [picom's](https://github.com/yshui/picom/) xdg_config_home().
+ * Credit more or less goes to [Yuxuan Shui](yshuiv7@gmail.com), I just made some minor adjustments.
+ *
  * @author Yuxuan Shui - <yshuiv7@gmail.com>
+ *
  * @see https://github.com/yshui/picom
+ * @see https://github.com/yshui/picom/blob/69539edc0638019e3dd88c67007e90ce7f51174e/src/config.c#L33
  */
-// Derived from picom ( config.c::xdg_config_home() )
 char *_get_xdg_config_home( void ) {
         char *xdg_config_home = getenv( "XDG_CONFIG_HOME" );
         char *user_home = getenv( "HOME" );
@@ -1285,12 +1301,18 @@ char *_get_xdg_config_home( void ) {
 }
 
 /**
+ * @brief
+ *
  * @return
  *
+ * @note This function is derived from [picom's](https://github.com/yshui/picom/) xdg_config_home().
+ * Credit more or less goes to [Yuxuan Shui](yshuiv7@gmail.com), I just made some minor adjustments.
+ *
  * @author Yuxuan Shui - <yshuiv7@gmail.com>
+ *
  * @see https://github.com/yshui/picom
+ * @see https://github.com/yshui/picom/blob/69539edc0638019e3dd88c67007e90ce7f51174e/src/config.c#L33
  */
-// Derived from picom ( config.c::xdg_config_home() )
 char *_get_xdg_data_home( void ) {
         char *xdg_data_home = getenv( "XDG_DATA_HOME" );
         char *user_home = getenv( "HOME" );
@@ -1320,11 +1342,15 @@ char *_get_xdg_data_home( void ) {
 // length_1 + length_2 + 1, so this strncpy can't overflow.
 
 /**
+ * @brief
+ *
  * @param string_1
  * @param string_2
+ *
  * @return
  *
  * @author Yuxuan Shui - <yshuiv7@gmail.com>
+ *
  * @see https://github.com/yshui/picom
  */
 // Allocate the space and join two strings. - Derived from picom ( str.c::mstrjoin() )
@@ -1344,10 +1370,14 @@ char *_join_strings( const char *string_1, const char *string_2 ) {
 #endif
 
 /**
+ * @brief
+ *
  * @param path
+ *
  * @return
  *
  * @author Mihir Lad - <mihirlad55@gmail>
+ *
  * @see https://github.com/mihirlad55/dwm-ipc
  */
 // Derived from dwm-ipc ( util.c::mkdirp() )
@@ -1407,11 +1437,15 @@ int _make_parent_directory( const char *path ) {
 }
 
 /**
+ * @brief
+ *
  * @param path
  * @param normal
+ *
  * @return
  *
  * @author Mihir Lad - <mihirlad55@gmail>
+ *
  * @see https://github.com/mihirlad55/dwm-ipc
  */
 // Derived from dwm-ipc ( util.c::normalizepath() )
@@ -1458,16 +1492,16 @@ int _normalize_path( const char *path, char **normal ) {
 
 // Undefine original length macro in favor of this modified wrapper. Lose compile
 // time calculation under most optimizations, but this is required for how the below
-// macros replace the variables from config.h with values from `master_config`.
+// macros replace the variables from config.h with values from `config`.
 #undef LENGTH
 #define LENGTH( X ) _length_wrapper( &dwm_config, X, ( sizeof( X ) / sizeof( X )[ 0 ] ) )
 
-unsigned long _length_wrapper( const Configuration *master_config, const void *pointer, const unsigned long precalculated_length ) {
+unsigned long _length_wrapper( const Configuration *config, const void *pointer, const unsigned long precalculated_length ) {
 
-        // Return custom lengths if they match elements from the master configuration
-        if ( pointer == master_config->rule_array ) return master_config->rule_array_size;
-        if ( pointer == master_config->keybind_array ) return master_config->keybind_array_size;
-        if ( pointer == master_config->buttonbind_array ) return master_config->buttonbind_array_size;
+        // Return custom lengths if they match elements from the configuration
+        if ( pointer == config->rule_array ) return config->rule_array_size;
+        if ( pointer == config->keybind_array ) return config->keybind_array_size;
+        if ( pointer == config->buttonbind_array ) return config->buttonbind_array_size;
 
         // Else return the computed length from `sizeof(pointer)/sizeof(pointer)[0]`
         return precalculated_length;

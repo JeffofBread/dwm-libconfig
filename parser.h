@@ -13,6 +13,8 @@
  *
  * @warning This file must be included after the definition of the structs
  * @ref Arg, @ref Button, @ref Key, and @ref Rule.
+ *
+ * @todo Finish documentation
  */
 
 #ifndef PARSER_H_
@@ -80,8 +82,8 @@ typedef struct Configuration {
 // be written to variables in `config.(def.).h`
 extern Configuration dwm_config;
 
-extern void config_cleanup( Configuration *master_config );
-extern int parse_config( Configuration *master_config );
+extern void config_cleanup( Configuration *config );
+extern int parse_config( Configuration *config );
 extern void setlayout_floating( const Arg *arg );
 extern void setlayout_monocle( const Arg *arg );
 extern void setlayout_tiled( const Arg *arg );
