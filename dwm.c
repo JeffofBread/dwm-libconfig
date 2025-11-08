@@ -314,8 +314,8 @@ applyrules(Client *c)
 	class    = ch.res_class ? ch.res_class : broken;
 	instance = ch.res_name  ? ch.res_name  : broken;
 
-	for (i = 0; i < LENGTH(rules); i++) {
-		r = &rules[i];
+	for (i = 0; i < dwm_config.rule_array_size; i++) {
+		r = &dwm_config.rule_array[i];
 		if ((!r->title || strstr(c->name, r->title))
 		&& (!r->class || strstr(class, r->class))
 		&& (!r->instance || strstr(instance, r->instance)))
@@ -474,10 +474,10 @@ buttonpress(XEvent *e)
 		XAllowEvents(dpy, ReplayPointer, CurrentTime);
 		click = ClkClientWin;
 	}
-	for (i = 0; i < LENGTH(buttons); i++)
-		if (click == buttons[i].click && buttons[i].func && buttons[i].button == ev->button
-		&& CLEANMASK(buttons[i].mask) == CLEANMASK(ev->state))
-			buttons[i].func(click == ClkTagBar && buttons[i].arg.i == 0 ? &arg : &buttons[i].arg);
+	for (i = 0; i < dwm_config.buttonbind_array_size; i++)
+		if (click == BUTTONBINDS[i].click && BUTTONBINDS[i].func && BUTTONBINDS[i].button == ev->button &&
+		CLEANMASK(BUTTONBINDS[i].mask) == CLEANMASK(ev->state))
+			BUTTONBINDS[i].func(click == ClkTagBar && BUTTONBINDS[i].arg.i == 0 ? &arg : &BUTTONBINDS[i].arg);
 }
 
 void
@@ -963,11 +963,11 @@ grabbuttons(Client *c, int focused)
 		if (!focused)
 			XGrabButton(dpy, AnyButton, AnyModifier, c->win, False,
 				BUTTONMASK, GrabModeSync, GrabModeSync, None, None);
-		for (i = 0; i < LENGTH(buttons); i++)
-			if (buttons[i].click == ClkClientWin)
+		for (i = 0; i < dwm_config.buttonbind_array_size; i++)
+			if (BUTTONBINDS[i].click == ClkClientWin)
 				for (j = 0; j < LENGTH(modifiers); j++)
-					XGrabButton(dpy, buttons[i].button,
-						buttons[i].mask | modifiers[j],
+					XGrabButton(dpy, BUTTONBINDS[i].button,
+						BUTTONBINDS[i].mask | modifiers[j],
 						c->win, False, BUTTONMASK,
 						GrabModeAsync, GrabModeSync, None, None);
 	}
@@ -989,12 +989,12 @@ grabkeys(void)
 		if (!syms)
 			return;
 		for (k = start; k <= end; k++)
-			for (i = 0; i < LENGTH(keys); i++)
+			for (i = 0; i < dwm_config.keybind_array_size; i++)
 				/* skip modifier codes, we do that ourselves */
-				if (keys[i].keysym == syms[(k - start) * skip])
+				if (KEYBINDS[i].keysym == syms[(k - start) * skip])
 					for (j = 0; j < LENGTH(modifiers); j++)
 						XGrabKey(dpy, k,
-							 keys[i].mod | modifiers[j],
+							 KEYBINDS[i].mod | modifiers[j],
 							 root, True,
 							 GrabModeAsync, GrabModeAsync);
 		XFree(syms);
@@ -1029,11 +1029,11 @@ keypress(XEvent *e)
 
 	ev = &e->xkey;
 	keysym = XKeycodeToKeysym(dpy, (KeyCode)ev->keycode, 0);
-	for (i = 0; i < LENGTH(keys); i++)
-		if (keysym == keys[i].keysym
-		&& CLEANMASK(keys[i].mod) == CLEANMASK(ev->state)
-		&& keys[i].func)
-			keys[i].func(&(keys[i].arg));
+	for (i = 0; i < dwm_config.keybind_array_size; i++)
+		if (keysym == KEYBINDS[i].keysym
+		&& CLEANMASK(KEYBINDS[i].mod) == CLEANMASK(ev->state)
+		&& KEYBINDS[i].func)
+			KEYBINDS[i].func(&(KEYBINDS[i].arg));
 }
 
 void

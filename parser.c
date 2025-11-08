@@ -1480,34 +1480,7 @@ int _normalize_path( const char *path, char **normal ) {
         return 0;
 }
 
-/// Compatability macros ///
-
-// Note, if you can, I would recommend manually going and replacing these values instead
-// of using these macros. The below helps with patch compatability out of the box but
-// with more custom builds or invasive patches could cause issues. This exists for those
-// who don't really know C or don't really want to mess with the source at all.
-
-// This is to silence compiler warnings from the new length macro, feel free to remove this.
-#pragma GCC diagnostic ignored "-Wsizeof-pointer-div"
-
-// Undefine original length macro in favor of this modified wrapper. Lose compile
-// time calculation under most optimizations, but this is required for how the below
-// macros replace the variables from config.h with values from `config`.
-#undef LENGTH
-#define LENGTH( X ) _length_wrapper( &dwm_config, X, ( sizeof( X ) / sizeof( X )[ 0 ] ) )
-
-unsigned long _length_wrapper( const Configuration *config, const void *pointer, const unsigned long precalculated_length ) {
-
-        // Return custom lengths if they match elements from the configuration
-        if ( pointer == config->rule_array ) return config->rule_array_size;
-        if ( pointer == config->keybind_array ) return config->keybind_array_size;
-        if ( pointer == config->buttonbind_array ) return config->buttonbind_array_size;
-
-        // Else return the computed length from `sizeof(pointer)/sizeof(pointer)[0]`
-        return precalculated_length;
-}
-
-// Replace config.h variables with parsed values
-#define rules dwm_config.rule_array
-#define keys dwm_config.keybind_array
-#define buttons dwm_config.buttonbind_array
+/// Warning macros ///
+#define rules _Pragma("message \"WARNING: 'rules' replaced with `dwm_config.rule_array` by dwm-libconfig.\"")
+#define buttons _Pragma("message \"WARNING: 'buttons' replaced with `dwm_config.buttonbind_array` by dwm-libconfig.\"")
+#define keys _Pragma("message \"WARNING: 'keys' replaced with `dwm_config.keybind_array` by dwm-libconfig.\"")

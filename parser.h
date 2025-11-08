@@ -61,6 +61,10 @@ DEFINE_CLAMP_FUNCTION( long, long, "%ld" )
 DEFINE_CLAMP_FUNCTION( ulong, unsigned long, "%ld" )
 DEFINE_CLAMP_FUNCTION( float, float, "%f" )
 
+// Some macros to make the structure a little easer smaller
+#define BUTTONBINDS dwm_config.buttonbind_array
+#define KEYBINDS dwm_config.keybind_array
+
 typedef struct Configuration {
         bool is_fallback_config;
         bool default_keybinds_loaded;
