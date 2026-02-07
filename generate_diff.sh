@@ -5,6 +5,7 @@ set -e
 REPO_URL="https://git.suckless.org/dwm"
 CLONE_DIR="dwm_tmp"
 PATCH_NAME="dwm_changes.diff"
+GIT_HASH=$(git rev-parse --short HEAD || echo "unknown")
 
 FILES=(
         "config.def.h"
@@ -31,7 +32,6 @@ make clean >/dev/null 2>&1 || true
 make
 
 DWM_VERSION=$(./dwm -v 2>&1 || true)
-GIT_HASH=$(git rev-parse --short HEAD)
 GIT_STAT=$(git diff --stat HEAD)
 
 git commit -m "
