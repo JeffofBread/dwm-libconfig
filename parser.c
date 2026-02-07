@@ -965,6 +965,8 @@ static int _parse_buttonbind_button( const char *button_string, unsigned int *pa
         const unsigned long parsed_value = strtoul( button_string, &end_pointer, 10 );
 
         if ( errno != 0 || end_pointer == button_string || *end_pointer != '\0' ) return -1;
+
+        // X11 button mask is only 8 bits
         if ( parsed_value < 1 || parsed_value > 255 ) return -1;
 
         *parsed_button = (unsigned int) parsed_value;
