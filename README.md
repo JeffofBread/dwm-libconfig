@@ -2,16 +2,18 @@
 
 Do you want to completely up-end one of the core features of [suckless](https://suckless.org/) software? Well this is the patch for you.
 dwm-libconfig is a patch for dwm that adds runtime configuration for dwm using [libconfig](https://hyperrealm.github.io/libconfig/). It
-replaces the need to edit `config.h` for configuration changes with `dwm.conf`, a runtime parsed configuration file. This means that to
-adjust configuration values in dwm, you no longer need to recompile. Assuming you don't need to change the behavior of the parser or dwm,
-you don't need to recompile and re-install. Want to change your theme? Just edit the `dwm.conf` file and restart dwm, simple as that.
-I highly recommend the [restartsig](https://dwm.suckless.org/patches/restartsig/) patch for that reason.
+(mostly) replaces the need to edit `config.h` for configuration changes with `dwm.conf`, a runtime parsed configuration file. This means that
+to adjust configuration values in dwm, you no longer need to recompile. Assuming you don't need to change the behavior of the parser or dwm,
+you don't need to recompile and re-install. Want to change your theme? A keybind? Bar position? Just edit the `dwm.conf` file and restart dwm,
+simple as that. I highly recommend pairing dwm-libconfig with the [restartsig](https://dwm.suckless.org/patches/restartsig/) patch for easy 
+hot-reloading of dwm. 
 
 Some notes however, this is a backported featured from a very different project. Certain design choices or style are definitely a little
-out of place for a [suckless](https://suckless.org/) application, but to be honest, I didn't to rewrite it completely just to "fit" better.
-It is quite overbuild for the level of configuration dwm offers by default. That being said, I did design it to be quite robust and easily
-extensible. With a little editing you can add a wide variety of new configuration values or edit the names or ranges of existing ones with
-relative ease. If you would like to reach out, please do, I am more than happy to help. See [Reaching Out](#reaching-out) for contact info.
+out of place for a [suckless](https://suckless.org/) application. It is quite overbuild for the level of configuration dwm offers by default,
+and is a bit "bloated" for that reason. It could definitely be slimmed down to a much lower line count at the sacrifice of modularity or
+verbosity. That being said, I did  design it to be quite robust, extensible, and modular. With a little editing you can add just about anything
+you would like to the configuration relative ease, or slim down what already exists. If you would like to reach out, please do, I am more than 
+happy to help. See [Reaching Out](#reaching-out) for contact info.
 
 ## Requirements
 The patch is based on dwm 6.6, so it is recommended to start there. You will need all the base dwm dependencies plus 
@@ -58,14 +60,14 @@ combine the line you just wrote and the next together into one long bind, causin
 There is definitely a performance impact, but it is generally minimal. In my testing, even in extremely resource limited VM or emulated
 systems, the time to parse a configuration is negligible. The longest time I found in my testing was around 400ms, with the rest of the
 setup of dwm (mainly `setup()` and `scan()`) taking roughly 1s. During runtime, there are also some small performance losses, mainly
-surrounding access time on elements in the keybind and button bind arrays. In dwm-libconfig, they are allocated on the heap, vs in
+surrounding access time on elements in the key and button bind arrays. In dwm-libconfig, they are allocated on the heap, vs in
 traditional dwm where they are on the stack. Combined with the loss of some compiler optimizations made in default dwm, you can run
-into higher input latency on dwm keybind and button bind actions. Though, again, this is generally quite minimal. In the worst case
+into higher input latency on dwm key and button bind actions. Though, again, this is generally quite minimal. In the worst case
 scenarios I found that it can add around 20-25ms of delay when accessing elements on opposite sides of the array in an extremely low
 resource system or VM.
 
 With all that said, real world performance losses are generally imperceptible. I have a relatively modern laptop and desktop PC, and both
-see less than 3ms to parse a complex configuration, and keybind / button bind latency of less than .3ms at worst. And, lets be honest, if
+see less than 3ms to parse a complex configuration, and key / button bind latency of less than .3ms at worst. And, lets be honest, if
 you are here looking at this patch, optimizing down to the last atom is not likely your chief concern.
 
 ## TODOs
