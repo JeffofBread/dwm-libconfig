@@ -28,7 +28,6 @@
  * @todo Finish documentation
  * @todo Cleanup or make more consistent the use of trace logs
  * @todo Better error handling. The current error handling is horrific.
- * @todo Move alias mapping to a header file for easier tweaking. Maybe also delim characters.
  * @todo Make sure function arguments are noted for being dynamically allocated in that function or its sub functions.
  */
 
@@ -54,11 +53,12 @@
 #define _TOSTRING( X ) #X
 #define TOSTRING( X ) _TOSTRING( X )
 
-// Uncomment to enable log printing for debugging. This is just
-// a crude compatability macro between my own logging system,
-// which I didn't want to bring over just for the config parser.
+// Uncomment as necessary to enable log printing for debugging.
+// This is just a crude compatability macro between my own
+// logging system, which I didn't want to bring over just
+// for the config parser.
 #define log_trace( ... ) //_log( "TRACE", __VA_ARGS__ )
-#define log_debug( ... ) _log( "DEBUG", __VA_ARGS__ )
+#define log_debug( ... ) //_log( "DEBUG", __VA_ARGS__ )
 #define log_info( ... ) _log( "INFO", __VA_ARGS__ )
 #define log_warn( ... ) _log( "WARN", __VA_ARGS__ )
 #define log_error( ... ) _log( "ERROR", __VA_ARGS__ )
@@ -93,21 +93,18 @@ DEFINE_CLAMP_FUNCTION( ulong, unsigned long, "%ld" )
 DEFINE_CLAMP_FUNCTION( float, float, "%f" )
 
 /**
- * @enum Argument_Type
- * @brief Enum to inform the program what data is stored in an @ref Arg union.
- *
- * The Argument_Type enum is a simple way of noting what kind of data was stored in an
- * argument. It acts as a simple safeguard against incorrect usage of an argument's data.
- *
- * @see @ref Arg
+ * TODO
  */
-enum Argument_Type {
-        ARG_TYPE_NONE,
-        ARG_TYPE_INT,
-        ARG_TYPE_UINT,
-        ARG_TYPE_FLOAT,
-        ARG_TYPE_POINTER,
+enum Data_Type {
+        NONE,
+        BOOLEAN,
+        INT,
+        UINT,
+        FLOAT,
+        STRING,
 };
+
+char *DATA_TYPE_STRINGS[ ] = { "NONE", "BOOLEAN", "INT", "UINT", "FLOAT", "STRING" };
 
 // Struct to hold some parser internal data and
 // some of the configuration data that can't
@@ -142,15 +139,15 @@ void spawn_simple( const Arg *arg );
 static void _backup_config( config_t *libconfig_config );
 static void _load_default_config( Configuration *config );
 static int _open_config( Configuration *config );
-static int _parse_bind_argument( const char *argument_string, enum Argument_Type arg_type, long double range_min, long double range_max, Arg *parsed_arg );
-static int _parse_bind_function( const char *function_string, void ( **parsed_function )( const Arg * ), enum Argument_Type *parsed_arg_type, long double *parsed_range_min,
+static int _parse_bind_argument( const char *argument_string, enum Data_Type arg_type, long double range_min, long double range_max, Arg *parsed_arg );
+static int _parse_bind_function( const char *function_string, void ( **parsed_function )( const Arg * ), enum Data_Type *parsed_arg_type, long double *parsed_range_min,
                                  long double *parsed_range_max );
 static int _parse_bind_modifier( const char *modifier_string, unsigned int *parsed_modifier );
 static int _parse_buttonbind( const char *buttonbind_string, unsigned int max_keys, Button *parsed_buttonbind );
 static int _parse_buttonbind_button( const char *button_string, unsigned int *parsed_button );
 static int _parse_buttonbind_click( const char *click_string, unsigned int *parsed_click );
 static int _parse_buttonbinds_config( const config_t *libconfig_config, unsigned int max_keys, Button **buttonbind_config, unsigned int *buttonbind_count, bool *default_buttonbinds_loaded );
-static int _parse_generic_settings( const config_t *libconfig_config, unsigned int *max_keys );
+static int _parse_generic_settings( const config_t *libconfig_config );
 static int _parse_keybind( const char *keybind_string, unsigned int max_keys, Key *parsed_keybind );
 static int _parse_keybind_keysym( const char *keysym_string, KeySym *parsed_keysym );
 static int _parse_keybinds_config( const config_t *libconfig_config, unsigned int max_keys, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded );
@@ -179,6 +176,106 @@ static int _libconfig_setting_lookup_string( const config_setting_t *setting, co
 static int _make_directory_path( const char *path );
 static int _normalize_path( const char *original_path, char **normalized_path );
 static char *_trim_whitespace( char *input_string );
+
+const struct Function_Alias_Map {
+        const char *name;
+        void ( *func )( const Arg * );
+        const enum Data_Type arg_type;
+        const long double range_min, range_max;
+} function_alias_map[ ] = {
+        { "focusmon", focusmon, INT, -99, 99 },
+        { "focusstack", focusstack, INT, -99, 99 },
+        { "incnmaster", incnmaster, INT, -99, 99 },
+        { "killclient", killclient, NONE },
+        { "movemouse", movemouse, NONE },
+        { "quit", quit, NONE },
+        { "resizemouse", resizemouse, NONE },
+        { "setlayout-tiled", setlayout_tiled, NONE },
+        { "setlayout-floating", setlayout_floating, NONE },
+        { "setlayout-monocle", setlayout_monocle, NONE },
+        { "setlayout-toggle", setlayout, NONE },
+        { "setmfact", setmfact, FLOAT, -0.95f, 1.95f },
+        { "spawn", spawn_simple, STRING },
+        { "tag", tag, INT, -1, TAGMASK },
+        { "tagmon", tagmon, INT, -99, 99 },
+        { "togglebar", togglebar, NONE },
+        { "togglefloating", togglefloating, NONE },
+        { "toggletag", toggletag, INT, -1, TAGMASK },
+        { "toggleview", toggleview, INT, -1, TAGMASK },
+        { "view", view, INT, -1, TAGMASK },
+        { "zoom", zoom, NONE },
+};
+
+const struct Modifier_Alias_Map {
+        const char *name;
+        const unsigned int mask;
+} modifier_alias_map[ ] = {
+        { "super", Mod4Mask },
+        { "control", ControlMask },
+        { "ctrl", ControlMask },
+        { "shift", ShiftMask },
+        { "alt", Mod1Mask },
+        { "caps", LockMask },
+        { "capslock", LockMask },
+        { "mod1", Mod1Mask },
+        { "mod2", Mod2Mask },
+        { "mod3", Mod3Mask },
+        { "mod4", Mod4Mask },
+        { "mod5", Mod5Mask },
+};
+
+// @formatter:off
+const struct Click_Alias_Map{
+        const char *name;
+        const int click;
+} click_alias_map[ ] = {
+        { "tag", ClkTagBar },
+        { "layout", ClkLtSymbol },
+        { "status", ClkStatusText },
+        { "title", ClkWinTitle },
+        { "client", ClkClientWin },
+        { "desktop", ClkRootWin },
+};
+// @formatter:on
+
+const struct Button_Alias_Map {
+        const char *name;
+        const int button;
+} button_alias_map[ ] = {
+        { "leftclick", Button1 },
+        { "left-click", Button1 },
+        { "middleclick", Button2 },
+        { "middle-click", Button2 },
+        { "rightclick", Button3 },
+        { "right-click", Button3 },
+        { "scrollup", Button4 },
+        { "scroll-up", Button4 },
+        { "scrolldown", Button5 },
+        { "scroll-down", Button5 },
+};
+
+const struct Setting_Alias_Map {
+        const char *name;
+        void *value;
+        const enum Data_Type type;
+        const bool optional;
+        const long double range_min, range_max;
+} settings_alias_map[ ] = {
+
+        // General
+        { "showbar", &showbar, BOOLEAN, true },
+        { "topbar", &topbar, BOOLEAN, true },
+        { "resizehints", &resizehints, BOOLEAN, true },
+        { "lockfullscreen", &lockfullscreen, BOOLEAN, true },
+        { "borderpx", &borderpx, UINT, true, 0, 9999 },
+        { "snap", &snap, UINT, true, 0, 9999 },
+        { "nmaster", &nmaster, UINT, true, 0, 99 },
+        { "refreshrate", &refreshrate, UINT, true, 0, 999 },
+        { "mfact", &mfact, FLOAT, true, 0.05f, 0.95f },
+
+        // Advanced
+        { "max-keys", &dwm_config.max_keys, UINT, true, 1, 10 },
+};
 
 /// Parser public function definitions ///
 
@@ -217,7 +314,7 @@ void config_cleanup( Configuration *config ) {
 
         if ( !config->default_keybinds_loaded ) {
                 for ( i = 0; i < config->keybind_array_size; i++ ) {
-                        if ( config->keybind_array[ i ].argument_type == ARG_TYPE_POINTER ) {
+                        if ( config->keybind_array[ i ].argument_type == STRING ) {
                                 SAFE_FREE( config->keybind_array[ i ].arg.v );
                         }
                 }
@@ -226,7 +323,7 @@ void config_cleanup( Configuration *config ) {
 
         if ( !config->default_buttonbinds_loaded ) {
                 for ( i = 0; i < config->buttonbind_array_size; i++ ) {
-                        if ( config->buttonbind_array[ i ].argument_type == ARG_TYPE_POINTER ) {
+                        if ( config->buttonbind_array[ i ].argument_type == STRING ) {
                                 SAFE_FREE( config->buttonbind_array[ i ].arg.v );
                         }
                 }
@@ -284,7 +381,7 @@ int parse_config( Configuration *config ) {
 
         // TODO: This error handing scheme sucks and needs to be replaced.
         int total_errors = 0;
-        total_errors += _parse_generic_settings( &config->libconfig_config, &config->max_keys );
+        total_errors += _parse_generic_settings( &config->libconfig_config );
         total_errors += _parse_keybinds_config( &config->libconfig_config, config->max_keys, &config->keybind_array, &config->keybind_array_size, &config->default_keybinds_loaded );
         total_errors += _parse_buttonbinds_config( &config->libconfig_config, config->max_keys, &config->buttonbind_array, &config->buttonbind_array_size, &config->default_buttonbinds_loaded );
         total_errors += _parse_rules_config( &config->libconfig_config, &config->rule_array, &config->rule_array_size, &config->default_rules_loaded );
@@ -632,7 +729,7 @@ static int _open_config( Configuration *config ) {
  *
  * @return 0 on success, -1 on failure.
  */
-static int _parse_bind_argument( const char *argument_string, const enum Argument_Type arg_type, const long double range_min, const long double range_max, Arg *parsed_arg ) {
+static int _parse_bind_argument( const char *argument_string, const enum Data_Type arg_type, const long double range_min, const long double range_max, Arg *parsed_arg ) {
 
         log_trace( "Argument being parsed: \"%s\"\n", argument_string );
 
@@ -644,33 +741,37 @@ static int _parse_bind_argument( const char *argument_string, const enum Argumen
         // @formatter:off
         char *end_pointer;
         switch ( arg_type ) {
-                case ARG_TYPE_INT:
+                case NONE:
+                        log_trace( "Argument type none\n" );
+                        break;
+
+                case BOOLEAN:
+                        log_error( "Argument type boolean, but converting from a string to a bool isn't supported. Please use a numeric value instead\n" );
+                        return -1;
+
+                case INT:
                         parsed_arg->i = clamp_range_long( strtol( argument_string, &end_pointer, 10 ), (long) range_min, (long) range_max );
                         if ( *end_pointer != '\0' ) return -1;
                         log_trace( "Argument type int: %d\n", parsed_arg->i );
                         break;
 
-                case ARG_TYPE_UINT:
+                case UINT:
                         parsed_arg->ui = clamp_range_ulong( strtoul( argument_string, &end_pointer, 10 ), (long) range_min, (long) range_max );
                         if ( *end_pointer != '\0' ) return -1;
                         log_trace( "Argument type unsigned int: %u\n", parsed_arg->ui );
                         break;
 
-                case ARG_TYPE_FLOAT:
+                case FLOAT:
                         parsed_arg->f = clamp_range_float( strtof( argument_string, &end_pointer ), (float) range_min, (float) range_max );
                         if ( *end_pointer != '\0' ) return -1;
                         log_trace( "Argument type float: %f\n", parsed_arg->f );
                         break;
 
-                case ARG_TYPE_POINTER:
+                case STRING:
                         parsed_arg->v = _estrdup( argument_string );
                         if ( !parsed_arg->v )return -1;
                         log_trace( "Argument type pointer (string): \"%s\", (pointer): %p\n", argument_string, parsed_arg->v );
                         break;
-
-                case ARG_TYPE_NONE:
-                        log_trace( "Argument type none\n" );
-                        return 0;
 
                 default:
                         log_error( "Unknown argument type during bind parsing: %d\n", arg_type );
@@ -694,37 +795,8 @@ static int _parse_bind_argument( const char *argument_string, const enum Argumen
  *
  * @return 0 on success, -1 on failure.
  */
-static int _parse_bind_function( const char *function_string, void ( **parsed_function )( const Arg * ), enum Argument_Type *parsed_arg_type, long double *parsed_range_min,
+static int _parse_bind_function( const char *function_string, void ( **parsed_function )( const Arg * ), enum Data_Type *parsed_arg_type, long double *parsed_range_min,
                                  long double *parsed_range_max ) {
-
-        const struct {
-                const char *name;
-                void ( *func )( const Arg * );
-                const enum Argument_Type arg_type;
-                const long double range_min, range_max;
-        } function_alias_map[ ] = {
-                { "focusmon", focusmon, ARG_TYPE_INT, -99, 99 },
-                { "focusstack", focusstack, ARG_TYPE_INT, -99, 99 },
-                { "incnmaster", incnmaster, ARG_TYPE_INT, -99, 99 },
-                { "killclient", killclient, ARG_TYPE_NONE },
-                { "movemouse", movemouse, ARG_TYPE_NONE },
-                { "quit", quit, ARG_TYPE_NONE },
-                { "resizemouse", resizemouse, ARG_TYPE_NONE },
-                { "setlayout-tiled", setlayout_tiled, ARG_TYPE_NONE },
-                { "setlayout-floating", setlayout_floating, ARG_TYPE_NONE },
-                { "setlayout-monocle", setlayout_monocle, ARG_TYPE_NONE },
-                { "setlayout-toggle", setlayout, ARG_TYPE_NONE },
-                { "setmfact", setmfact, ARG_TYPE_FLOAT, -0.95f, 1.95f },
-                { "spawn", spawn_simple, ARG_TYPE_POINTER },
-                { "tag", tag, ARG_TYPE_INT, -1, TAGMASK },
-                { "tagmon", tagmon, ARG_TYPE_INT, -99, 99 },
-                { "togglebar", togglebar, ARG_TYPE_NONE },
-                { "togglefloating", togglefloating, ARG_TYPE_NONE },
-                { "toggletag", toggletag, ARG_TYPE_INT, -1, TAGMASK },
-                { "toggleview", toggleview, ARG_TYPE_INT, -1, TAGMASK },
-                { "view", view, ARG_TYPE_INT, -1, TAGMASK },
-                { "zoom", zoom, ARG_TYPE_NONE },
-        };
 
         log_trace( "Function being parsed: \"%s\"\n", function_string );
 
@@ -755,24 +827,6 @@ static int _parse_bind_function( const char *function_string, void ( **parsed_fu
  * @see https://gitlab.freedesktop.org/xorg/proto/xorgproto/-/blob/master/include/X11/X.h
  */
 static int _parse_bind_modifier( const char *modifier_string, unsigned int *parsed_modifier ) {
-
-        const struct {
-                const char *name;
-                const unsigned int mask;
-        } modifier_alias_map[ ] = {
-                { "super", Mod4Mask },
-                { "control", ControlMask },
-                { "ctrl", ControlMask },
-                { "shift", ShiftMask },
-                { "alt", Mod1Mask },
-                { "caps", LockMask },
-                { "capslock", LockMask },
-                { "mod1", Mod1Mask },
-                { "mod2", Mod2Mask },
-                { "mod3", Mod3Mask },
-                { "mod4", Mod4Mask },
-                { "mod5", Mod5Mask },
-        };
 
         log_trace( "Modifier being parsed: \"%s\"\n", modifier_string );
 
@@ -866,12 +920,12 @@ static int _parse_buttonbind( const char *buttonbind_string, const unsigned int 
         }
 
         long double range_min, range_max;
-        if ( _parse_bind_function( function_token, &parsed_buttonbind->func, (enum Argument_Type *) &parsed_buttonbind->argument_type, &range_min, &range_max ) ) {
+        if ( _parse_bind_function( function_token, &parsed_buttonbind->func, (enum Data_Type *) &parsed_buttonbind->argument_type, &range_min, &range_max ) ) {
                 log_error( "Invalid function \"%s\" in buttonbind \"%s\"\n", function_token, buttonbind_string );
                 return -1;
         }
 
-        if ( parsed_buttonbind->argument_type != ARG_TYPE_NONE ) {
+        if ( parsed_buttonbind->argument_type != NONE ) {
                 if ( _parse_bind_argument( argument_token, parsed_buttonbind->argument_type, range_min, range_max, &parsed_buttonbind->arg ) ) {
                         log_error( "Invalid argument \"%s\" in buttonbind \"%s\"\n", argument_token, buttonbind_string );
                         return -1;
@@ -896,22 +950,6 @@ static int _parse_buttonbind( const char *buttonbind_string, const unsigned int 
  * @see https://gitlab.freedesktop.org/xorg/proto/xorgproto/-/blob/master/include/X11/X.h
  */
 static int _parse_buttonbind_button( const char *button_string, unsigned int *parsed_button ) {
-
-        const struct {
-                const char *name;
-                const int button;
-        } button_alias_map[ ] = {
-                { "leftclick", Button1 },
-                { "left-click", Button1 },
-                { "middleclick", Button2 },
-                { "middle-click", Button2 },
-                { "rightclick", Button3 },
-                { "right-click", Button3 },
-                { "scrollup", Button4 },
-                { "scroll-up", Button4 },
-                { "scrolldown", Button5 },
-                { "scroll-down", Button5 },
-        };
 
         log_trace( "Button string to parse: \"%s\"\n", button_string );
         for ( int i = 0; i < LENGTH( button_alias_map ); i++ ) {
@@ -946,20 +984,6 @@ static int _parse_buttonbind_button( const char *button_string, unsigned int *pa
  * @return 0 on success, -1 on failure.
  */
 static int _parse_buttonbind_click( const char *click_string, unsigned int *parsed_click ) {
-
-        // @formatter:off
-        const struct {
-                const char *name;
-                const int click;
-        } click_alias_map[ ] = {
-                { "tag", ClkTagBar },
-                { "layout", ClkLtSymbol },
-                { "status", ClkStatusText },
-                { "title", ClkWinTitle },
-                { "client", ClkClientWin },
-                { "desktop", ClkRootWin },
-        };
-        // @formatter:on
 
         log_trace( "Click string to parse: \"%s\"\n", click_string );
 
@@ -1053,72 +1077,46 @@ static int _parse_buttonbinds_config( const config_t *libconfig_config, const un
  * TODO
  *
  * @param[in] libconfig_config Pointer to the libconfig @ref config_t containing the generic settings to be parsed.
- * @param[out] max_keys Pointer to where to store the parsed value of the setting defining the max number of keys,
- * buttons, and modifiers allowed in a bind.
  *
  * @return 0 on success, >0 equals the number of failed settings.
- *
- * @note Author's note here on why @p max_keys is passed as an argument but no other settings value is.
- * Simply put, this was just to make the port/integration into base dwm easier. Originally, this function
- * just takes in @p libconfig_config and a struct containing all the program settings, but that isn't as
- * easily possible in base dwm here, which is why this function looks so strange now.
  */
-static int _parse_generic_settings( const config_t *libconfig_config, unsigned int *max_keys ) {
+static int _parse_generic_settings( const config_t *libconfig_config ) {
 
-        enum Setting_Type {
-                TYPE_BOOL,
-                TYPE_INT,
-                TYPE_UINT,
-                TYPE_FLOAT,
-                TYPE_STRING
-        };
-
-        const struct {
-                const char *name;
-                void *value;
-                const enum Setting_Type type;
-                const bool optional;
-                const long double range_min, range_max;
-        } setting_map[ ] = {
-                // General
-                { "showbar", &showbar, TYPE_BOOL, true },
-                { "topbar", &topbar, TYPE_BOOL, true },
-                { "resizehints", &resizehints, TYPE_BOOL, true },
-                { "lockfullscreen", &lockfullscreen, TYPE_BOOL, true },
-                { "borderpx", &borderpx, TYPE_UINT, true, 0, 9999 },
-                { "snap", &snap, TYPE_UINT, true, 0, 9999 },
-                { "nmaster", &nmaster, TYPE_UINT, true, 0, 99 },
-                { "refreshrate", &refreshrate, TYPE_UINT, true, 0, 999 },
-                { "mfact", &mfact, TYPE_FLOAT, true, 0.05f, 0.95f },
-
-                // Advanced
-                { "max-keys", max_keys, TYPE_UINT, true, 1, 10 },
-        };
-
-        log_debug( "Generic settings available: %lu\n", LENGTH( setting_map ) );
+        log_debug( "Generic settings available: %lu\n", LENGTH( settings_alias_map ) );
 
         int settings_failed_count = 0;
-        for ( int i = 0; i < LENGTH( setting_map ); ++i ) {
-                switch ( setting_map[ i ].type ) {
-                        case TYPE_BOOL:
-                                settings_failed_count -= _libconfig_lookup_bool( libconfig_config, setting_map[ i ].name, setting_map[ i ].optional, setting_map[ i ].value );
+        for ( int i = 0; i < LENGTH( settings_alias_map ); ++i ) {
+                // @formatter:off
+                switch ( settings_alias_map[ i ].type ) {
+                        case BOOLEAN:
+                                settings_failed_count -= _libconfig_lookup_bool( libconfig_config, settings_alias_map[ i ].name, settings_alias_map[ i ].optional, settings_alias_map[ i ].value );
                                 break;
-                        case TYPE_INT:
-                                settings_failed_count -= _libconfig_lookup_int( libconfig_config, setting_map[ i ].name, setting_map[ i ].optional, (int) setting_map[ i ].range_min,
-                                                                                (int) setting_map[ i ].range_max, setting_map[ i ].value );
+
+                        case INT:
+                                settings_failed_count -= _libconfig_lookup_int( libconfig_config, settings_alias_map[ i ].name, settings_alias_map[ i ].optional, (int) settings_alias_map[ i ].range_min,
+                                                                                (int) settings_alias_map[ i ].range_max, settings_alias_map[ i ].value );
                                 break;
-                        case TYPE_UINT:
-                                settings_failed_count -= _libconfig_lookup_uint( libconfig_config, setting_map[ i ].name, setting_map[ i ].optional, (unsigned int) setting_map[ i ].range_min,
-                                                                                 (unsigned int) setting_map[ i ].range_max, setting_map[ i ].value );
+
+                        case UINT:
+                                settings_failed_count -= _libconfig_lookup_uint( libconfig_config, settings_alias_map[ i ].name, settings_alias_map[ i ].optional, (unsigned int) settings_alias_map[ i ].range_min,
+                                                                                 (unsigned int) settings_alias_map[ i ].range_max, settings_alias_map[ i ].value );
                                 break;
-                        case TYPE_FLOAT:
-                                settings_failed_count -= _libconfig_lookup_float( libconfig_config, setting_map[ i ].name, setting_map[ i ].optional, (float) setting_map[ i ].range_min,
-                                                                                  (float) setting_map[ i ].range_max, setting_map[ i ].value );
+
+                        case FLOAT:
+                                settings_failed_count -= _libconfig_lookup_float( libconfig_config, settings_alias_map[ i ].name, settings_alias_map[ i ].optional, (float) settings_alias_map[ i ].range_min,
+                                                                                  (float) settings_alias_map[ i ].range_max, settings_alias_map[ i ].value );
                                 break;
-                        case TYPE_STRING:
-                                settings_failed_count -= _libconfig_lookup_string( libconfig_config, setting_map[ i ].name, setting_map[ i ].optional, setting_map[ i ].value );
+
+                        case STRING:
+                                settings_failed_count -= _libconfig_lookup_string( libconfig_config, settings_alias_map[ i ].name, settings_alias_map[ i ].optional, settings_alias_map[ i ].value );
+                                break;
+
+                        default:
+                                log_warn( "Setting \"%s\" is of an invalid type: \"%s\"\n", settings_alias_map[ i ].name, DATA_TYPE_STRINGS[ settings_alias_map[ i ].type ] );
+                                settings_failed_count++;
                                 break;
                 }
+                // @formatter:on
         }
 
         log_debug( "%d generic settings failed to be parsed\n", settings_failed_count );
@@ -1158,12 +1156,12 @@ static int _parse_keybind( const char *keybind_string, const unsigned int max_ke
         }
 
         long double range_min, range_max;
-        if ( _parse_bind_function( function_token, &parsed_keybind->func, (enum Argument_Type *) &parsed_keybind->argument_type, &range_min, &range_max ) ) {
+        if ( _parse_bind_function( function_token, &parsed_keybind->func, (enum Data_Type *) &parsed_keybind->argument_type, &range_min, &range_max ) ) {
                 log_error( "Invalid function \"%s\" in keybind \"%s\"\n", function_token, keybind_string );
                 return -1;
         }
 
-        if ( parsed_keybind->argument_type != ARG_TYPE_NONE ) {
+        if ( parsed_keybind->argument_type != NONE ) {
                 if ( _parse_bind_argument( argument_token, parsed_keybind->argument_type, range_min, range_max, &parsed_keybind->arg ) ) {
                         log_error( "Invalid argument \"%s\" in keybind \"%s\"\n", argument_token, keybind_string );
                         return -1;
