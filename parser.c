@@ -2318,6 +2318,6 @@ static char *_trim_whitespace( char *input_string ) {
 }
 
 /// Warning macros ///
-#define rules _Pragma("message \"WARNING: 'rules' replaced with `dwm_config.rule_array` by the dwm-libconfig patch.\"")
-#define buttons _Pragma("message \"WARNING: 'buttons' replaced with `dwm_config.buttonbind_array` by the dwm-libconfig patch.\"")
-#define keys _Pragma("message \"WARNING: 'keys' replaced with `dwm_config.keybind_array` by the dwm-libconfig patch.\"")
+#define buttons buttons_ARRAY_REPLACED_WITH_dwm_config_buttons_array_BY_LIBCONFIG_PATCH
+#define keys keys_ARRAY_REPLACED_WITH_dwm_config_keybind_array_BY_LIBCONFIG_PATCH
+#define rules rules_ARRAY_REPLACED_WITH_dwm_config_rules_array_BY_LIBCONFIG_PATCH
