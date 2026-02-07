@@ -3,8 +3,8 @@
 set -e
 
 REPO_URL="https://git.suckless.org/dwm"
-CLONE_DIR="dwm_tmp"
-PATCH_NAME="dwm_changes.diff"
+CLONE_DIR="dwm_clone"
+PATCH_NAME="dwm-libconfig-6.8.diff"
 GIT_HASH=$(git rev-parse --short HEAD || echo "unknown")
 
 FILES=(
@@ -36,6 +36,7 @@ GIT_STAT=$(git diff --stat HEAD)
 
 git commit -m "
 dwm-libconfig (${GIT_HASH}) for ${DWM_VERSION}
+
 ---
 ${GIT_STAT}
 "

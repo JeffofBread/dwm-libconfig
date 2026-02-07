@@ -11,7 +11,7 @@ hot-reloading of dwm.
 Some notes however, this is a backported featured from a very different project. Certain design choices or style are definitely a little
 out of place for a [suckless](https://suckless.org/) application. It is quite overbuild for the level of configuration dwm offers by default,
 and is a bit "bloated" for that reason. It could definitely be slimmed down to a much lower line count at the sacrifice of modularity or
-verbosity. That being said, I did  design it to be quite robust, extensible, and modular. With a little editing you can add just about anything
+verbosity. That being said, I did design it to be quite robust, extensible, and modular. With a little editing you can add just about anything
 you would like to the configuration relative ease, or slim down what already exists. If you would like to reach out, please do, I am more than 
 happy to help. See [Reaching Out](#reaching-out) for contact info.
 
@@ -53,7 +53,7 @@ documentation you should need. All elements in the file must follow the libconfi
 Any issues with the syntax will cause parsing to fail, as libconfig is not very fault-tolerant when it comes to syntax. Warning,
 older versions of libconfig do not support trailing commas. This means that parsing could fail if you place a comma after the final
 element in a list. Please be careful about this, it can catch you off guard quite easily. Also, be careful with commas surrounding
-the button/key binds. Libconfig supports multi-line strings, meaning if you forget a comma after a line of binds, libconfig will
+the button/key binds. libconfig supports multi-line strings, meaning if you forget a comma after a line of binds, libconfig will
 combine the line you just wrote and the next together into one long bind, causing that keybind to likely fail to parse.
 
 ## Performance Impact
@@ -72,7 +72,7 @@ you are here looking at this patch, optimizing down to the last atom is not like
 
 ## TODOs
 There are still a few things I want to adjust before releasing this as a proper patch:
-- [ ] Complete documentation. I have about 50% of it already elsewhere, it just needs to be completed and adapted to this version of the parser
+- [ ] Complete the documentation.
 - [x] Fix the very clumsy logging. `print_log()` is just a placeholder macro to bridge the gap between my fully fledged logger and dwm's original source. It needs a little more polish.
 - [x] If I can, I want to remove the need for most functions called by a bind to be made a non-const `Arg`. If I can solve this, it will reduce the codebase impact of the patch and reduce conflicts with other patches a little.
 - [x] Reduce codebase impact as much as possible to improve patch compatability.
