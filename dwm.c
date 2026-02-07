@@ -66,25 +66,6 @@ enum { WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast }; /* default atoms *
 enum { ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWinTitle,
        ClkClientWin, ClkRootWin, ClkLast }; /* clicks */
 
-/**
- * @enum Argument_Type
- * @brief Enum to inform the program what data is stored in an @ref Arg union.
- *
- * The Argument_Type enum is a simple way of noting what kind of data was stored in an
- * argument. It acts as a simple safeguard against incorrect usage of an argument's data.
- * Used for the [dwm-libconfig patch](https://github.com/JeffofBread/dwm-libconfig).
- *
- * @see @ref Arg
- * @see https://github.com/JeffofBread/dwm-libconfig
- */
-enum Argument_Type {
-        ARG_TYPE_NONE,
-        ARG_TYPE_INT,
-        ARG_TYPE_UINT,
-        ARG_TYPE_FLOAT,
-        ARG_TYPE_POINTER,
-};
-
 typedef union {
 	int i;
 	unsigned int ui;
@@ -98,7 +79,7 @@ typedef struct {
 	unsigned int button;
 	void (*func)(const Arg *arg);
 	Arg arg;
-	enum Argument_Type argument_type;
+	unsigned int argument_type;
 } Button;
 
 typedef struct Monitor Monitor;
@@ -123,7 +104,7 @@ typedef struct {
 	KeySym keysym;
 	void (*func)(const Arg *);
 	Arg arg;
-	enum Argument_Type argument_type;
+	unsigned int argument_type;
 } Key;
 
 typedef struct {
