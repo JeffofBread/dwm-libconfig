@@ -24,7 +24,7 @@ clean:
 
 dist: clean
 	mkdir -p dwm-${VERSION}
-	cp -R LICENSE Makefile README.md config.mk dwm.1\
+	cp -R LICENSE Makefile README config.mk dwm.1\
 	      drw.h util.h ${SRC} dwm.conf dwm.png \
 	      parser.c transient.c dwm-${VERSION}
 	tar -cf dwm-${VERSION}.tar dwm-${VERSION}
@@ -32,8 +32,6 @@ dist: clean
 	rm -rf dwm-${VERSION}
 
 install: all
-	mkdir -p /etc/dwm
-	cp -f dwm.conf /etc/dwm
 	mkdir -p ${DESTDIR}${PREFIX}/bin
 	cp -f dwm ${DESTDIR}${PREFIX}/bin
 	chmod 755 ${DESTDIR}${PREFIX}/bin/dwm

@@ -16,7 +16,7 @@ you would like to the configuration relative ease, or slim down what already exi
 happy to help. See [Reaching Out](#reaching-out) for contact info.
 
 ## Requirements
-The patch is based on dwm 6.6, so it is recommended to start there. You will need all the base dwm dependencies plus 
+The patch is based on dwm 6.8, so it is recommended to start there. You will need all the base dwm dependencies plus 
 [libconfig](https://hyperrealm.github.io/libconfig/). You can find it in most distributions repositories without issue.
 
 Here are a few common distros:
