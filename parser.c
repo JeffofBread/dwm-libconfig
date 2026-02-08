@@ -419,7 +419,7 @@ int parse_config( Configuration *config ) {
  */
 void setlayout_floating( const Arg *arg ) {
 
-        Arg tmp = _find_layout( NULL );
+        const Arg tmp = _find_layout( NULL );
         if ( !tmp.i ) {
                 log_warn( "setlayout_floating() failed to find floating layout in \"layouts\" array\n" );
         } else {
@@ -438,7 +438,7 @@ void setlayout_floating( const Arg *arg ) {
  */
 void setlayout_monocle( const Arg *arg ) {
 
-        Arg tmp = _find_layout( monocle );
+        const Arg tmp = _find_layout( monocle );
         if ( !tmp.i ) {
                 log_warn( "setlayout_monocle() failed to find monocle layout in \"layouts\" array\n" );
         } else {
@@ -457,7 +457,7 @@ void setlayout_monocle( const Arg *arg ) {
  */
 void setlayout_tiled( const Arg *arg ) {
 
-        Arg tmp = _find_layout( tile );
+        const Arg tmp = _find_layout( tile );
         if ( !tmp.i ) {
                 log_warn( "setlayout_tiled() failed to find tile layout in \"layouts\" array\n" );
         } else {
