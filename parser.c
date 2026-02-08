@@ -10,8 +10,10 @@
  * page: https://github.com/JeffofBread/dwm-libconfig.
  *
  * @authors JeffOfBread <jeffofbreadcoding@gmail.com>
- * @authors Yuxuan Shui - <yshuiv7@gmail.com>, author of [picom](https://github.com/yshui/picom), which I (JeffOfBread) copied code from. Code from picom is credited as such.
- * @authors Mihir Lad - <mihirlad55@gmail.com>, author of [dwm-ipc](https://github.com/mihirlad55/dwm-ipc), which I (JeffOfBread) copied code from. Code from dwm-ipc is credited as such.
+ * @authors Yuxuan Shui - <yshuiv7@gmail.com>, author of [picom](https://github.com/yshui/picom),
+ * which I (JeffOfBread) copied code from. Code from picom is credited as such.
+ * @authors Mihir Lad - <mihirlad55@gmail.com>, author of [dwm-ipc](https://github.com/mihirlad55/dwm-ipc),
+ * which I (JeffOfBread) copied code from. Code from dwm-ipc is credited as such.
  *
  * @see https://github.com/hyperrealm/libconfig
  * @see https://github.com/JeffofBread/dwm-libconfig
@@ -140,8 +142,7 @@ static void _backup_config( config_t *libconfig_config );
 static void _load_default_config( Configuration *config );
 static int _open_config( Configuration *config );
 static int _parse_bind_argument( const char *argument_string, enum Data_Type arg_type, long double range_min, long double range_max, Arg *parsed_arg );
-static int _parse_bind_function( const char *function_string, void ( **parsed_function )( const Arg * ), enum Data_Type *parsed_arg_type, long double *parsed_range_min,
-                                 long double *parsed_range_max );
+static int _parse_bind_function( const char *function_string, void ( **parsed_function )( const Arg * ), enum Data_Type *parsed_arg_type, long double *parsed_range_min, long double *parsed_range_max );
 static int _parse_bind_modifier( const char *modifier_string, unsigned int *parsed_modifier );
 static int _parse_buttonbind( const char *buttonbind_string, unsigned int max_keys, Button *parsed_buttonbind );
 static int _parse_buttonbind_button( const char *button_string, unsigned int *parsed_button );
@@ -679,8 +680,7 @@ static int _open_config( Configuration *config ) {
                 }
 
                 if ( config_read( &config->libconfig_config, tmp_file ) == CONFIG_FALSE ) {
-                        log_warn( "Problem parsing config file \"%s\", line %d: %s\n", config_filepaths[ i ], config_error_line( &config->libconfig_config ),
-                                  config_error_text( &config->libconfig_config ) );
+                        log_warn( "Problem parsing config file \"%s\", line %d: %s\n", config_filepaths[ i ], config_error_line( &config->libconfig_config ), config_error_text( &config->libconfig_config ) );
                         SAFE_FCLOSE( tmp_file );
                         continue;
                 }
@@ -795,8 +795,7 @@ static int _parse_bind_argument( const char *argument_string, const enum Data_Ty
  *
  * @return 0 on success, -1 on failure.
  */
-static int _parse_bind_function( const char *function_string, void ( **parsed_function )( const Arg * ), enum Data_Type *parsed_arg_type, long double *parsed_range_min,
-                                 long double *parsed_range_max ) {
+static int _parse_bind_function( const char *function_string, void ( **parsed_function )( const Arg * ), enum Data_Type *parsed_arg_type, long double *parsed_range_min, long double *parsed_range_max ) {
 
         log_trace( "Function being parsed: \"%s\"\n", function_string );
 
@@ -2009,8 +2008,7 @@ static int _libconfig_lookup_uint( const config_t *config, const char *path, con
  *
  * @see config_setting_lookup_int() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005flookup_005fint)
  */
-static int _libconfig_setting_lookup_uint( const config_setting_t *setting, const char *path, const bool optional, const unsigned int range_min, const unsigned int range_max,
-                                           unsigned int *parsed_value ) {
+static int _libconfig_setting_lookup_uint( const config_setting_t *setting, const char *path, const bool optional, const unsigned int range_min, const unsigned int range_max, unsigned int *parsed_value ) {
         if ( !setting ) {
                 log_error( "libconfig setting context is NULL, cannot perform lookup of \"%s\"\n", path );
                 return -1;
