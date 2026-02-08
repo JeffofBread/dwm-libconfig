@@ -5,3 +5,4 @@ config.h
 dwm
 *.o
 *.diff
+*.tar.gz
