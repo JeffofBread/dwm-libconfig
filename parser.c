@@ -42,10 +42,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
 #include <X11/X.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
-#include <sys/stat.h>
 
 // Simple wrappers for free/fclose to improve null safety. It is not flawless or a catch-all however
 #define SAFE_FREE( p ) do { if ( p ) { free( ( void * ) ( p ) ); ( p ) = NULL; } } while ( 0 )
@@ -97,21 +97,27 @@ DEFINE_CLAMP_FUNCTION( float, float, "%f" )
 /**
  * TODO
  */
-enum Data_Type {
-        NONE,
+// TODO: May be too long or verbose a name
+typedef enum Parser_Data_Type {
+        NONE = 0,
         BOOLEAN,
         INT,
         UINT,
         FLOAT,
         STRING,
-};
+} Parser_Data_Type_t;
 
-char *DATA_TYPE_STRINGS[ ] = { "NONE", "BOOLEAN", "INT", "UINT", "FLOAT", "STRING" };
+char *PARSER_DATA_TYPE_STRINGS[ ] = { "NONE", "BOOLEAN", "INT", "UINT", "FLOAT", "STRING" };
+
+// Alias libconfig structs for better name
+// separation from the parser's configuration struct
+typedef config_t Libconfig_Config_t;
+typedef config_setting_t Libconfig_Setting_t;
 
 // Struct to hold some parser internal data and
 // some of the configuration data that can't
 // be written to variables in `config.(def.).h`
-typedef struct Configuration {
+typedef struct Parser_Config {
         bool fallback_config_loaded;
         bool default_keybinds_loaded;
         bool default_buttonbinds_loaded;
@@ -124,40 +130,40 @@ typedef struct Configuration {
         Rule *rule_array;
         Key *keybind_array;
         Button *buttonbind_array;
-        config_t libconfig_config;
-} Configuration;
+        Libconfig_Config_t libconfig_config;
+} Parser_Config_t;
 
-Configuration dwm_config = { 0 };
+Parser_Config_t dwm_config = { 0 };
 
 /// Public parser functions ///
-void config_cleanup( Configuration *config );
-int parse_config( Configuration *config );
+void config_cleanup( Parser_Config_t *config );
+int parse_config( Parser_Config_t *config );
 void setlayout_floating( const Arg *arg );
 void setlayout_monocle( const Arg *arg );
 void setlayout_tiled( const Arg *arg );
 void spawn_simple( const Arg *arg );
 
 /// Parser internal functions declaration ///
-static void _backup_config( config_t *libconfig_config );
-static void _load_default_config( Configuration *config );
-static int _open_config( Configuration *config );
-static int _parse_bind_argument( const char *argument_string, enum Data_Type arg_type, long double range_min, long double range_max, Arg *parsed_arg );
-static int _parse_bind_function( const char *function_string, void ( **parsed_function )( const Arg * ), enum Data_Type *parsed_arg_type, long double *parsed_range_min, long double *parsed_range_max );
+static void _backup_config( Libconfig_Config_t *libconfig_config );
+static void _load_default_config( Parser_Config_t *config );
+static int _open_config( Parser_Config_t *config );
+static int _parse_bind_argument( const char *argument_string, Parser_Data_Type_t arg_type, long double range_min, long double range_max, Arg *parsed_arg );
+static int _parse_bind_function( const char *function_string, void ( **parsed_function )( const Arg * ), Parser_Data_Type_t *parsed_arg_type, long double *parsed_range_min, long double *parsed_range_max );
 static int _parse_bind_modifier( const char *modifier_string, unsigned int *parsed_modifier );
 static int _parse_buttonbind( const char *buttonbind_string, unsigned int max_keys, Button *parsed_buttonbind );
 static int _parse_buttonbind_button( const char *button_string, unsigned int *parsed_button );
 static int _parse_buttonbind_click( const char *click_string, unsigned int *parsed_click );
-static int _parse_buttonbinds_config( const config_t *libconfig_config, unsigned int max_keys, Button **buttonbind_config, unsigned int *buttonbind_count, bool *default_buttonbinds_loaded );
-static int _parse_generic_settings( const config_t *libconfig_config );
+static int _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_config, unsigned int max_keys, Button **buttonbind_config, unsigned int *buttonbind_count, bool *default_buttonbinds_loaded );
+static int _parse_generic_settings( const Libconfig_Config_t *libconfig_config );
 static int _parse_keybind( const char *keybind_string, unsigned int max_keys, Key *parsed_keybind );
 static int _parse_keybind_keysym( const char *keysym_string, KeySym *parsed_keysym );
-static int _parse_keybinds_config( const config_t *libconfig_config, unsigned int max_keys, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded );
-static int _parse_rule( const config_setting_t *rule_libconfig_setting, int rule_index, Rule *parsed_rule );
-static int _parse_rule_string( const config_setting_t *rule_libconfig_setting, const char *path, int rule_index, char **parsed_value );
-static int _parse_rules_config( const config_t *libconfig_config, Rule **rules_config, unsigned int *rules_count, bool *default_rules_loaded );
-static int _parse_tags_config( const config_t *libconfig_config );
-static int _parse_theme( const config_setting_t *theme_libconfig_setting );
-static int _parse_theme_config( const config_t *libconfig_config );
+static int _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, unsigned int max_keys, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded );
+static int _parse_rule( const Libconfig_Setting_t *rule_libconfig_setting, int rule_index, Rule *parsed_rule );
+static int _parse_rule_string( const Libconfig_Setting_t *rule_libconfig_setting, const char *path, int rule_index, char **parsed_value );
+static int _parse_rules_config( const Libconfig_Config_t *libconfig_config, Rule **rules_config, unsigned int *rules_count, bool *default_rules_loaded );
+static int _parse_tags_config( const Libconfig_Config_t *libconfig_config );
+static int _parse_theme( const Libconfig_Setting_t *theme_libconfig_setting );
+static int _parse_theme_config( const Libconfig_Config_t *libconfig_config );
 
 /// Utility functions declaration ///
 static char *_estrdup( const char *string );
@@ -166,14 +172,14 @@ static Arg _find_layout( void ( *arrange )( Monitor * ) );
 static char *_get_xdg_config_home( void );
 static char *_get_xdg_data_home( void );
 static char *_join_strings( const char *string_1, const char *string_2 );
-static int _libconfig_lookup_bool( const config_t *config, const char *path, bool optional, bool *parsed_value );
-static int _libconfig_lookup_int( const config_t *config, const char *path, bool optional, int range_min, int range_max, int *parsed_value );
-static int _libconfig_setting_lookup_int( const config_setting_t *setting, const char *path, bool optional, int range_min, int range_max, int *parsed_value );
-static int _libconfig_lookup_uint( const config_t *config, const char *path, bool optional, unsigned int range_min, unsigned int range_max, unsigned int *parsed_value );
-static int _libconfig_setting_lookup_uint( const config_setting_t *setting, const char *path, bool optional, unsigned int range_min, unsigned int range_max, unsigned int *parsed_value );
-static int _libconfig_lookup_float( const config_t *config, const char *path, bool optional, float range_min, float range_max, float *parsed_value );
-static int _libconfig_lookup_string( const config_t *config, const char *path, bool optional, const char **parsed_value );
-static int _libconfig_setting_lookup_string( const config_setting_t *setting, const char *path, bool optional, const char **parsed_value );
+static int _libconfig_lookup_bool( const Libconfig_Config_t *config, const char *path, bool optional, bool *parsed_value );
+static int _libconfig_lookup_int( const Libconfig_Config_t *config, const char *path, bool optional, int range_min, int range_max, int *parsed_value );
+static int _libconfig_setting_lookup_int( const Libconfig_Setting_t *setting, const char *path, bool optional, int range_min, int range_max, int *parsed_value );
+static int _libconfig_lookup_uint( const Libconfig_Config_t *config, const char *path, bool optional, unsigned int range_min, unsigned int range_max, unsigned int *parsed_value );
+static int _libconfig_setting_lookup_uint( const Libconfig_Setting_t *setting, const char *path, bool optional, unsigned int range_min, unsigned int range_max, unsigned int *parsed_value );
+static int _libconfig_lookup_float( const Libconfig_Config_t *config, const char *path, bool optional, float range_min, float range_max, float *parsed_value );
+static int _libconfig_lookup_string( const Libconfig_Config_t *config, const char *path, bool optional, const char **parsed_value );
+static int _libconfig_setting_lookup_string( const Libconfig_Setting_t *setting, const char *path, bool optional, const char **parsed_value );
 static int _make_directory_path( const char *path );
 static int _normalize_path( const char *original_path, char **normalized_path );
 static char *_trim_whitespace( char *input_string );
@@ -181,7 +187,7 @@ static char *_trim_whitespace( char *input_string );
 const struct Function_Alias_Map {
         const char *name;
         void ( *func )( const Arg * );
-        const enum Data_Type arg_type;
+        const Parser_Data_Type_t arg_type;
         const long double range_min, range_max;
 } function_alias_map[ ] = {
         { "focusmon", focusmon, INT, -99, 99 },
@@ -258,7 +264,7 @@ const struct Button_Alias_Map {
 const struct Setting_Alias_Map {
         const char *name;
         void *value;
-        const enum Data_Type type;
+        const Parser_Data_Type_t type;
         const bool optional;
         const long double range_min, range_max;
 } settings_alias_map[ ] = {
@@ -281,15 +287,15 @@ const struct Setting_Alias_Map {
 /// Parser public function definitions ///
 
 /**
- * @brief Frees all members of a @ref Configuration struct.
+ * @brief Frees all members of a @ref Parser_Config_t struct.
  *
- * Frees all members of a @ref Configuration struct. Intended
+ * Frees all members of a @ref Parser_Config_t struct. Intended
  * for use after @ref parse_config().
  *
- * @param[in,out] config Pointer to the @ref Configuration
+ * @param[in,out] config Pointer to the @ref Parser_Config_t
  * struct to be cleaned.
  */
-void config_cleanup( Configuration *config ) {
+void config_cleanup( Parser_Config_t *config ) {
 
         int i;
 
@@ -347,7 +353,7 @@ void config_cleanup( Configuration *config ) {
  * please reference the helper function related to the functionality you want to learn
  * more about, they all have their own documentation and comments.
  *
- * @param[in,out] config Pointer to the @ref Configuration struct. It is expected to be
+ * @param[in,out] config Pointer to the @ref Parser_Config_t struct. It is expected to be
  * a valid and mutable pointer to an already allocated struct.
  *
  * @return -1 if no configuration file is successfully found or parsed, 0 on complete
@@ -358,7 +364,7 @@ void config_cleanup( Configuration *config ) {
  *
  * @see https://github.com/JeffofBread/dwm-libconfig
  */
-int parse_config( Configuration *config ) {
+int parse_config( Parser_Config_t *config ) {
 
         _load_default_config( config );
 
@@ -493,9 +499,9 @@ void spawn_simple( const Arg *arg ) {
 /// Parser internal function definitions ///
 
 /**
- * @brief Backs up a libconfig @ref config_t to disk.
+ * @brief Backs up a libconfig configuration to disk.
  *
- * This function backs up the given libconfig @ref config_t
+ * This function backs up the given libconfig @ref Libconfig_Config_t
  * @p libconfig_config following the XDG specification. If
  * @ref _get_xdg_data_home() fails to find the XDG data directory
  * (which is likely), we will default to using "~/.local/share/"
@@ -506,10 +512,10 @@ void spawn_simple( const Arg *arg ) {
  * The backup file is then created and written to by libconfig's
  * config_write_file().
  *
- * @param[in] libconfig_config Pointer to the libconfig @ref config_t
+ * @param[in] libconfig_config Pointer to the libconfig configuration
  * to be backed up.
  */
-static void _backup_config( config_t *libconfig_config ) {
+static void _backup_config( Libconfig_Config_t *libconfig_config ) {
 
         // Save xdg data directory to buffer (~/.local/share)
         char *buffer = _get_xdg_data_home();
@@ -537,13 +543,13 @@ static void _backup_config( config_t *libconfig_config ) {
 }
 
 /**
- * @brief Loads default values from @ref config.h into a @ref Configuration struct.
+ * @brief Loads default values from @ref config.h into a @ref Parser_Config_t struct.
  *
- * Initializes the given @ref Configuration struct with default values from
+ * Initializes the given @ref Parser_Config_t struct with default values from
  * @ref config.h and other misc hardcoded default values. This is intended to
  * proceed any use of the configuration to ensure consistent behavior.
  *
- * @param[in,out] config Pointer to the @ref Configuration struct to load default values
+ * @param[in,out] config Pointer to the @ref Parser_Config_t struct to load default values
  * into. If the pointer is NULL, the program will exit with a failure exit code.
  *
  * @note This function is an exit point in the program. If @p config
@@ -557,7 +563,7 @@ static void _backup_config( config_t *libconfig_config ) {
  * it uses the original arrays from @ref config.h alongside a boolean to keep track
  * of the this until it is later dynamically allocated in the parser.
  */
-static void _load_default_config( Configuration *config ) {
+static void _load_default_config( Parser_Config_t *config ) {
 
         if ( config == NULL ) {
                 log_fatal( "config is NULL, can't load default configuration\n" );
@@ -605,14 +611,14 @@ static void _load_default_config( Configuration *config ) {
  * fails, the function will return and the program will rely on the hardcoded default values
  * loaded during @ref _load_default_config().
  *
- * @param[in,out] config Pointer to the @ref Configuration. From @p config, we read
- * the value of @ref Configuration::config_filepath to see if the user passed in a
+ * @param[in,out] config Pointer to the @ref Parser_Config_t. From @p config, we read
+ * the value of @ref Parser_Config_t::config_filepath to see if the user passed in a
  * custom configuration filepath from the cli. In @p config, we also store the filepath
- * and libconfig @ref config_t if we find and parse a valid configuration file.
+ * and libconfig configuration if we find and parse a valid configuration file.
  *
  * @return 0 on success, -1 on failure.
  */
-static int _open_config( Configuration *config ) {
+static int _open_config( Parser_Config_t *config ) {
 
         int i, config_filepaths_length = 0;
 
@@ -729,7 +735,7 @@ static int _open_config( Configuration *config ) {
  *
  * @return 0 on success, -1 on failure.
  */
-static int _parse_bind_argument( const char *argument_string, const enum Data_Type arg_type, const long double range_min, const long double range_max, Arg *parsed_arg ) {
+static int _parse_bind_argument( const char *argument_string, const Parser_Data_Type_t arg_type, const long double range_min, const long double range_max, Arg *parsed_arg ) {
 
         log_trace( "Argument being parsed: \"%s\"\n", argument_string );
 
@@ -795,7 +801,7 @@ static int _parse_bind_argument( const char *argument_string, const enum Data_Ty
  *
  * @return 0 on success, -1 on failure.
  */
-static int _parse_bind_function( const char *function_string, void ( **parsed_function )( const Arg * ), enum Data_Type *parsed_arg_type, long double *parsed_range_min, long double *parsed_range_max ) {
+static int _parse_bind_function( const char *function_string, void ( **parsed_function )( const Arg * ), Parser_Data_Type_t *parsed_arg_type, long double *parsed_range_min, long double *parsed_range_max ) {
 
         log_trace( "Function being parsed: \"%s\"\n", function_string );
 
@@ -919,7 +925,7 @@ static int _parse_buttonbind( const char *buttonbind_string, const unsigned int 
         }
 
         long double range_min, range_max;
-        if ( _parse_bind_function( function_token, &parsed_buttonbind->func, (enum Data_Type *) &parsed_buttonbind->argument_type, &range_min, &range_max ) ) {
+        if ( _parse_bind_function( function_token, &parsed_buttonbind->func, (Parser_Data_Type_t *) &parsed_buttonbind->argument_type, &range_min, &range_max ) ) {
                 log_error( "Invalid function \"%s\" in buttonbind \"%s\"\n", function_token, buttonbind_string );
                 return -1;
         }
@@ -1000,11 +1006,11 @@ static int _parse_buttonbind_click( const char *click_string, unsigned int *pars
 }
 
 /**
- * @brief Parse a list of buttonbinds from a libconfig @ref config_t into a list of @ref Button structs.
+ * @brief Parse a list of buttonbinds from a libconfig configuration into a list of @ref Button structs.
  *
  * TODO
  *
- * @param[in] libconfig_config Pointer to the libconfig @ref config_t containing the buttonbinds to
+ * @param[in] libconfig_config Pointer to the libconfig configuration containing the buttonbinds to
  * be parsed into @p buttonbind_config.
  * @param[in] max_keys Maximum number of modifiers + buttons allowed in a buttonbind.
  * @param[out] buttonbind_config Pointer to where to dynamically allocate and store all the parsed buttonbinds.
@@ -1021,7 +1027,7 @@ static int _parse_buttonbind_click( const char *click_string, unsigned int *pars
  *
  * @todo Overhaul the error return value. It sucks.
  */
-static int _parse_buttonbinds_config( const config_t *libconfig_config, const unsigned int max_keys, Button **buttonbind_config, unsigned int *buttonbind_count, bool *default_buttonbinds_loaded ) {
+static int _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_config, const unsigned int max_keys, Button **buttonbind_config, unsigned int *buttonbind_count, bool *default_buttonbinds_loaded ) {
 
         // I may look at adjusting how memory is allocated and used here. For example,
         // if a bind fails and is assigned. This just leaves empty unused memory. Not
@@ -1031,7 +1037,7 @@ static int _parse_buttonbinds_config( const config_t *libconfig_config, const un
 
         int failed_buttonbinds_count = 0;
 
-        const config_setting_t *buttonbinds_libconfig_setting = config_lookup( libconfig_config, "buttonbinds" );
+        const Libconfig_Setting_t *buttonbinds_libconfig_setting = config_lookup( libconfig_config, "buttonbinds" );
         if ( buttonbinds_libconfig_setting != NULL ) {
                 *buttonbind_count = config_setting_length( buttonbinds_libconfig_setting );
 
@@ -1046,7 +1052,7 @@ static int _parse_buttonbinds_config( const config_t *libconfig_config, const un
                 *buttonbind_config = ecalloc( *buttonbind_count, sizeof( Button ) );
                 *default_buttonbinds_loaded = false;
 
-                const config_setting_t *buttonbind_libconfig_setting = NULL;
+                const Libconfig_Setting_t *buttonbind_libconfig_setting = NULL;
                 for ( int i = 0; i < *buttonbind_count; i++ ) {
                         buttonbind_libconfig_setting = config_setting_get_elem( buttonbinds_libconfig_setting, i );
 
@@ -1073,15 +1079,15 @@ static int _parse_buttonbinds_config( const config_t *libconfig_config, const un
 }
 
 /**
- * @brief Parse generic configuration settings from a libconfig @ref config_t.
+ * @brief Parse generic configuration settings from a libconfig configuration.
  *
  * TODO
  *
- * @param[in] libconfig_config Pointer to the libconfig @ref config_t containing the generic settings to be parsed.
+ * @param[in] libconfig_config Pointer to the libconfig configuration containing the generic settings to be parsed.
  *
  * @return 0 on success, >0 equals the number of failed settings.
  */
-static int _parse_generic_settings( const config_t *libconfig_config ) {
+static int _parse_generic_settings( const Libconfig_Config_t *libconfig_config ) {
 
         log_debug( "Generic settings available: %lu\n", LENGTH( settings_alias_map ) );
 
@@ -1113,7 +1119,7 @@ static int _parse_generic_settings( const config_t *libconfig_config ) {
                                 break;
 
                         default:
-                                log_warn( "Setting \"%s\" is of an invalid type: \"%s\"\n", settings_alias_map[ i ].name, DATA_TYPE_STRINGS[ settings_alias_map[ i ].type ] );
+                                log_warn( "Setting \"%s\" is of an invalid type: \"%s\"\n", settings_alias_map[ i ].name, PARSER_DATA_TYPE_STRINGS[ settings_alias_map[ i ].type ] );
                                 settings_failed_count++;
                                 break;
                 }
@@ -1157,7 +1163,7 @@ static int _parse_keybind( const char *keybind_string, const unsigned int max_ke
         }
 
         long double range_min, range_max;
-        if ( _parse_bind_function( function_token, &parsed_keybind->func, (enum Data_Type *) &parsed_keybind->argument_type, &range_min, &range_max ) ) {
+        if ( _parse_bind_function( function_token, &parsed_keybind->func, (Parser_Data_Type_t *) &parsed_keybind->argument_type, &range_min, &range_max ) ) {
                 log_error( "Invalid function \"%s\" in keybind \"%s\"\n", function_token, keybind_string );
                 return -1;
         }
@@ -1243,11 +1249,11 @@ static int _parse_keybind_keysym( const char *keysym_string, KeySym *parsed_keys
 }
 
 /**
- * @brief Parse a list of keybinds from a libconfig @ref config_t into a list of @ref Key structs.
+ * @brief Parse a list of keybinds from a libconfig configuration into a list of @ref Key structs.
  *
  * TODO
  *
- * @param[in] libconfig_config Pointer to the libconfig @ref config_t containing the keybinds to
+ * @param[in] libconfig_config Pointer to the libconfig configuration containing the keybinds to
  * be parsed into @p keybind_config.
  * @param[in] max_keys Maximum number of modifiers + keys allowed in a keybind.
  * @param[out] keybind_config Pointer to where to dynamically allocate memory and store all the parsed keybinds.
@@ -1264,7 +1270,7 @@ static int _parse_keybind_keysym( const char *keysym_string, KeySym *parsed_keys
  *
  * @todo Overhaul the error return value. It sucks.
  */
-static int _parse_keybinds_config( const config_t *libconfig_config, const unsigned int max_keys, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded ) {
+static int _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, const unsigned int max_keys, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded ) {
 
         // I may look at adjusting how memory is allocated and used here. For example,
         // if a bind fails and is assigned. This just leaves empty unused memory. Not
@@ -1274,7 +1280,7 @@ static int _parse_keybinds_config( const config_t *libconfig_config, const unsig
 
         int failed_keybinds = 0;
 
-        const config_setting_t *keybinds_libconfig_setting = config_lookup( libconfig_config, "keybinds" );
+        const Libconfig_Setting_t *keybinds_libconfig_setting = config_lookup( libconfig_config, "keybinds" );
         if ( keybinds_libconfig_setting != NULL ) {
                 *keybinds_count = config_setting_length( keybinds_libconfig_setting );
 
@@ -1289,7 +1295,7 @@ static int _parse_keybinds_config( const config_t *libconfig_config, const unsig
                 *keybind_config = ecalloc( *keybinds_count, sizeof( Key ) );
                 *default_keybinds_loaded = false;
 
-                const config_setting_t *keybind_libconfig_setting = NULL;
+                const Libconfig_Setting_t *keybind_libconfig_setting = NULL;
                 for ( int i = 0; i < *keybinds_count; i++ ) {
                         keybind_libconfig_setting = config_setting_get_elem( keybinds_libconfig_setting, i );
 
@@ -1316,7 +1322,7 @@ static int _parse_keybinds_config( const config_t *libconfig_config, const unsig
 }
 
 /**
- * @brief Parse a rule from a libconfig @ref config_setting_t.
+ * @brief Parse a rule from a libconfig configuration setting.
  *
  * TODO
  *
@@ -1328,7 +1334,7 @@ static int _parse_keybinds_config( const config_t *libconfig_config, const unsig
  *
  * @return 0 on success, >0 equals the number of failed rule elements.
  */
-static int _parse_rule( const config_setting_t *rule_libconfig_setting, const int rule_index, Rule *parsed_rule ) {
+static int _parse_rule( const Libconfig_Setting_t *rule_libconfig_setting, const int rule_index, Rule *parsed_rule ) {
 
         int failed_rule_elements_count = 0;
 
@@ -1361,7 +1367,7 @@ static int _parse_rule( const config_setting_t *rule_libconfig_setting, const in
  *
  * @note @p The string pointed to by @p parsed_value can be dynamically allocated and will need to be freed if not NULL.
  */
-static int _parse_rule_string( const config_setting_t *rule_libconfig_setting, const char *path, const int rule_index, char **parsed_value ) {
+static int _parse_rule_string( const Libconfig_Setting_t *rule_libconfig_setting, const char *path, const int rule_index, char **parsed_value ) {
         const char *tmp_string = NULL;
 
         _libconfig_setting_lookup_string( rule_libconfig_setting, path, false, &tmp_string );
@@ -1384,11 +1390,11 @@ static int _parse_rule_string( const config_setting_t *rule_libconfig_setting, c
 }
 
 /**
- * @brief Parse a list of rules from a libconfig @ref config_t into a list of @ref Rule structs.
+ * @brief Parse a list of rules from a libconfig configuration into a list of @ref Rule structs.
  *
  * TODO
  *
- * @param[in] libconfig_config Pointer to the libconfig @ref config_t containing the rules to be parsed into @p rules_config.
+ * @param[in] libconfig_config Pointer to the libconfig configuration containing the rules to be parsed into @p rules_config.
  * @param[out] rules_config Pointer to where to dynamically allocate memory and store all the parsed rules.
  * @param[out] rules_count Pointer to where to store the number of rules to be parsed. This value does not take into account
  * any failures during parsing the rules.
@@ -1401,11 +1407,11 @@ static int _parse_rule_string( const config_setting_t *rule_libconfig_setting, c
  *
  * @todo Overhaul the error return value. It sucks.
  */
-static int _parse_rules_config( const config_t *libconfig_config, Rule **rules_config, unsigned int *rules_count, bool *default_rules_loaded ) {
+static int _parse_rules_config( const Libconfig_Config_t *libconfig_config, Rule **rules_config, unsigned int *rules_count, bool *default_rules_loaded ) {
 
         int failed_rules_count = 0, failed_rules_elements_count = 0;
 
-        const config_setting_t *rules_libconfig_setting = config_lookup( libconfig_config, "rules" );
+        const Libconfig_Setting_t *rules_libconfig_setting = config_lookup( libconfig_config, "rules" );
         if ( rules_libconfig_setting != NULL ) {
                 *rules_count = config_setting_length( rules_libconfig_setting );
 
@@ -1431,7 +1437,7 @@ static int _parse_rules_config( const config_t *libconfig_config, Rule **rules_c
                         ( *rules_config )[ i ].monitor = -1;
                 }
 
-                const config_setting_t *rule_libconfig_setting = NULL;
+                const Libconfig_Setting_t *rule_libconfig_setting = NULL;
 
                 for ( int i = 0; i < *rules_count; i++ ) {
                         rule_libconfig_setting = config_setting_get_elem( rules_libconfig_setting, i );
@@ -1455,21 +1461,21 @@ static int _parse_rules_config( const config_t *libconfig_config, Rule **rules_c
 }
 
 /**
- * @brief Parse a list of tags from a libconfig @ref config_t.
+ * @brief Parse a list of tags from a libconfig configuration.
  *
  * TODO
  *
- * @param[in] libconfig_config Pointer to the libconfig @ref config_t containing the tags to be parsed.
+ * @param[in] libconfig_config Pointer to the libconfig configuration containing the tags to be parsed.
  *
  * @return 0 on success, >0 equals the number of tags that failed to be parsed.
  *
  * @note All successfully parsed tags are dynamically allocated into @p tags and will need to be freed.
  */
-static int _parse_tags_config( const config_t *libconfig_config ) {
+static int _parse_tags_config( const Libconfig_Config_t *libconfig_config ) {
 
         int tags_failed_count = 0;
 
-        const config_setting_t *tag_names_libconfig_setting = config_lookup( libconfig_config, "tag-names" );
+        const Libconfig_Setting_t *tag_names_libconfig_setting = config_lookup( libconfig_config, "tag-names" );
         if ( tag_names_libconfig_setting != NULL ) {
                 const char *tag_name = NULL;
                 int tags_count = config_setting_length( tag_names_libconfig_setting );
@@ -1520,7 +1526,7 @@ static int _parse_tags_config( const config_t *libconfig_config ) {
 }
 
 /**
- * @brief Parse a theme from a libconfig @ref config_setting_t.
+ * @brief Parse a theme from a libconfig configuration setting.
  *
  * TODO
  *
@@ -1530,7 +1536,7 @@ static int _parse_tags_config( const config_t *libconfig_config ) {
  *
  * @note All successfully parsed theme values are dynamically allocated and will need to be freed.
  */
-static int _parse_theme( const config_setting_t *theme_libconfig_setting ) {
+static int _parse_theme( const Libconfig_Setting_t *theme_libconfig_setting ) {
 
         const struct {
                 const char *path;
@@ -1560,22 +1566,22 @@ static int _parse_theme( const config_setting_t *theme_libconfig_setting ) {
 }
 
 /**
- * @brief Parse a list of themes from a libconfig @ref config_t.
+ * @brief Parse a list of themes from a libconfig configuration.
  *
  * TODO
  *
- * @param[in] libconfig_config Pointer to the libconfig @ref config_t containing the theme to be parsed.
+ * @param[in] libconfig_config Pointer to the libconfig configuration containing the theme to be parsed.
  *
  * @return 0 on success, >0 on failure.
  *
  * @todo Overhaul the error return value. It sucks.
  */
-static int _parse_theme_config( const config_t *libconfig_config ) {
+static int _parse_theme_config( const Libconfig_Config_t *libconfig_config ) {
 
         int failed_themes_count = 0;
         int failed_theme_elements_count = 0;
 
-        const config_setting_t *themes_libconfig_setting = config_lookup( libconfig_config, "themes" );
+        const Libconfig_Setting_t *themes_libconfig_setting = config_lookup( libconfig_config, "themes" );
         if ( themes_libconfig_setting != NULL ) {
 
                 int detected_theme_count = config_setting_length( themes_libconfig_setting );
@@ -1592,7 +1598,7 @@ static int _parse_theme_config( const config_t *libconfig_config ) {
                         detected_theme_count = 1;
                 }
 
-                const config_setting_t *theme_libconfig_setting = NULL;
+                const Libconfig_Setting_t *theme_libconfig_setting = NULL;
 
                 for ( int i = 0; i < detected_theme_count; i++ ) {
 
@@ -1842,7 +1848,7 @@ static char *_join_strings( const char *string_1, const char *string_2 ) {
  *
  * @see config_lookup_bool() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005flookup_005fbool)
  */
-static int _libconfig_lookup_bool( const config_t *config, const char *path, const bool optional, bool *parsed_value ) {
+static int _libconfig_lookup_bool( const Libconfig_Config_t *config, const char *path, const bool optional, bool *parsed_value ) {
         if ( !config ) {
                 log_error( "libconfig configuration context is NULL, cannot perform lookup of \"%s\"\n", path );
                 return -1;
@@ -1884,7 +1890,7 @@ static int _libconfig_lookup_bool( const config_t *config, const char *path, con
  *
  * @see config_lookup_int() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005fsetting_005flookup_005fint)
  */
-static int _libconfig_lookup_int( const config_t *config, const char *path, const bool optional, const int range_min, const int range_max, int *parsed_value ) {
+static int _libconfig_lookup_int( const Libconfig_Config_t *config, const char *path, const bool optional, const int range_min, const int range_max, int *parsed_value ) {
         if ( !config ) {
                 log_error( "libconfig configuration context is NULL, cannot perform lookup of \"%s\"\n", path );
                 return -1;
@@ -1925,7 +1931,7 @@ static int _libconfig_lookup_int( const config_t *config, const char *path, cons
  *
  * @see config_setting_lookup_int() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005flookup_005fint)
  */
-static int _libconfig_setting_lookup_int( const config_setting_t *setting, const char *path, const bool optional, const int range_min, const int range_max, int *parsed_value ) {
+static int _libconfig_setting_lookup_int( const Libconfig_Setting_t *setting, const char *path, const bool optional, const int range_min, const int range_max, int *parsed_value ) {
         if ( !setting ) {
                 log_error( "libconfig setting context is NULL, cannot perform lookup of \"%s\"\n", path );
                 return -1;
@@ -1966,7 +1972,7 @@ static int _libconfig_setting_lookup_int( const config_setting_t *setting, const
  *
  * @see config_lookup_int() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005fsetting_005flookup_005fint)
  */
-static int _libconfig_lookup_uint( const config_t *config, const char *path, const bool optional, const unsigned int range_min, const unsigned int range_max, unsigned int *parsed_value ) {
+static int _libconfig_lookup_uint( const Libconfig_Config_t *config, const char *path, const bool optional, const unsigned int range_min, const unsigned int range_max, unsigned int *parsed_value ) {
         if ( !config ) {
                 log_error( "libconfig configuration context is NULL, cannot perform lookup of \"%s\"\n", path );
                 return -1;
@@ -2008,7 +2014,7 @@ static int _libconfig_lookup_uint( const config_t *config, const char *path, con
  *
  * @see config_setting_lookup_int() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005flookup_005fint)
  */
-static int _libconfig_setting_lookup_uint( const config_setting_t *setting, const char *path, const bool optional, const unsigned int range_min, const unsigned int range_max, unsigned int *parsed_value ) {
+static int _libconfig_setting_lookup_uint( const Libconfig_Setting_t *setting, const char *path, const bool optional, const unsigned int range_min, const unsigned int range_max, unsigned int *parsed_value ) {
         if ( !setting ) {
                 log_error( "libconfig setting context is NULL, cannot perform lookup of \"%s\"\n", path );
                 return -1;
@@ -2050,7 +2056,7 @@ static int _libconfig_setting_lookup_uint( const config_setting_t *setting, cons
  *
  * @see config_lookup_float() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005fsetting_005flookup_005ffloat)
  */
-static int _libconfig_lookup_float( const config_t *config, const char *path, const bool optional, const float range_min, const float range_max, float *parsed_value ) {
+static int _libconfig_lookup_float( const Libconfig_Config_t *config, const char *path, const bool optional, const float range_min, const float range_max, float *parsed_value ) {
         if ( !config ) {
                 log_error( "libconfig configuration context is NULL, cannot perform lookup of \"%s\"\n", path );
                 return -1;
@@ -2089,7 +2095,7 @@ static int _libconfig_lookup_float( const config_t *config, const char *path, co
  *
  * @see config_lookup_string() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005flookup_005fstring)
  */
-static int _libconfig_lookup_string( const config_t *config, const char *path, const bool optional, const char **parsed_value ) {
+static int _libconfig_lookup_string( const Libconfig_Config_t *config, const char *path, const bool optional, const char **parsed_value ) {
         if ( !config ) {
                 log_error( "libconfig configuration context is NULL, cannot perform lookup of \"%s\"\n", path );
                 return -1;
@@ -2126,7 +2132,7 @@ static int _libconfig_lookup_string( const config_t *config, const char *path, c
  *
  * @see config_setting_lookup_string() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005fsetting_005flookup_005fstring)
  */
-static int _libconfig_setting_lookup_string( const config_setting_t *setting, const char *path, const bool optional, const char **parsed_value ) {
+static int _libconfig_setting_lookup_string( const Libconfig_Setting_t *setting, const char *path, const bool optional, const char **parsed_value ) {
         if ( !setting ) {
                 log_error( "libconfig setting context is NULL, cannot perform lookup of \"%s\"\n", path );
                 return -1;
