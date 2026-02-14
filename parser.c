@@ -77,7 +77,7 @@
 //      #define CLAMP(A, MIN, MAX) ((A) < (MIN) ? (MIN) : ((A) > (MAX) ? (MAX) : (A)))
 // But that clamps the range silently. No print or notification a value was out of range.
 #define DEFINE_CLAMP_FUNCTION( NAME, TYPE, FORMAT )                                                     \
-        static TYPE clamp_range_##NAME( TYPE input, TYPE min, TYPE max ) {                       \
+        static TYPE clamp_range_##NAME( TYPE input, TYPE min, TYPE max ) {                              \
                 if ( input < min ) {                                                                    \
                         log_warn( "Clamped \"" FORMAT "\" to a min of \"" FORMAT "\"\n", input, min );  \
                         return min;                                                                     \
@@ -138,15 +138,24 @@ Parser_Config_t dwm_config = { 0 };
 /// Public parser functions ///
 void config_cleanup( Parser_Config_t *config );
 int parse_config( Parser_Config_t *config );
+
+/// Public utility functions ///
+char *estrdup( const char *string );
+void extend_string( char **source_string_pointer, const char *addition );
+Arg find_layout( void ( *arrange )( Monitor * ) );
+char *get_xdg_config_home( void );
+char *get_xdg_data_home( void );
+char *join_strings( const char *string_1, const char *string_2 );
+int make_directory_path( const char *path );
+int normalize_path( const char *original_path, char **normalized_path );
 void setlayout_floating( const Arg *arg );
 void setlayout_monocle( const Arg *arg );
 void setlayout_tiled( const Arg *arg );
 void spawn_simple( const Arg *arg );
+char *trim_whitespace( char *input_string );
 
-/// Parser internal functions declaration ///
-static void _backup_config( Libconfig_Config_t *libconfig_config );
-static void _load_default_config( Parser_Config_t *config );
-static int _open_config( Parser_Config_t *config );
+/// Parser internal functions ///
+static void _parser_backup_config( Libconfig_Config_t *libconfig_config );
 static int _parse_bind_argument( const char *argument_string, Parser_Data_Type_t arg_type, long double range_min, long double range_max, Arg *parsed_arg );
 static int _parse_bind_function( const char *function_string, void ( **parsed_function )( const Arg * ), Parser_Data_Type_t *parsed_arg_type, long double *parsed_range_min, long double *parsed_range_max );
 static int _parse_bind_modifier( const char *modifier_string, unsigned int *parsed_modifier );
@@ -158,6 +167,8 @@ static int _parse_generic_settings( const Libconfig_Config_t *libconfig_config )
 static int _parse_keybind( const char *keybind_string, unsigned int max_keys, Key *parsed_keybind );
 static int _parse_keybind_keysym( const char *keysym_string, KeySym *parsed_keysym );
 static int _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, unsigned int max_keys, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded );
+static void _parser_load_default_config( Parser_Config_t *config );
+static int _parser_open_config( Parser_Config_t *config );
 static int _parse_rule( const Libconfig_Setting_t *rule_libconfig_setting, int rule_index, Rule *parsed_rule );
 static int _parse_rule_string( const Libconfig_Setting_t *rule_libconfig_setting, const char *path, int rule_index, char **parsed_value );
 static int _parse_rules_config( const Libconfig_Config_t *libconfig_config, Rule **rules_config, unsigned int *rules_count, bool *default_rules_loaded );
@@ -165,25 +176,17 @@ static int _parse_tags_config( const Libconfig_Config_t *libconfig_config );
 static int _parse_theme( const Libconfig_Setting_t *theme_libconfig_setting );
 static int _parse_theme_config( const Libconfig_Config_t *libconfig_config );
 
-/// Utility functions declaration ///
-static char *_estrdup( const char *string );
-static void _extend_string( char **source_string_pointer, const char *addition );
-static Arg _find_layout( void ( *arrange )( Monitor * ) );
-static char *_get_xdg_config_home( void );
-static char *_get_xdg_data_home( void );
-static char *_join_strings( const char *string_1, const char *string_2 );
+/// Parser internal utility functions ///
 static int _libconfig_lookup_bool( const Libconfig_Config_t *config, const char *path, bool optional, bool *parsed_value );
-static int _libconfig_lookup_int( const Libconfig_Config_t *config, const char *path, bool optional, int range_min, int range_max, int *parsed_value );
-static int _libconfig_setting_lookup_int( const Libconfig_Setting_t *setting, const char *path, bool optional, int range_min, int range_max, int *parsed_value );
-static int _libconfig_lookup_uint( const Libconfig_Config_t *config, const char *path, bool optional, unsigned int range_min, unsigned int range_max, unsigned int *parsed_value );
-static int _libconfig_setting_lookup_uint( const Libconfig_Setting_t *setting, const char *path, bool optional, unsigned int range_min, unsigned int range_max, unsigned int *parsed_value );
 static int _libconfig_lookup_float( const Libconfig_Config_t *config, const char *path, bool optional, float range_min, float range_max, float *parsed_value );
+static int _libconfig_lookup_int( const Libconfig_Config_t *config, const char *path, bool optional, int range_min, int range_max, int *parsed_value );
 static int _libconfig_lookup_string( const Libconfig_Config_t *config, const char *path, bool optional, const char **parsed_value );
+static int _libconfig_lookup_uint( const Libconfig_Config_t *config, const char *path, bool optional, unsigned int range_min, unsigned int range_max, unsigned int *parsed_value );
+static int _libconfig_setting_lookup_int( const Libconfig_Setting_t *setting, const char *path, bool optional, int range_min, int range_max, int *parsed_value );
 static int _libconfig_setting_lookup_string( const Libconfig_Setting_t *setting, const char *path, bool optional, const char **parsed_value );
-static int _make_directory_path( const char *path );
-static int _normalize_path( const char *original_path, char **normalized_path );
-static char *_trim_whitespace( char *input_string );
+static int _libconfig_setting_lookup_uint( const Libconfig_Setting_t *setting, const char *path, bool optional, unsigned int range_min, unsigned int range_max, unsigned int *parsed_value );
 
+/// Parser alias maps ///
 const struct Function_Alias_Map {
         const char *name;
         void ( *func )( const Arg * );
@@ -284,7 +287,7 @@ const struct Setting_Alias_Map {
         { "max-keys", &dwm_config.max_keys, UINT, true, 1, 10 },
 };
 
-/// Parser public function definitions ///
+/// Public parser functions ///
 
 /**
  * @brief Frees all members of a @ref Parser_Config_t struct.
@@ -366,9 +369,9 @@ void config_cleanup( Parser_Config_t *config ) {
  */
 int parse_config( Parser_Config_t *config ) {
 
-        _load_default_config( config );
+        _parser_load_default_config( config );
 
-        if ( _open_config( config ) ) return -1;
+        if ( _parser_open_config( config ) ) return -1;
 
         log_info( "Path to config file: \"%s\"\n", config->config_filepath );
 
@@ -399,7 +402,7 @@ int parse_config( Parser_Config_t *config ) {
         // some relaxing or possibly come up with a better way of calculating if a config
         // passes, or is valid enough to warrant backing up.
         if ( total_errors == 0 && !( config->default_keybinds_loaded || config->default_buttonbinds_loaded || config->fallback_config_loaded ) ) {
-                _backup_config( &config->libconfig_config );
+                _parser_backup_config( &config->libconfig_config );
         } else {
                 if ( config->default_keybinds_loaded || config->default_buttonbinds_loaded ) {
                         log_warn( "Not saving config as backup, as hardcoded default bind values were used, not the user's\n" );
@@ -415,6 +418,357 @@ int parse_config( Parser_Config_t *config ) {
         return total_errors;
 }
 
+/// Public utility functions ///
+
+/**
+ * @brief Simple wrapper around @ref strdup() to provide error logging.
+ *
+ * TODO
+ *
+ * @param[in] string String to be copied using @ref strdup().
+ *
+ * @return Pointer of the string dynamically allocated using @ref strdup()
+ * or NULL if @ref strdup() failed.
+ *
+ * @note String is dynamically allocated using @ref strdup(), and will need
+ * to be manually freed.
+ */
+char *estrdup( const char *string ) {
+        if ( !string ) return NULL;
+        char *return_string = strdup( string );
+        if ( !return_string ) {
+                log_error( "strdup failed: %s\n", strerror(errno) );
+        }
+        return return_string;
+}
+
+/**
+ * @brief Extend one string with another.
+ *
+ * TODO
+ *
+ * @param[in,out] source_string_pointer Pointer to where the extended string will be stored. Must be NULL or heap allocated.
+ * @param[in] addition Additional string to be appended to the string pointed to by @p source_string_pointer.
+ *
+ * @warning @p source_string_pointer must be NULL or heap allocated. If it points to a string
+ * literal, @ref realloc() will crash the program. See @ref join_strings() if you wish to append a string literal.
+ *
+ * @note @p source_string_pointer is or will be dynamically allocated on the heap and must be freed.
+ *
+ * @note This function is derived from [picom's](https://github.com/yshui/picom/) mstrextend().
+ * Credit more or less goes to [Yuxuan Shui](yshuiv7@gmail.com), I just made some minor adjustments.
+ *
+ * @author Yuxuan Shui - <yshuiv7@gmail.com>
+ *
+ * @see https://github.com/yshui/picom
+ * @see https://github.com/yshui/picom/blob/69539edc0638019e3dd88c67007e90ce7f51174e/src/utils/str.c#L54
+ */
+void extend_string( char **source_string_pointer, const char *addition ) {
+
+        if ( !*source_string_pointer ) {
+                *source_string_pointer = estrdup( addition );
+                return;
+        }
+
+        const size_t length_1 = strlen( *source_string_pointer );
+        const size_t length_2 = strlen( addition );
+        const size_t total_length = length_1 + length_2 + 1;
+
+        *source_string_pointer = realloc( *source_string_pointer, total_length );
+
+        strncpy( *source_string_pointer + length_1, addition, length_2 );
+        ( *source_string_pointer )[ total_length - 1 ] = '\0';
+}
+
+/**
+ * @brief Find a layout in @ref layouts that uses a specific arrange function.
+ *
+ * TODO
+ *
+ * @param[in] arrange Arrange function used by the layout to be found and returned.
+ *
+ * @return @ref Arg containing a pointer to the @ref Layout struct containing the
+ * first instance of @p arrange.
+ */
+Arg find_layout( void ( *arrange )( Monitor * ) ) {
+
+        for ( int i = 0; i < LENGTH( layouts ); i++ ) {
+                if ( layouts[ i ].arrange == arrange ) {
+                        return (Arg){ .v = &layouts[ i ] };
+                }
+        }
+
+        return (Arg){ .i = 0 };
+}
+
+/**
+ * @brief Get the user's XDG configuration directory path.
+ *
+ * TODO
+ *
+ * @return Pointer of a dynamically allocated string containing the complete path to the user's XDG
+ * configuration directory, or NULL if no directory was able to be found.
+ *
+ * @note If the function is successful, the returned string will have been dynamically allocated
+ * and will need to be freed.
+ *
+ * @note This function is derived from [picom's](https://github.com/yshui/picom/) xdg_config_home().
+ * Credit more or less goes to [Yuxuan Shui](yshuiv7@gmail.com), I just made some minor adjustments.
+ *
+ * @author Yuxuan Shui - <yshuiv7@gmail.com>
+ *
+ * @see https://github.com/yshui/picom
+ * @see https://github.com/yshui/picom/blob/69539edc0638019e3dd88c67007e90ce7f51174e/src/config.c#L33
+ */
+char *get_xdg_config_home( void ) {
+
+        char *xdg_config_home = getenv( "XDG_CONFIG_HOME" );
+        char *user_home = getenv( "HOME" );
+
+        log_trace( "XDG_CONFIG_HOME: \"%s\", $HOME: \"%s\"\n", xdg_config_home, user_home );
+
+        if ( !xdg_config_home ) {
+                const char *default_config_directory = "/.config";
+
+                if ( !user_home ) {
+                        log_warn( "XDG_CONFIG_HOME and $HOME are not set\n" );
+                        return NULL;
+                }
+
+                xdg_config_home = join_strings( user_home, default_config_directory );
+        } else {
+                xdg_config_home = estrdup( xdg_config_home );
+        }
+
+        return xdg_config_home;
+}
+
+/**
+ * @brief Get the user's XDG data directory path.
+ *
+ * TODO
+ *
+ * @return Pointer of a dynamically allocated string containing the complete path to the user's XDG
+ * data directory, or NULL if no directory was able to be found.
+ *
+ * @note TODO mention dynamic allocation with join_strings() and estrdup()
+ *
+ * @note This function is derived from [picom's](https://github.com/yshui/picom/) xdg_config_home().
+ * Credit more or less goes to [Yuxuan Shui](yshuiv7@gmail.com), I just made some minor adjustments.
+ *
+ * @author Yuxuan Shui - <yshuiv7@gmail.com>
+ *
+ * @see https://github.com/yshui/picom
+ * @see https://github.com/yshui/picom/blob/69539edc0638019e3dd88c67007e90ce7f51174e/src/config.c#L33
+ */
+char *get_xdg_data_home( void ) {
+
+        char *xdg_data_home = getenv( "XDG_DATA_HOME" );
+        char *user_home = getenv( "HOME" );
+
+        log_trace( "$XDG_DATA_HOME: \"%s\", $HOME: \"%s\"\n", xdg_data_home, user_home );
+
+        if ( !xdg_data_home ) {
+                const char *default_data_directory = "/.local/share";
+
+                if ( !user_home ) {
+                        log_warn( "$XDG_DATA_HOME and $HOME are not set\n" );
+                        return NULL;
+                }
+
+                xdg_data_home = join_strings( user_home, default_data_directory );
+        } else {
+                xdg_data_home = estrdup( xdg_data_home );
+        }
+
+        return xdg_data_home;
+}
+
+/**
+ * @brief Join two strings into one.
+ *
+ * TODO
+ *
+ * @param[in] string_1 String for @p string_2 to be appended to.
+ * @param[in] string_2 String to be appended to @p string_1.
+ *
+ * @return Pointer of a dynamically allocated string containing the now joined strings,
+ * or NULL on failure.
+ *
+ * @note Returned string is dynamically allocated and will need to be freed.
+ *
+ * @note This function is derived from [picom's](https://github.com/yshui/picom/) mstrjoin().
+ * Credit more or less goes to [Yuxuan Shui](yshuiv7@gmail.com), I just made some minor adjustments.
+ *
+ * @note gcc warns about legitimate truncation worries in @ref strncpy() in @ref join_strings().
+ * `strncpy( joined_string, string_1, length_1 )` intentionally truncates the null byte
+ * from @p string_1, however. `strncpy( joined_string + length_1, string_2, length_2 )`
+ * uses bounds depending on the source argument, but `joined_string` is allocated with
+ * `length_1 + length_2 + 1`, so this @ref strncpy() can't overflow.
+ *
+ * @author Yuxuan Shui - <yshuiv7@gmail.com>
+ *
+ * @see https://github.com/yshui/picom
+ * @see https://github.com/yshui/picom/blob/69961987e1238f9bc3af53fa0774fc19fdec44a4/src/utils/str.c#L24
+ */
+char *join_strings( const char *string_1, const char *string_2 ) {
+
+        const size_t length_1 = strlen( string_1 );
+        const size_t length_2 = strlen( string_2 );
+        const size_t total_length = length_1 + length_2 + 1;
+
+        char *joined_string = calloc( total_length, sizeof( char ) );
+
+        if ( !joined_string ) {
+                log_error( "Calloc failed: %s\n", strerror(errno) );
+                log_error( "Failed to join \"%s\" and \"%s\"\n", string_1, string_2 );
+                return NULL;
+        }
+
+        #ifndef __clang__
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wpragmas"
+        #pragma GCC diagnostic ignored "-Wstringop-truncation"
+        #pragma GCC diagnostic ignored "-Wstringop-overflow"
+        #endif
+
+        strncpy( joined_string, string_1, length_1 );
+        strncpy( joined_string + length_1, string_2, length_2 );
+
+        #ifndef __clang__
+        #pragma GCC diagnostic pop
+        #endif
+
+        joined_string[ total_length - 1 ] = '\0';
+
+        return joined_string;
+}
+
+/**
+ * @brief Creates all directories in a given path if they don't exist.
+ *
+ * TODO
+ *
+ * @param[in] path String containing the directory path to attempt to create.
+ *
+ * @return 0 on success, -1 on failure.
+ *
+ * @note This function is derived from [dwm-ipc's](https://github.com/mihirlad55/dwm-ipc) mkdirp().
+ * Credit more or less goes to [Mihir Lad](mihirlad55@gmail.com), I just made some minor adjustments.
+ *
+ * @author Mihir Lad - <mihirlad55@gmail.com>
+ *
+ * @see https://github.com/mihirlad55/dwm-ipc
+ * @see https://github.com/mihirlad55/dwm-ipc/blob/b3eebba7c043482d454afc5c882f513fc1b157ad/util.c#L103
+ */
+int make_directory_path( const char *path ) {
+
+        char *normalized_path;
+        normalize_path( path, &normalized_path );
+
+        const char *walk = normalized_path;
+        const size_t normalized_path_length = strlen( normalized_path );
+
+        while ( walk < normalized_path + normalized_path_length + 1 ) {
+
+                // Get length from walk to next '/'
+                const size_t distance_to_slash = strcspn( walk, "/" );
+
+                // Skip path /
+                if ( distance_to_slash == 0 ) {
+                        walk++;
+                        continue;
+                }
+
+                // Length of current path segment
+                const size_t current_path_length = walk - normalized_path + distance_to_slash;
+                char current_path[ current_path_length + 1 ];
+
+                struct stat stat_variable;
+
+                // Copy path segment to stat
+                strncpy( current_path, normalized_path, current_path_length );
+                strcpy( current_path + current_path_length, "" );
+
+                errno = 0;
+                if ( stat( current_path, &stat_variable ) < 0 ) {
+                        if ( errno == ENOENT ) {
+                                log_debug( "Making directory %s\n", current_path );
+                                if ( mkdir( current_path, 0700 ) < 0 ) {
+                                        log_error( "Failed to make directory \"%s\": %s\n", current_path, strerror( errno ) );
+                                        free( normalized_path );
+                                        return -1;
+                                }
+                        } else {
+                                log_error( "Error stat-ing directory \"%s\": %s\n", current_path, strerror( errno ) );
+                                free( normalized_path );
+                                return -1;
+                        }
+                }
+
+                // Continue to next path segment
+                walk += distance_to_slash;
+        }
+
+        free( normalized_path );
+        return 0;
+}
+
+/**
+ * @brief Normalize a file or folder path to remove repeat forward slash characters.
+ *
+ * TODO
+ *
+ * @param[in] original_path String containing the path to be normalized.
+ * @param[out] normalized_path Pointer to where to store the normalized path. It is dynamically
+ * allocated and will need to be freed.
+ *
+ * @return TODO check for errors in realloc() and whatever replaces ecalloc() for allocating normalized_path
+ *
+ * @note @p normalized_path is dynamically allocated and will need to be freed.
+ *
+ * @note This function is derived from [dwm-ipc's](https://github.com/mihirlad55/dwm-ipc) normalizepath().
+ * Credit more or less goes to [Mihir Lad](mihirlad55@gmail.com), I just made some minor adjustments.
+ *
+ * @author Mihir Lad - <mihirlad55@gmail.com>
+ *
+ * @see https://github.com/mihirlad55/dwm-ipc
+ * @see https://github.com/mihirlad55/dwm-ipc/blob/b3eebba7c043482d454afc5c882f513fc1b157ad/util.c#L40
+ */
+int normalize_path( const char *original_path, char **normalized_path ) {
+
+        const size_t original_length = strlen( original_path );
+
+        // TODO: This probably shouldn't use ecalloc()
+        *normalized_path = (char *) ecalloc( ( original_length + 1 ), sizeof( char ) );
+
+        size_t new_length = 0;
+        const char *match, *walk = original_path;
+        while ( ( match = strchr( walk, '/' ) ) ) {
+
+                // Copy everything between match and walk
+                strncpy( *normalized_path + new_length, walk, match - walk );
+                new_length += match - walk;
+                walk += match - walk;
+
+                // Skip all repeating slashes
+                while ( *walk == '/' ) walk++;
+
+                // If not last character in path
+                if ( walk != original_path + original_length ) ( *normalized_path )[ new_length++ ] = '/';
+        }
+
+        ( *normalized_path )[ new_length++ ] = '\0';
+
+        // Copy remaining path
+        strcat( *normalized_path, walk );
+        new_length += strlen( walk );
+
+        *normalized_path = (char *) realloc( *normalized_path, new_length * sizeof( char ) );
+
+        return 0;
+}
+
 /**
  * @brief Set current layout to floating.
  *
@@ -426,7 +780,7 @@ int parse_config( Parser_Config_t *config ) {
  */
 void setlayout_floating( const Arg *arg ) {
 
-        const Arg tmp = _find_layout( NULL );
+        const Arg tmp = find_layout( NULL );
         if ( !tmp.i ) {
                 log_warn( "setlayout_floating() failed to find floating layout in \"layouts\" array\n" );
         } else {
@@ -445,7 +799,7 @@ void setlayout_floating( const Arg *arg ) {
  */
 void setlayout_monocle( const Arg *arg ) {
 
-        const Arg tmp = _find_layout( monocle );
+        const Arg tmp = find_layout( monocle );
         if ( !tmp.i ) {
                 log_warn( "setlayout_monocle() failed to find monocle layout in \"layouts\" array\n" );
         } else {
@@ -464,7 +818,7 @@ void setlayout_monocle( const Arg *arg ) {
  */
 void setlayout_tiled( const Arg *arg ) {
 
-        const Arg tmp = _find_layout( tile );
+        const Arg tmp = find_layout( tile );
         if ( !tmp.i ) {
                 log_warn( "setlayout_tiled() failed to find tile layout in \"layouts\" array\n" );
         } else {
@@ -496,29 +850,54 @@ void spawn_simple( const Arg *arg ) {
         spawn( &tmp );
 }
 
-/// Parser internal function definitions ///
+/**
+ * @brief Removes the whitespace before and after @p input_string.
+ *
+ * This function trims the whitespace before and after @p input_string.
+ * The trim is performed in place on @p input_string, and assumes it is
+ * both mutable and null-terminated.
+ *
+ * @param[in,out] input_string Null-terminated, mutable string to be trimmed.
+ *
+ * @return On success, a pointer to the first non-space character in
+ * the string is returned. If @p input_string was entirely whitespace, an
+ * empty string is returned. If @p input_string was NULL, NULL is returned.
+ */
+char *trim_whitespace( char *input_string ) {
+        if ( !input_string ) return NULL;
+        while ( isspace( (unsigned char) *input_string ) ) input_string++;
+        if ( *input_string == '\0' ) return input_string;
+        char *end = input_string + strlen( input_string ) - 1;
+        while ( end > input_string && isspace( (unsigned char) *end ) ) end--;
+        *( end + 1 ) = '\0';
+        return input_string;
+}
+
+/// Parser internal functions ///
 
 /**
  * @brief Backs up a libconfig configuration to disk.
  *
  * This function backs up the given libconfig @ref Libconfig_Config_t
  * @p libconfig_config following the XDG specification. If
- * @ref _get_xdg_data_home() fails to find the XDG data directory
+ * @ref get_xdg_data_home() fails to find the XDG data directory
  * (which is likely), we will default to using "~/.local/share/"
  * instead. Meaning that, in the latter case, the filepath to
  * the backup file will be "~/.local/share/dwm/dwm_last.conf".
  * "/dwm/dwm_last.conf" will always be appended to the end of
- * whatever path is returned by @ref _get_xdg_data_home().
+ * whatever path is returned by @ref get_xdg_data_home().
  * The backup file is then created and written to by libconfig's
  * config_write_file().
  *
  * @param[in] libconfig_config Pointer to the libconfig configuration
  * to be backed up.
+ *
+ * @todo Should have a return type for error handling
  */
-static void _backup_config( Libconfig_Config_t *libconfig_config ) {
+static void _parser_backup_config( Libconfig_Config_t *libconfig_config ) {
 
         // Save xdg data directory to buffer (~/.local/share)
-        char *buffer = _get_xdg_data_home();
+        char *buffer = get_xdg_data_home();
 
         if ( buffer == NULL ) {
                 log_error( "Unable to get necessary directory to backup config\n" );
@@ -528,9 +907,9 @@ static void _backup_config( Libconfig_Config_t *libconfig_config ) {
                 // with the directory we want to backup the config to, create the directory
                 // if it doesn't exist, and then append with the filename we want to backup
                 // to config in.
-                _extend_string( &buffer, "/dwm/" );
-                _make_directory_path( buffer );
-                _extend_string( &buffer, "dwm_last.conf" );
+                extend_string( &buffer, "/dwm/" );
+                make_directory_path( buffer );
+                extend_string( &buffer, "dwm_last.conf" );
 
                 if ( config_write_file( libconfig_config, buffer ) == CONFIG_FALSE ) {
                         log_error( "Problem backing up current config to \"%s\"\n", buffer );
@@ -540,185 +919,6 @@ static void _backup_config( Libconfig_Config_t *libconfig_config ) {
 
                 SAFE_FREE( buffer );
         }
-}
-
-/**
- * @brief Loads default values from @ref config.h into a @ref Parser_Config_t struct.
- *
- * Initializes the given @ref Parser_Config_t struct with default values from
- * @ref config.h and other misc hardcoded default values. This is intended to
- * proceed any use of the configuration to ensure consistent behavior.
- *
- * @param[in,out] config Pointer to the @ref Parser_Config_t struct to load default values
- * into. If the pointer is NULL, the program will exit with a failure exit code.
- *
- * @note This function is an exit point in the program. If @p config
- * is NULL, the program will be unable to continue. Later attempts to access
- * values in @p config would just cause the program to either enter
- * undefined behavior or crash. Instead, the program will log the fatal error
- * and return a failure exit code.
- *
- * @todo Replace current colors array with a better solution. It should follow
- * a similar system to that of the other rules, keys, and buttons arrays, in that
- * it uses the original arrays from @ref config.h alongside a boolean to keep track
- * of the this until it is later dynamically allocated in the parser.
- */
-static void _load_default_config( Parser_Config_t *config ) {
-
-        if ( config == NULL ) {
-                log_fatal( "config is NULL, can't load default configuration\n" );
-                exit( EXIT_FAILURE );
-        }
-
-        config->max_keys = 4;
-        config->fallback_config_loaded = false;
-
-        config->default_rules_loaded = true;
-        config->rule_array_size = LENGTH( rules );
-        config->rule_array = (Rule *) rules;
-
-        config->default_keybinds_loaded = true;
-        config->keybind_array_size = LENGTH( keys );
-        config->keybind_array = (Key *) keys;
-
-        config->default_buttonbinds_loaded = true;
-        config->buttonbind_array_size = LENGTH( buttons );
-        config->buttonbind_array = (Button *) buttons;
-
-        // This is a bit lazy, but simplifies cleanup logic.
-        // We dynamically allocate all the values here so they
-        // can universally be freed instead of having to keep
-        // track of which are dynamic and which are static.
-        fonts[ 0 ] = _estrdup( fonts[ 0 ] );
-        for ( int i = 0; i < LENGTH( colors ); i++ ) {
-                for ( int j = 0; j < LENGTH( colors[ i ] ); j++ ) {
-                        colors[ i ][ j ] = _estrdup( colors[ i ][ j ] );
-                }
-        }
-
-        config_init( &config->libconfig_config );
-}
-
-/**
- * @brief Attempts to find, open, and store a valid libconfig configuration file.
- *
- * This function handles most of the high level logic regarding finding, opening,
- * validating, and storing a libconfig configuration file. This function will first
- * search for a custom configuration file, passed in using @p config. If that is not
- * found, a list of default directories are searched. If still no user configuration
- * is found, a user's last configuration backup will be attempted to be loaded. If again
- * unsuccessful, a system default configuration file will be loaded. Finally, if all else
- * fails, the function will return and the program will rely on the hardcoded default values
- * loaded during @ref _load_default_config().
- *
- * @param[in,out] config Pointer to the @ref Parser_Config_t. From @p config, we read
- * the value of @ref Parser_Config_t::config_filepath to see if the user passed in a
- * custom configuration filepath from the cli. In @p config, we also store the filepath
- * and libconfig configuration if we find and parse a valid configuration file.
- *
- * @return 0 on success, -1 on failure.
- */
-static int _open_config( Parser_Config_t *config ) {
-
-        int i, config_filepaths_length = 0;
-
-        // Yes this uses a "magic number", but I didn't see a way that was less
-        // cumbersome than just hardcoding this value. 5 is just the 1 CLI custom
-        // filepath + 4 fallback config locations created a few lines later.
-        char *config_filepaths[ 5 ];
-
-        // Check if a custom user config was passed through the CLI.
-        // If a path was given, copy it to the first index of the filepaths array.
-        if ( config->config_filepath != NULL ) {
-                config_filepaths[ config_filepaths_length++ ] = _estrdup( config->config_filepath );
-                SAFE_FREE( config->config_filepath );
-        }
-
-        // $XDG_CONFIG_HOME/.config/dwm.conf or $HOME/.config/dwm.conf
-        char *config_top_directory = _get_xdg_config_home();
-        if ( !config_top_directory ) {
-                log_warn( "Unable to acquire top level configuration directory\n" );
-        } else {
-                _extend_string( &config_top_directory, "/dwm.conf" );
-                config_filepaths[ config_filepaths_length++ ] = config_top_directory;
-        }
-
-        // $XDG_CONFIG_HOME/.config/dwm/dwm.conf or $HOME/.config/dwm/dwm.conf
-        char *config_sub_directory = _get_xdg_config_home();
-        if ( !config_sub_directory ) {
-                log_warn( "Unable to acquire dwm configuration directory\n" );
-        } else {
-                _extend_string( &config_sub_directory, "/dwm/dwm.conf" );
-                config_filepaths[ config_filepaths_length++ ] = config_sub_directory;
-        }
-
-        // $XDG_DATA_HOME/.local/share/dwm/dwm_last.conf or $HOME/.local/share/dwm/dwm_last.conf
-        char *config_backup = _get_xdg_data_home();
-        if ( !config_backup ) {
-                log_warn( "Unable to acquire dwm configuration backup directory\n" );
-        } else {
-                _extend_string( &config_backup, "/dwm/dwm_last.conf" );
-                config_filepaths[ config_filepaths_length++ ] = config_backup;
-        }
-
-        // /etc/dwm/dwm.conf
-        char *config_fallback = _estrdup( "/etc/dwm/dwm.conf" );
-        if ( !config_fallback ) {
-                log_warn( "Unable to acquire dwm system configuration fallback directory\n" );
-        } else {
-                config_filepaths[ config_filepaths_length++ ] = config_fallback;
-        }
-
-        FILE *tmp_file = NULL;
-        for ( i = 0; i < config_filepaths_length; i++ ) {
-                log_debug( "Attempting to open config file \"%s\"\n", config_filepaths[ i ] );
-
-                if ( config_filepaths[ i ] == NULL ) {
-                        log_warn( "config_filepaths[%d] was NULL, unable to lookup intended config. Likely a memory allocation error\n", i );
-                        continue;
-                }
-
-                tmp_file = fopen( config_filepaths[ i ], "r" );
-
-                if ( tmp_file == NULL ) {
-                        log_warn( "Unable to open config file \"%s\"\n", config_filepaths[ i ] );
-                        continue;
-                }
-
-                if ( config_read( &config->libconfig_config, tmp_file ) == CONFIG_FALSE ) {
-                        log_warn( "Problem parsing config file \"%s\", line %d: %s\n", config_filepaths[ i ], config_error_line( &config->libconfig_config ), config_error_text( &config->libconfig_config ) );
-                        SAFE_FCLOSE( tmp_file );
-                        continue;
-                }
-
-                // Save found config filepath
-                SAFE_FREE( config->config_filepath );
-                config->config_filepath = _estrdup( config_filepaths[ i ] );
-
-                // Check if it's a user's custom configuration
-                if ( strcmp( config_filepaths[ i ], config_backup ) == 0 || strcmp( config_filepaths[ i ], config_fallback ) == 0 ) {
-                        config->fallback_config_loaded = true;
-                }
-
-                for ( i = 0; i < config_filepaths_length; i++ ) {
-                        SAFE_FREE( config_filepaths[ i ] );
-                }
-
-                SAFE_FCLOSE( tmp_file );
-
-                return 0;
-        }
-
-        log_error( "Unable to load any configs. Hardcoded default config values will be used. Exiting parsing\n" );
-
-        for ( i = 0; i < config_filepaths_length; i++ ) {
-                SAFE_FREE( config_filepaths[ i ] );
-        }
-
-        config_destroy( &config->libconfig_config );
-        SAFE_FCLOSE( tmp_file );
-
-        return -1;
 }
 
 /**
@@ -774,7 +974,7 @@ static int _parse_bind_argument( const char *argument_string, const Parser_Data_
                         break;
 
                 case STRING:
-                        parsed_arg->v = _estrdup( argument_string );
+                        parsed_arg->v = estrdup( argument_string );
                         if ( !parsed_arg->v )return -1;
                         log_trace( "Argument type pointer (string): \"%s\", (pointer): %p\n", argument_string, parsed_arg->v );
                         break;
@@ -870,13 +1070,13 @@ static int _parse_buttonbind( const char *buttonbind_string, const unsigned int 
         char *modifier_token_list = strtok( buttonbind_string_copy, "," );
 
         char *click_token = strtok( NULL, "," );
-        if ( click_token ) click_token = _trim_whitespace( click_token );
+        if ( click_token ) click_token = trim_whitespace( click_token );
 
         char *function_token = strtok( NULL, "," );
-        if ( function_token ) function_token = _trim_whitespace( function_token );
+        if ( function_token ) function_token = trim_whitespace( function_token );
 
         char *argument_token = strtok( NULL, "," );
-        if ( argument_token ) argument_token = _trim_whitespace( argument_token );
+        if ( argument_token ) argument_token = trim_whitespace( argument_token );
 
         if ( !modifier_token_list || !function_token || !click_token || modifier_token_list[ 0 ] == '\0' || function_token[ 0 ] == '\0' || click_token[ 0 ] == '\0' ) {
                 log_error( "Invalid buttonbind string. Expected format: \"mod+key, click, function, arg (if necessary)\" and got \"%s\"\n", buttonbind_string );
@@ -889,7 +1089,7 @@ static int _parse_buttonbind( const char *buttonbind_string, const unsigned int 
         memset( trimmed_modifier_token_list, 0, sizeof( trimmed_modifier_token_list ) );
         char *tmp_token = strtok( modifier_token_list, "+" );
         while ( tmp_token && modifier_token_count < max_keys ) {
-                char *trimmed = _trim_whitespace( tmp_token );
+                char *trimmed = trim_whitespace( tmp_token );
                 if ( *trimmed ) {
                         trimmed_modifier_token_list[ modifier_token_count ] = trimmed;
                         modifier_token_count++;
@@ -1152,10 +1352,10 @@ static int _parse_keybind( const char *keybind_string, const unsigned int max_ke
         char *modifier_token_list = strtok( keybind_string_copy, "," );
 
         char *function_token = strtok( NULL, "," );
-        if ( function_token ) function_token = _trim_whitespace( function_token );
+        if ( function_token ) function_token = trim_whitespace( function_token );
 
         char *argument_token = strtok( NULL, "," );
-        if ( argument_token ) argument_token = _trim_whitespace( argument_token );
+        if ( argument_token ) argument_token = trim_whitespace( argument_token );
 
         if ( !modifier_token_list || !function_token || modifier_token_list[ 0 ] == '\0' || function_token[ 0 ] == '\0' ) {
                 log_error( "Invalid keybind string. Expected format: \"mod+key, function, arg (if necessary)\" and got \"%s\"\n", keybind_string );
@@ -1183,7 +1383,7 @@ static int _parse_keybind( const char *keybind_string, const unsigned int max_ke
         memset( trimmed_modifier_token_list, 0, sizeof( trimmed_modifier_token_list ) );
         char *tmp_token = strtok( modifier_token_list, "+" );
         while ( tmp_token && modifier_token_count < max_keys ) {
-                char *trimmed = _trim_whitespace( tmp_token );
+                char *trimmed = trim_whitespace( tmp_token );
                 if ( *trimmed ) {
                         trimmed_modifier_token_list[ modifier_token_count ] = trimmed;
                         modifier_token_count++;
@@ -1322,6 +1522,187 @@ static int _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, c
 }
 
 /**
+ * @brief Loads default values from @ref config.h into a @ref Parser_Config_t struct.
+ *
+ * Initializes the given @ref Parser_Config_t struct with default values from
+ * @ref config.h and other misc hardcoded default values. This is intended to
+ * proceed any use of the configuration to ensure consistent behavior.
+ *
+ * @param[in,out] config Pointer to the @ref Parser_Config_t struct to load default values
+ * into. If the pointer is NULL, the program will exit with a failure exit code.
+ *
+ * @note This function is an exit point in the program. If @p config
+ * is NULL, the program will be unable to continue. Later attempts to access
+ * values in @p config would just cause the program to either enter
+ * undefined behavior or crash. Instead, the program will log the fatal error
+ * and return a failure exit code.
+ *
+ * @todo Replace current colors array with a better solution. It should follow
+ * a similar system to that of the other rules, keys, and buttons arrays, in that
+ * it uses the original arrays from @ref config.h alongside a boolean to keep track
+ * of the this until it is later dynamically allocated in the parser.
+ *
+ * @todo Should have a return type for error handling
+ */
+static void _parser_load_default_config( Parser_Config_t *config ) {
+
+        if ( config == NULL ) {
+                log_fatal( "config is NULL, can't load default configuration\n" );
+                exit( EXIT_FAILURE );
+        }
+
+        config->max_keys = 4;
+        config->fallback_config_loaded = false;
+
+        config->default_rules_loaded = true;
+        config->rule_array_size = LENGTH( rules );
+        config->rule_array = (Rule *) rules;
+
+        config->default_keybinds_loaded = true;
+        config->keybind_array_size = LENGTH( keys );
+        config->keybind_array = (Key *) keys;
+
+        config->default_buttonbinds_loaded = true;
+        config->buttonbind_array_size = LENGTH( buttons );
+        config->buttonbind_array = (Button *) buttons;
+
+        // This is a bit lazy, but simplifies cleanup logic.
+        // We dynamically allocate all the values here so they
+        // can universally be freed instead of having to keep
+        // track of which are dynamic and which are static.
+        fonts[ 0 ] = estrdup( fonts[ 0 ] );
+        for ( int i = 0; i < LENGTH( colors ); i++ ) {
+                for ( int j = 0; j < LENGTH( colors[ i ] ); j++ ) {
+                        colors[ i ][ j ] = estrdup( colors[ i ][ j ] );
+                }
+        }
+
+        config_init( &config->libconfig_config );
+}
+
+/**
+ * @brief Attempts to find, open, and store a valid libconfig configuration file.
+ *
+ * This function handles most of the high level logic regarding finding, opening,
+ * validating, and storing a libconfig configuration file. This function will first
+ * search for a custom configuration file, passed in using @p config. If that is not
+ * found, a list of default directories are searched. If still no user configuration
+ * is found, a user's last configuration backup will be attempted to be loaded. If again
+ * unsuccessful, a system default configuration file will be loaded. Finally, if all else
+ * fails, the function will return and the program will rely on the hardcoded default values
+ * loaded during @ref _parser_load_default_config().
+ *
+ * @param[in,out] config Pointer to the @ref Parser_Config_t. From @p config, we read
+ * the value of @ref Parser_Config_t::config_filepath to see if the user passed in a
+ * custom configuration filepath from the cli. In @p config, we also store the filepath
+ * and libconfig configuration if we find and parse a valid configuration file.
+ *
+ * @return 0 on success, -1 on failure.
+ */
+static int _parser_open_config( Parser_Config_t *config ) {
+
+        int i, config_filepaths_length = 0;
+
+        // Yes this uses a "magic number", but I didn't see a way that was less
+        // cumbersome than just hardcoding this value. 5 is just the 1 CLI custom
+        // filepath + 4 fallback config locations created a few lines later.
+        char *config_filepaths[ 5 ];
+
+        // Check if a custom user config was passed through the CLI.
+        // If a path was given, copy it to the first index of the filepaths array.
+        if ( config->config_filepath != NULL ) {
+                config_filepaths[ config_filepaths_length++ ] = estrdup( config->config_filepath );
+                SAFE_FREE( config->config_filepath );
+        }
+
+        // $XDG_CONFIG_HOME/.config/dwm.conf or $HOME/.config/dwm.conf
+        char *config_top_directory = get_xdg_config_home();
+        if ( !config_top_directory ) {
+                log_warn( "Unable to acquire top level configuration directory\n" );
+        } else {
+                extend_string( &config_top_directory, "/dwm.conf" );
+                config_filepaths[ config_filepaths_length++ ] = config_top_directory;
+        }
+
+        // $XDG_CONFIG_HOME/.config/dwm/dwm.conf or $HOME/.config/dwm/dwm.conf
+        char *config_sub_directory = get_xdg_config_home();
+        if ( !config_sub_directory ) {
+                log_warn( "Unable to acquire dwm configuration directory\n" );
+        } else {
+                extend_string( &config_sub_directory, "/dwm/dwm.conf" );
+                config_filepaths[ config_filepaths_length++ ] = config_sub_directory;
+        }
+
+        // $XDG_DATA_HOME/.local/share/dwm/dwm_last.conf or $HOME/.local/share/dwm/dwm_last.conf
+        char *config_backup = get_xdg_data_home();
+        if ( !config_backup ) {
+                log_warn( "Unable to acquire dwm configuration backup directory\n" );
+        } else {
+                extend_string( &config_backup, "/dwm/dwm_last.conf" );
+                config_filepaths[ config_filepaths_length++ ] = config_backup;
+        }
+
+        // /etc/dwm/dwm.conf
+        char *config_fallback = estrdup( "/etc/dwm/dwm.conf" );
+        if ( !config_fallback ) {
+                log_warn( "Unable to acquire dwm system configuration fallback directory\n" );
+        } else {
+                config_filepaths[ config_filepaths_length++ ] = config_fallback;
+        }
+
+        FILE *tmp_file = NULL;
+        for ( i = 0; i < config_filepaths_length; i++ ) {
+                log_debug( "Attempting to open config file \"%s\"\n", config_filepaths[ i ] );
+
+                if ( config_filepaths[ i ] == NULL ) {
+                        log_warn( "config_filepaths[%d] was NULL, unable to lookup intended config. Likely a memory allocation error\n", i );
+                        continue;
+                }
+
+                tmp_file = fopen( config_filepaths[ i ], "r" );
+
+                if ( tmp_file == NULL ) {
+                        log_warn( "Unable to open config file \"%s\"\n", config_filepaths[ i ] );
+                        continue;
+                }
+
+                if ( config_read( &config->libconfig_config, tmp_file ) == CONFIG_FALSE ) {
+                        log_warn( "Problem parsing config file \"%s\", line %d: %s\n", config_filepaths[ i ], config_error_line( &config->libconfig_config ), config_error_text( &config->libconfig_config ) );
+                        SAFE_FCLOSE( tmp_file );
+                        continue;
+                }
+
+                // Save found config filepath
+                SAFE_FREE( config->config_filepath );
+                config->config_filepath = estrdup( config_filepaths[ i ] );
+
+                // Check if it's a user's custom configuration
+                if ( strcmp( config_filepaths[ i ], config_backup ) == 0 || strcmp( config_filepaths[ i ], config_fallback ) == 0 ) {
+                        config->fallback_config_loaded = true;
+                }
+
+                for ( i = 0; i < config_filepaths_length; i++ ) {
+                        SAFE_FREE( config_filepaths[ i ] );
+                }
+
+                SAFE_FCLOSE( tmp_file );
+
+                return 0;
+        }
+
+        log_error( "Unable to load any configs. Hardcoded default config values will be used. Exiting parsing\n" );
+
+        for ( i = 0; i < config_filepaths_length; i++ ) {
+                SAFE_FREE( config_filepaths[ i ] );
+        }
+
+        config_destroy( &config->libconfig_config );
+        SAFE_FCLOSE( tmp_file );
+
+        return -1;
+}
+
+/**
  * @brief Parse a rule from a libconfig configuration setting.
  *
  * TODO
@@ -1379,7 +1760,7 @@ static int _parse_rule_string( const Libconfig_Setting_t *rule_libconfig_setting
         if ( strcasecmp( tmp_string, "NULL" ) == 0 ) {
                 *parsed_value = NULL;
         } else {
-                *parsed_value = _estrdup( tmp_string );
+                *parsed_value = estrdup( tmp_string );
                 if ( *parsed_value == NULL ) {
                         log_error( "Out of memory copying \"%s\" into rule %d's %s field\n", tmp_string, rule_index + 1, path );
                         return -1;
@@ -1506,10 +1887,10 @@ static int _parse_tags_config( const Libconfig_Config_t *libconfig_config ) {
                         char fallback_tag_name[ 32 ];
                         snprintf( fallback_tag_name, sizeof( fallback_tag_name ), "%d", i + 1 );
 
-                        tags[ i ] = _estrdup( tag_name );
+                        tags[ i ] = estrdup( tag_name );
                         if ( tags[ i ] == NULL ) {
                                 log_error( "Failed while copying parsed tag %d\n", i );
-                                tags[ i ] = _estrdup( fallback_tag_name );
+                                tags[ i ] = estrdup( fallback_tag_name );
                                 tags_failed_count++;
                                 continue;
                         }
@@ -1556,7 +1937,7 @@ static int _parse_theme( const Libconfig_Setting_t *theme_libconfig_setting ) {
         for ( int i = 0; i < LENGTH( theme_map ); i++ ) {
                 if ( !_libconfig_setting_lookup_string( theme_libconfig_setting, theme_map[ i ].path, false, &tmp_string ) ) {
                         SAFE_FREE( *theme_map[ i ].value );
-                        *theme_map[ i ].value = _estrdup( tmp_string );
+                        *theme_map[ i ].value = estrdup( tmp_string );
                 } else {
                         theme_elements_failed_count++;
                 }
@@ -1626,209 +2007,7 @@ static int _parse_theme_config( const Libconfig_Config_t *libconfig_config ) {
         return failed_themes_count + failed_theme_elements_count;
 }
 
-/// Utility function definitions ///
-
-/**
- * @brief Extend one string with another.
- *
- * TODO
- *
- * @param[in,out] source_string_pointer Pointer to where the extended string will be stored. Must be NULL or heap allocated.
- * @param[in] addition Additional string to be appended to the string pointed to by @p source_string_pointer.
- *
- * @warning @p source_string_pointer must be NULL or heap allocated. If it points to a string
- * literal, @ref realloc() will crash the program. See @ref _join_strings() if you wish to append a string literal.
- *
- * @note @p source_string_pointer is or will be dynamically allocated on the heap and must be freed.
- *
- * @note This function is derived from [picom's](https://github.com/yshui/picom/) mstrextend().
- * Credit more or less goes to [Yuxuan Shui](yshuiv7@gmail.com), I just made some minor adjustments.
- *
- * @author Yuxuan Shui - <yshuiv7@gmail.com>
- *
- * @see https://github.com/yshui/picom
- * @see https://github.com/yshui/picom/blob/69539edc0638019e3dd88c67007e90ce7f51174e/src/utils/str.c#L54
- */
-static void _extend_string( char **source_string_pointer, const char *addition ) {
-
-        if ( !*source_string_pointer ) {
-                *source_string_pointer = _estrdup( addition );
-                return;
-        }
-
-        const size_t length_1 = strlen( *source_string_pointer );
-        const size_t length_2 = strlen( addition );
-        const size_t total_length = length_1 + length_2 + 1;
-
-        *source_string_pointer = realloc( *source_string_pointer, total_length );
-
-        strncpy( *source_string_pointer + length_1, addition, length_2 );
-        ( *source_string_pointer )[ total_length - 1 ] = '\0';
-}
-
-/**
- * @brief Find a layout in @ref layouts that uses a specific arrange function.
- *
- * TODO
- *
- * @param[in] arrange Arrange function used by the layout to be found and returned.
- *
- * @return @ref Arg containing a pointer to the @ref Layout struct containing the
- * first instance of @p arrange.
- */
-static Arg _find_layout( void ( *arrange )( Monitor * ) ) {
-
-        for ( int i = 0; i < LENGTH( layouts ); i++ ) {
-                if ( layouts[ i ].arrange == arrange ) {
-                        return (Arg){ .v = &layouts[ i ] };
-                }
-        }
-
-        return (Arg){ .i = 0 };
-}
-
-/**
- * @brief Get the user's XDG configuration directory path.
- *
- * TODO
- *
- * @return Pointer of a dynamically allocated string containing the complete path to the user's XDG
- * configuration directory, or NULL if no directory was able to be found.
- *
- * @note If the function is successful, the returned string will have been dynamically allocated
- * and will need to be freed.
- *
- * @note This function is derived from [picom's](https://github.com/yshui/picom/) xdg_config_home().
- * Credit more or less goes to [Yuxuan Shui](yshuiv7@gmail.com), I just made some minor adjustments.
- *
- * @author Yuxuan Shui - <yshuiv7@gmail.com>
- *
- * @see https://github.com/yshui/picom
- * @see https://github.com/yshui/picom/blob/69539edc0638019e3dd88c67007e90ce7f51174e/src/config.c#L33
- */
-static char *_get_xdg_config_home( void ) {
-
-        char *xdg_config_home = getenv( "XDG_CONFIG_HOME" );
-        char *user_home = getenv( "HOME" );
-
-        log_trace( "XDG_CONFIG_HOME: \"%s\", $HOME: \"%s\"\n", xdg_config_home, user_home );
-
-        if ( !xdg_config_home ) {
-                const char *default_config_directory = "/.config";
-
-                if ( !user_home ) {
-                        log_warn( "XDG_CONFIG_HOME and $HOME are not set\n" );
-                        return NULL;
-                }
-
-                xdg_config_home = _join_strings( user_home, default_config_directory );
-        } else {
-                xdg_config_home = _estrdup( xdg_config_home );
-        }
-
-        return xdg_config_home;
-}
-
-/**
- * @brief Get the user's XDG data directory path.
- *
- * TODO
- *
- * @return Pointer of a dynamically allocated string containing the complete path to the user's XDG
- * data directory, or NULL if no directory was able to be found.
- *
- * @note TODO mention dynamic allocation with _join_strings() and _estrdup()
- *
- * @note This function is derived from [picom's](https://github.com/yshui/picom/) xdg_config_home().
- * Credit more or less goes to [Yuxuan Shui](yshuiv7@gmail.com), I just made some minor adjustments.
- *
- * @author Yuxuan Shui - <yshuiv7@gmail.com>
- *
- * @see https://github.com/yshui/picom
- * @see https://github.com/yshui/picom/blob/69539edc0638019e3dd88c67007e90ce7f51174e/src/config.c#L33
- */
-static char *_get_xdg_data_home( void ) {
-
-        char *xdg_data_home = getenv( "XDG_DATA_HOME" );
-        char *user_home = getenv( "HOME" );
-
-        log_trace( "$XDG_DATA_HOME: \"%s\", $HOME: \"%s\"\n", xdg_data_home, user_home );
-
-        if ( !xdg_data_home ) {
-                const char *default_data_directory = "/.local/share";
-
-                if ( !user_home ) {
-                        log_warn( "$XDG_DATA_HOME and $HOME are not set\n" );
-                        return NULL;
-                }
-
-                xdg_data_home = _join_strings( user_home, default_data_directory );
-        } else {
-                xdg_data_home = _estrdup( xdg_data_home );
-        }
-
-        return xdg_data_home;
-}
-
-/**
- * @brief Join two strings into one.
- *
- * TODO
- *
- * @param[in] string_1 String for @p string_2 to be appended to.
- * @param[in] string_2 String to be appended to @p string_1.
- *
- * @return Pointer of a dynamically allocated string containing the now joined strings,
- * or NULL on failure.
- *
- * @note Returned string is dynamically allocated and will need to be freed.
- *
- * @note This function is derived from [picom's](https://github.com/yshui/picom/) mstrjoin().
- * Credit more or less goes to [Yuxuan Shui](yshuiv7@gmail.com), I just made some minor adjustments.
- *
- * @note gcc warns about legitimate truncation worries in @ref strncpy() in @ref _join_strings().
- * `strncpy( joined_string, string_1, length_1 )` intentionally truncates the null byte
- * from @p string_1, however. `strncpy( joined_string + length_1, string_2, length_2 )`
- * uses bounds depending on the source argument, but `joined_string` is allocated with
- * `length_1 + length_2 + 1`, so this @ref strncpy() can't overflow.
- *
- * @author Yuxuan Shui - <yshuiv7@gmail.com>
- *
- * @see https://github.com/yshui/picom
- * @see https://github.com/yshui/picom/blob/69961987e1238f9bc3af53fa0774fc19fdec44a4/src/utils/str.c#L24
- */
-static char *_join_strings( const char *string_1, const char *string_2 ) {
-
-        const size_t length_1 = strlen( string_1 );
-        const size_t length_2 = strlen( string_2 );
-        const size_t total_length = length_1 + length_2 + 1;
-
-        char *joined_string = calloc( total_length, sizeof( char ) );
-
-        if ( !joined_string ) {
-                log_error( "Calloc failed: %s\n", strerror(errno) );
-                log_error( "Failed to join \"%s\" and \"%s\"\n", string_1, string_2 );
-                return NULL;
-        }
-
-        #ifndef __clang__
-        #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Wpragmas"
-        #pragma GCC diagnostic ignored "-Wstringop-truncation"
-        #pragma GCC diagnostic ignored "-Wstringop-overflow"
-        #endif
-
-        strncpy( joined_string, string_1, length_1 );
-        strncpy( joined_string + length_1, string_2, length_2 );
-
-        #ifndef __clang__
-        #pragma GCC diagnostic pop
-        #endif
-
-        joined_string[ total_length - 1 ] = '\0';
-
-        return joined_string;
-}
+/// Parser internal utility functions ///
 
 /**
  * @brief Look up a boolean value in a libconfig configuration.
@@ -1911,47 +2090,6 @@ static int _libconfig_lookup_int( const Libconfig_Config_t *config, const char *
 }
 
 /**
- * @brief Look up an integer value in a libconfig setting.
- *
- * This function searches the libconfig setting context @p setting for an integer
- * value at the location @p path using libconfig's config_setting_lookup_int().
- * If the lookup succeeds, the result is clamped to a minimum of @p range_min
- * and maximum of @p range_max, then stored in @p parsed_value and 0 is returned.
- * If the lookup fails (value not found or wrong type), a warning is logged,
- * @p parsed_value is left unchanged, and -1 is returned.
- *
- * @param[in] setting Pointer to the libconfig setting.
- * @param[in] path Path expression to search within @p setting.
- * @param[in] optional If the value being looked up is optional.
- * @param[in] range_min Minimum value that can be saved to @p parsed_value.
- * @param[in] range_max Maximum value that can be saved to @p parsed_value.
- * @param[out] parsed_value Pointer to where the parsed value will be stored on success.
- *
- * @return 0 on success, -1 on failure.
- *
- * @see config_setting_lookup_int() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005flookup_005fint)
- */
-static int _libconfig_setting_lookup_int( const Libconfig_Setting_t *setting, const char *path, const bool optional, const int range_min, const int range_max, int *parsed_value ) {
-        if ( !setting ) {
-                log_error( "libconfig setting context is NULL, cannot perform lookup of \"%s\"\n", path );
-                return -1;
-        }
-
-        if ( config_setting_lookup_int( setting, path, parsed_value ) != CONFIG_TRUE ) {
-                if ( optional ) {
-                        log_debug( "Optional value \"%s\" not found, skipping\n", path );
-                        return 0;
-                }
-
-                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type\n", path );
-                return -1;
-        }
-
-        *parsed_value = clamp_range_int( *parsed_value, range_min, range_max );
-        return 0;
-}
-
-/**
  * @brief Look up an unsigned integer value in a libconfig configuration.
  *
  * This function searches the libconfig configuration @p config for an unsigned
@@ -1980,48 +2118,6 @@ static int _libconfig_lookup_uint( const Libconfig_Config_t *config, const char 
 
         int tmp = 0;
         if ( config_lookup_int( config, path, &tmp ) != CONFIG_TRUE ) {
-                if ( optional ) {
-                        log_debug( "Optional value \"%s\" not found, skipping\n", path );
-                        return 0;
-                }
-
-                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type\n", path );
-                return -1;
-        }
-
-        *parsed_value = clamp_range_uint( tmp, range_min, range_max );
-        return 0;
-}
-
-/**
- * @brief Look up an unsigned integer value in a libconfig setting.
- *
- * This function searches the libconfig setting context @p setting for an unsigned
- * integer value at the location @p path using libconfig's config_setting_lookup_int().
- * If the lookup succeeds, the result is clamped to a minimum of @p range_min
- * and maximum of @p range_max, then stored in @p parsed_value and 0 is returned.
- * If the lookup fails (value not found or wrong type), a warning is logged,
- * @p parsed_value is left unchanged, and -1 is returned.
- *
- * @param[in] setting Pointer to the libconfig setting.
- * @param[in] path Path expression to search within @p setting.
- * @param[in] optional If the value being looked up is optional.
- * @param[in] range_min Minimum value that can be saved to @p parsed_value.
- * @param[in] range_max Maximum value that can be saved to @p parsed_value.
- * @param[out] parsed_value Pointer to where the parsed value will be stored on success.
- *
- * @return 0 on success, -1 on failure.
- *
- * @see config_setting_lookup_int() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005flookup_005fint)
- */
-static int _libconfig_setting_lookup_uint( const Libconfig_Setting_t *setting, const char *path, const bool optional, const unsigned int range_min, const unsigned int range_max, unsigned int *parsed_value ) {
-        if ( !setting ) {
-                log_error( "libconfig setting context is NULL, cannot perform lookup of \"%s\"\n", path );
-                return -1;
-        }
-
-        int tmp = 0;
-        if ( config_setting_lookup_int( setting, path, &tmp ) != CONFIG_TRUE ) {
                 if ( optional ) {
                         log_debug( "Optional value \"%s\" not found, skipping\n", path );
                         return 0;
@@ -2115,6 +2211,89 @@ static int _libconfig_lookup_string( const Libconfig_Config_t *config, const cha
 }
 
 /**
+ * @brief Look up an integer value in a libconfig setting.
+ *
+ * This function searches the libconfig setting context @p setting for an integer
+ * value at the location @p path using libconfig's config_setting_lookup_int().
+ * If the lookup succeeds, the result is clamped to a minimum of @p range_min
+ * and maximum of @p range_max, then stored in @p parsed_value and 0 is returned.
+ * If the lookup fails (value not found or wrong type), a warning is logged,
+ * @p parsed_value is left unchanged, and -1 is returned.
+ *
+ * @param[in] setting Pointer to the libconfig setting.
+ * @param[in] path Path expression to search within @p setting.
+ * @param[in] optional If the value being looked up is optional.
+ * @param[in] range_min Minimum value that can be saved to @p parsed_value.
+ * @param[in] range_max Maximum value that can be saved to @p parsed_value.
+ * @param[out] parsed_value Pointer to where the parsed value will be stored on success.
+ *
+ * @return 0 on success, -1 on failure.
+ *
+ * @see config_setting_lookup_int() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005flookup_005fint)
+ */
+static int _libconfig_setting_lookup_int( const Libconfig_Setting_t *setting, const char *path, const bool optional, const int range_min, const int range_max, int *parsed_value ) {
+        if ( !setting ) {
+                log_error( "libconfig setting context is NULL, cannot perform lookup of \"%s\"\n", path );
+                return -1;
+        }
+
+        if ( config_setting_lookup_int( setting, path, parsed_value ) != CONFIG_TRUE ) {
+                if ( optional ) {
+                        log_debug( "Optional value \"%s\" not found, skipping\n", path );
+                        return 0;
+                }
+
+                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type\n", path );
+                return -1;
+        }
+
+        *parsed_value = clamp_range_int( *parsed_value, range_min, range_max );
+        return 0;
+}
+
+/**
+ * @brief Look up an unsigned integer value in a libconfig setting.
+ *
+ * This function searches the libconfig setting context @p setting for an unsigned
+ * integer value at the location @p path using libconfig's config_setting_lookup_int().
+ * If the lookup succeeds, the result is clamped to a minimum of @p range_min
+ * and maximum of @p range_max, then stored in @p parsed_value and 0 is returned.
+ * If the lookup fails (value not found or wrong type), a warning is logged,
+ * @p parsed_value is left unchanged, and -1 is returned.
+ *
+ * @param[in] setting Pointer to the libconfig setting.
+ * @param[in] path Path expression to search within @p setting.
+ * @param[in] optional If the value being looked up is optional.
+ * @param[in] range_min Minimum value that can be saved to @p parsed_value.
+ * @param[in] range_max Maximum value that can be saved to @p parsed_value.
+ * @param[out] parsed_value Pointer to where the parsed value will be stored on success.
+ *
+ * @return 0 on success, -1 on failure.
+ *
+ * @see config_setting_lookup_int() in the [Libconfig manual](https://hyperrealm.github.io/libconfig/libconfig_manual.html#index-config_005flookup_005fint)
+ */
+static int _libconfig_setting_lookup_uint( const Libconfig_Setting_t *setting, const char *path, const bool optional, const unsigned int range_min, const unsigned int range_max, unsigned int *parsed_value ) {
+        if ( !setting ) {
+                log_error( "libconfig setting context is NULL, cannot perform lookup of \"%s\"\n", path );
+                return -1;
+        }
+
+        int tmp = 0;
+        if ( config_setting_lookup_int( setting, path, &tmp ) != CONFIG_TRUE ) {
+                if ( optional ) {
+                        log_debug( "Optional value \"%s\" not found, skipping\n", path );
+                        return 0;
+                }
+
+                log_warn( "Problem reading required config value \"%s\": Not found or of wrong type\n", path );
+                return -1;
+        }
+
+        *parsed_value = clamp_range_uint( tmp, range_min, range_max );
+        return 0;
+}
+
+/**
  * @brief Look up a string value in a libconfig setting.
  *
  * This function searches the libconfig setting context @p setting for a string
@@ -2149,176 +2328,6 @@ static int _libconfig_setting_lookup_string( const Libconfig_Setting_t *setting,
         }
 
         return 0;
-}
-
-/**
- * @brief Creates all directories in a given path if they don't exist.
- *
- * TODO
- *
- * @param[in] path String containing the directory path to attempt to create.
- *
- * @return 0 on success, -1 on failure.
- *
- * @note This function is derived from [dwm-ipc's](https://github.com/mihirlad55/dwm-ipc) mkdirp().
- * Credit more or less goes to [Mihir Lad](mihirlad55@gmail.com), I just made some minor adjustments.
- *
- * @author Mihir Lad - <mihirlad55@gmail.com>
- *
- * @see https://github.com/mihirlad55/dwm-ipc
- * @see https://github.com/mihirlad55/dwm-ipc/blob/b3eebba7c043482d454afc5c882f513fc1b157ad/util.c#L103
- */
-static int _make_directory_path( const char *path ) {
-
-        char *normalized_path;
-        _normalize_path( path, &normalized_path );
-
-        const char *walk = normalized_path;
-        const size_t normalized_path_length = strlen( normalized_path );
-
-        while ( walk < normalized_path + normalized_path_length + 1 ) {
-
-                // Get length from walk to next '/'
-                const size_t distance_to_slash = strcspn( walk, "/" );
-
-                // Skip path /
-                if ( distance_to_slash == 0 ) {
-                        walk++;
-                        continue;
-                }
-
-                // Length of current path segment
-                const size_t current_path_length = walk - normalized_path + distance_to_slash;
-                char current_path[ current_path_length + 1 ];
-
-                struct stat stat_variable;
-
-                // Copy path segment to stat
-                strncpy( current_path, normalized_path, current_path_length );
-                strcpy( current_path + current_path_length, "" );
-
-                errno = 0;
-                if ( stat( current_path, &stat_variable ) < 0 ) {
-                        if ( errno == ENOENT ) {
-                                log_debug( "Making directory %s\n", current_path );
-                                if ( mkdir( current_path, 0700 ) < 0 ) {
-                                        log_error( "Failed to make directory \"%s\": %s\n", current_path, strerror( errno ) );
-                                        free( normalized_path );
-                                        return -1;
-                                }
-                        } else {
-                                log_error( "Error stat-ing directory \"%s\": %s\n", current_path, strerror( errno ) );
-                                free( normalized_path );
-                                return -1;
-                        }
-                }
-
-                // Continue to next path segment
-                walk += distance_to_slash;
-        }
-
-        free( normalized_path );
-        return 0;
-}
-
-/**
- * @brief Normalize a file or folder path to remove repeat forward slash characters.
- *
- * TODO
- *
- * @param[in] original_path String containing the path to be normalized.
- * @param[out] normalized_path Pointer to where to store the normalized path. It is dynamically
- * allocated and will need to be freed.
- *
- * @return TODO check for errors in realloc() and whatever replaces ecalloc() for allocating normalized_path
- *
- * @note @p normalized_path is dynamically allocated and will need to be freed.
- *
- * @note This function is derived from [dwm-ipc's](https://github.com/mihirlad55/dwm-ipc) normalizepath().
- * Credit more or less goes to [Mihir Lad](mihirlad55@gmail.com), I just made some minor adjustments.
- *
- * @author Mihir Lad - <mihirlad55@gmail.com>
- *
- * @see https://github.com/mihirlad55/dwm-ipc
- * @see https://github.com/mihirlad55/dwm-ipc/blob/b3eebba7c043482d454afc5c882f513fc1b157ad/util.c#L40
- */
-static int _normalize_path( const char *original_path, char **normalized_path ) {
-
-        const size_t original_length = strlen( original_path );
-
-        // TODO: This probably shouldn't use ecalloc()
-        *normalized_path = (char *) ecalloc( ( original_length + 1 ), sizeof( char ) );
-
-        size_t new_length = 0;
-        const char *match, *walk = original_path;
-        while ( ( match = strchr( walk, '/' ) ) ) {
-
-                // Copy everything between match and walk
-                strncpy( *normalized_path + new_length, walk, match - walk );
-                new_length += match - walk;
-                walk += match - walk;
-
-                // Skip all repeating slashes
-                while ( *walk == '/' ) walk++;
-
-                // If not last character in path
-                if ( walk != original_path + original_length ) ( *normalized_path )[ new_length++ ] = '/';
-        }
-
-        ( *normalized_path )[ new_length++ ] = '\0';
-
-        // Copy remaining path
-        strcat( *normalized_path, walk );
-        new_length += strlen( walk );
-
-        *normalized_path = (char *) realloc( *normalized_path, new_length * sizeof( char ) );
-
-        return 0;
-}
-
-/**
- * @brief Simple wrapper around @ref strdup() to provide error logging.
- *
- * TODO
- *
- * @param[in] string String to be copied using @ref strdup().
- *
- * @return Pointer of the string dynamically allocated using @ref strdup()
- * or NULL if @ref strdup() failed.
- *
- * @note String is dynamically allocated using @ref strdup(), and will need
- * to be manually freed.
- */
-static char *_estrdup( const char *string ) {
-        if ( !string ) return NULL;
-        char *return_string = strdup( string );
-        if ( !return_string ) {
-                log_error( "strdup failed: %s\n", strerror(errno) );
-        }
-        return return_string;
-}
-
-/**
- * @brief Removes the whitespace before and after @p input_string.
- *
- * This function trims the whitespace before and after @p input_string.
- * The trim is performed in place on @p input_string, and assumes it is
- * both mutable and null-terminated.
- *
- * @param[in,out] input_string Null-terminated, mutable string to be trimmed.
- *
- * @return On success, a pointer to the first non-space character in
- * the string is returned. If @p input_string was entirely whitespace, an
- * empty string is returned. If @p input_string was NULL, NULL is returned.
- */
-static char *_trim_whitespace( char *input_string ) {
-        if ( !input_string ) return NULL;
-        while ( isspace( (unsigned char) *input_string ) ) input_string++;
-        if ( *input_string == '\0' ) return input_string;
-        char *end = input_string + strlen( input_string ) - 1;
-        while ( end > input_string && isspace( (unsigned char) *end ) ) end--;
-        *( end + 1 ) = '\0';
-        return input_string;
 }
 
 /// Warning macros ///
