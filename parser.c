@@ -306,6 +306,8 @@ void config_cleanup( Parser_Config_t *config ) {
 
         SAFE_FREE( config->config_filepath );
 
+        SAFE_FREE( fonts[ 0 ] );
+
         for ( i = 0; i < LENGTH( tags ); i++ ) {
                 SAFE_FREE( tags[ i ] );
         }
