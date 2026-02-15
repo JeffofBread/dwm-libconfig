@@ -98,6 +98,7 @@ DEFINE_CLAMP_FUNCTION( float, float, "%f" )
  * TODO
  */
 // TODO: May be too long or verbose a name
+// TODO: May want to append something to the front of the enum values so they are less generic
 typedef enum Parser_Data_Type {
         NONE = 0,
         BOOLEAN,
@@ -155,7 +156,7 @@ void spawn_simple( const Arg *arg );
 char *trim_whitespace( char *input_string );
 
 /// Parser internal functions ///
-static void _parser_backup_config( Libconfig_Config_t *libconfig_config );
+static int _parser_backup_config( Libconfig_Config_t *libconfig_config );
 static int _parse_bind_argument( const char *argument_string, Parser_Data_Type_t arg_type, long double range_min, long double range_max, Arg *parsed_arg );
 static int _parse_bind_function( const char *function_string, void ( **parsed_function )( const Arg * ), Parser_Data_Type_t *parsed_arg_type, long double *parsed_range_min, long double *parsed_range_max );
 static int _parse_bind_modifier( const char *modifier_string, unsigned int *parsed_modifier );
@@ -167,8 +168,9 @@ static int _parse_generic_settings( const Libconfig_Config_t *libconfig_config )
 static int _parse_keybind( const char *keybind_string, unsigned int max_keys, Key *parsed_keybind );
 static int _parse_keybind_keysym( const char *keysym_string, KeySym *parsed_keysym );
 static int _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, unsigned int max_keys, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded );
-static void _parser_load_default_config( Parser_Config_t *config );
+static int _parser_load_default_config( Parser_Config_t *config );
 static int _parser_open_config( Parser_Config_t *config );
+static int _parser_resolve_include_directory( Parser_Config_t *config );
 static int _parse_rule( const Libconfig_Setting_t *rule_libconfig_setting, int rule_index, Rule *parsed_rule );
 static int _parse_rule_string( const Libconfig_Setting_t *rule_libconfig_setting, const char *path, int rule_index, char **parsed_value );
 static int _parse_rules_config( const Libconfig_Config_t *libconfig_config, Rule **rules_config, unsigned int *rules_count, bool *default_rules_loaded );
@@ -363,11 +365,22 @@ void config_cleanup( Parser_Config_t *config ) {
  * success, or >0 if there were errors while parsing the configuration. Any number over
  * 0 represents the number of errors during the process.
  *
+ * @note This function is an exit point in the program. If @p config
+ * is NULL, the program will be unable to continue. Later attempts to access
+ * values in @p config would just cause the program to either enter
+ * undefined behavior or crash. Instead, the program will log the fatal error
+ * and return a failure exit code.
+ *
  * @authors JeffOfBread <jeffofbreadcoding@gmail.com>
  *
  * @see https://github.com/JeffofBread/dwm-libconfig
  */
 int parse_config( Parser_Config_t *config ) {
+
+        if ( !config ) {
+                log_fatal( "Unable to begin configuration parsing. Pointer to config is NULL\n" );
+                exit( EXIT_FAILURE );
+        }
 
         _parser_load_default_config( config );
 
@@ -375,16 +388,7 @@ int parse_config( Parser_Config_t *config ) {
 
         log_info( "Path to config file: \"%s\"\n", config->config_filepath );
 
-        char *config_include_directory = realpath( config->config_filepath, NULL );
-        config_include_directory = dirname( config_include_directory );
-
-        if ( config_include_directory ) {
-                config_set_include_dir( &config->libconfig_config, config_include_directory );
-        } else {
-                log_error( "Unable to resolve configuration include directory\n" );
-        }
-
-        SAFE_FREE( config_include_directory );
+        _parser_resolve_include_directory( config );
 
         config_set_options( &config->libconfig_config, CONFIG_OPTION_AUTOCONVERT | CONFIG_OPTION_SEMICOLON_SEPARATORS );
         config_set_tab_width( &config->libconfig_config, 4 );
@@ -474,6 +478,7 @@ void extend_string( char **source_string_pointer, const char *addition ) {
         const size_t length_2 = strlen( addition );
         const size_t total_length = length_1 + length_2 + 1;
 
+        // TODO: Check for realloc errors
         *source_string_pointer = realloc( *source_string_pointer, total_length );
 
         strncpy( *source_string_pointer + length_1, addition, length_2 );
@@ -892,33 +897,39 @@ char *trim_whitespace( char *input_string ) {
  * @param[in] libconfig_config Pointer to the libconfig configuration
  * to be backed up.
  *
- * @todo Should have a return type for error handling
+ * @return 0 on success, -1 on failure.
  */
-static void _parser_backup_config( Libconfig_Config_t *libconfig_config ) {
+static int _parser_backup_config( Libconfig_Config_t *libconfig_config ) {
 
         // Save xdg data directory to buffer (~/.local/share)
         char *buffer = get_xdg_data_home();
 
         if ( buffer == NULL ) {
                 log_error( "Unable to get necessary directory to backup config\n" );
-        } else {
-
-                // Append buffer (already has "~/.local/share" or other xdg data directory)
-                // with the directory we want to backup the config to, create the directory
-                // if it doesn't exist, and then append with the filename we want to backup
-                // to config in.
-                extend_string( &buffer, "/dwm/" );
-                make_directory_path( buffer );
-                extend_string( &buffer, "dwm_last.conf" );
-
-                if ( config_write_file( libconfig_config, buffer ) == CONFIG_FALSE ) {
-                        log_error( "Problem backing up current config to \"%s\"\n", buffer );
-                } else {
-                        log_info( "Current config backed up to \"%s\"\n", buffer );
-                }
-
-                SAFE_FREE( buffer );
+                return -1;
         }
+
+        // Append buffer (already has "~/.local/share" or other xdg data directory)
+        // with the directory we want to backup the config to, create the directory
+        // if it doesn't exist, and then append with the filename we want to backup
+        // to config in.
+        extend_string( &buffer, "/dwm/" );
+
+        // TODO: Handle return
+        make_directory_path( buffer );
+
+        extend_string( &buffer, "dwm_last.conf" );
+
+        if ( config_write_file( libconfig_config, buffer ) == CONFIG_FALSE ) {
+                log_error( "Problem backing up current config to \"%s\"\n", buffer );
+                SAFE_FREE( buffer );
+                return -1;
+        }
+
+        log_info( "Current config backed up to \"%s\"\n", buffer );
+        SAFE_FREE( buffer );
+
+        return 0;
 }
 
 /**
@@ -1531,6 +1542,8 @@ static int _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, c
  * @param[in,out] config Pointer to the @ref Parser_Config_t struct to load default values
  * into. If the pointer is NULL, the program will exit with a failure exit code.
  *
+ * @return TODO
+ *
  * @note This function is an exit point in the program. If @p config
  * is NULL, the program will be unable to continue. Later attempts to access
  * values in @p config would just cause the program to either enter
@@ -1544,10 +1557,10 @@ static int _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, c
  *
  * @todo Should have a return type for error handling
  */
-static void _parser_load_default_config( Parser_Config_t *config ) {
+static int _parser_load_default_config( Parser_Config_t *config ) {
 
         if ( config == NULL ) {
-                log_fatal( "config is NULL, can't load default configuration\n" );
+                log_fatal( "Unable to begin configuration parsing. Pointer to config is NULL\n" );
                 exit( EXIT_FAILURE );
         }
 
@@ -1570,7 +1583,11 @@ static void _parser_load_default_config( Parser_Config_t *config ) {
         // We dynamically allocate all the values here so they
         // can universally be freed instead of having to keep
         // track of which are dynamic and which are static.
+        //
+        // TODO: Replace
         fonts[ 0 ] = estrdup( fonts[ 0 ] );
+
+        // TODO: Replace
         for ( int i = 0; i < LENGTH( colors ); i++ ) {
                 for ( int j = 0; j < LENGTH( colors[ i ] ); j++ ) {
                         colors[ i ][ j ] = estrdup( colors[ i ][ j ] );
@@ -1578,6 +1595,8 @@ static void _parser_load_default_config( Parser_Config_t *config ) {
         }
 
         config_init( &config->libconfig_config );
+
+        return 0;
 }
 
 /**
@@ -1700,6 +1719,36 @@ static int _parser_open_config( Parser_Config_t *config ) {
         SAFE_FCLOSE( tmp_file );
 
         return -1;
+}
+
+/**
+ * @brief TODO
+ *
+ * TODO
+ *
+ * @param[in,out] config TODO
+ *
+ * @return TODO
+ */
+static int _parser_resolve_include_directory( Parser_Config_t *config ) {
+
+        char *config_include_directory = realpath( config->config_filepath, NULL );
+
+        if ( !config_include_directory ) {
+                log_warn( "Failed to allocate memory for the configuration file's include path\n" );
+        } else {
+                config_include_directory = dirname( config_include_directory );
+
+                if ( config_include_directory[ 0 ] != '.' ) {
+                        config_set_include_dir( &config->libconfig_config, config_include_directory );
+                } else {
+                        log_warn( "Unable to resolve configuration file's include directory\n" );
+                }
+
+                SAFE_FREE( config_include_directory );
+        }
+
+        return 0;
 }
 
 /**
