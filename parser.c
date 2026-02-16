@@ -47,7 +47,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 
-// Simple wrappers for free/fclose to improve null safety. It is not flawless or a catch-all however
+// Simple wrappers for free/fclose to improve NULL safety. It is not flawless or a catch-all however
 #define SAFE_FREE( p ) do { if ( p ) { free( ( void * ) ( p ) ); ( p ) = NULL; } } while ( 0 )
 #define SAFE_FCLOSE( f ) do { if ( f ) { fclose( f ); ( f ) = NULL; } } while ( 0 )
 
@@ -108,6 +108,7 @@ typedef enum Parser_Data_Type {
         STRING,
 } Parser_Data_Type_t;
 
+// String name pairs to the Parser_Data_Type enum
 char *PARSER_DATA_TYPE_STRINGS[ ] = { "NONE", "BOOLEAN", "INT", "UINT", "FLOAT", "STRING" };
 
 // Alias libconfig structs for better name
