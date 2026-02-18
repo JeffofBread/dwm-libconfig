@@ -735,8 +735,12 @@ char *join_strings( const char *string_1, const char *string_2 ) {
  */
 int make_directory_path( const char *path ) {
 
-        char *normalized_path;
-        normalize_path( path, &normalized_path );
+        char *normalized_path = NULL;
+
+        if ( normalize_path( path, &normalized_path ) == -1 ) {
+                log_error( "Unable to make directory path because path normalization failed" );
+                return -1;
+        }
 
         const char *walk = normalized_path;
         const size_t normalized_path_length = strlen( normalized_path );
@@ -811,9 +815,9 @@ void merge_errors( Errors_t *destination, const Errors_t source ) {
  * @param[out] normalized_path Pointer to where to store the normalized path. It is dynamically
  * allocated and will need to be freed.
  *
- * @return TODO check for errors in realloc() and whatever replaces ecalloc() for allocating normalized_path
+ * @return TODO
  *
- * @note @p normalized_path is dynamically allocated and will need to be freed.
+ * @note @p normalized_path can be dynamically allocated and will need to be freed.
  *
  * @note This function is derived from [dwm-ipc's](https://github.com/mihirlad55/dwm-ipc) normalizepath().
  * Credit more or less goes to [Mihir Lad](mihirlad55@gmail.com), I just made some minor adjustments.
@@ -827,8 +831,12 @@ int normalize_path( const char *original_path, char **normalized_path ) {
 
         const size_t original_length = strlen( original_path );
 
-        // TODO: This probably shouldn't use ecalloc()
-        *normalized_path = (char *) ecalloc( ( original_length + 1 ), sizeof( char ) );
+        *normalized_path = calloc( ( original_length + 1 ), sizeof( char ) );
+
+        if ( *normalized_path == NULL ) {
+                log_error( "Calloc failed trying to allocate %lu bytes: %s\n", ( original_length + 1 ) * sizeof( char ), strerror(errno) );
+                return -1;
+        }
 
         size_t new_length = 0;
         const char *match, *walk = original_path;
