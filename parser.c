@@ -108,7 +108,7 @@ typedef enum Error {
 } Error_t;
 
 // String name pairs to the Error_t enum
-const char *ERROR_ENUM_STRINGS[ ] = { "None", "Not found", "Invalid type", "Out of range", "Null value", "Failed to allocate memory" };
+const char *ERROR_ENUM_STRINGS[ ] = { "None", "Not found", "Invalid type", "Out of range", "Null value", "Failed to allocate memory", "I/O exception" };
 
 // I would rather replace this with a more thorough
 // error/exception handling system, but like the
