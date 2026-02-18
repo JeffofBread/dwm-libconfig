@@ -4,7 +4,7 @@ XEPHYR_TEST_COMMAND="valgrind --leak-check=full --track-origins=yes"
 # XEPHYR_TEST_COMMAND="heaptrack"
 # XEPHYR_TEST_COMMAND="perf record"
 
-make clean all
+make clean all || exit 1
 
 Xephyr +xinerama -br -ac -noreset -screen 1920x1080 :1 &
 XEPHYR_PID=$!
