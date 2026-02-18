@@ -508,6 +508,7 @@ char *estrdup( const char *string ) {
         char *return_string = strdup( string );
         if ( !return_string ) {
                 log_error( "strdup failed to copy \"%s\": %s\n", string, strerror(errno) );
+                errno = 0;
         }
         return return_string;
 }
@@ -691,8 +692,8 @@ char *join_strings( const char *string_1, const char *string_2 ) {
         char *joined_string = calloc( total_length, sizeof( char ) );
 
         if ( !joined_string ) {
-                log_error( "Calloc failed: %s\n", strerror(errno) );
-                log_error( "Failed to join \"%s\" and \"%s\"\n", string_1, string_2 );
+                log_error( "Calloc failed trying to join \"%s\" and \"%s\": %s\n", string_1, string_2, strerror(errno) );
+                errno = 0;
                 return NULL;
         }
 
