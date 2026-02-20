@@ -31,6 +31,7 @@
  * @todo Overhaul printing / logging to match the new error handling.
  * @todo Make sure function arguments are noted for being dynamically allocated in that function or its sub functions.
  * @todo It may be worth going back to having a header, this file is very heavy.
+ * @todo Memory handling needs to be revised. There are plenty of instances of memory that is managed by libconfig, then dynamically allocated and copied for no real reason.
  */
 
 #include <ctype.h>
@@ -204,6 +205,8 @@ static Error_t _libconfig_lookup_float( const Libconfig_Config_t *config, const 
 static Error_t _libconfig_lookup_int( const Libconfig_Config_t *config, const char *path, int range_min, int range_max, int *parsed_value );
 static Error_t _libconfig_lookup_string( const Libconfig_Config_t *config, const char *path, const char **parsed_value );
 static Error_t _libconfig_lookup_uint( const Libconfig_Config_t *config, const char *path, unsigned int range_min, unsigned int range_max, unsigned int *parsed_value );
+static Error_t _libconfig_setting_lookup_bool( Libconfig_Setting_t *setting, const char *path, bool *parsed_value );
+static Error_t _libconfig_setting_lookup_float( Libconfig_Setting_t *setting, const char *path, float range_min, float range_max, float *parsed_value );
 static Error_t _libconfig_setting_lookup_int( Libconfig_Setting_t *setting, const char *path, int range_min, int range_max, int *parsed_value );
 static Error_t _libconfig_setting_lookup_string( Libconfig_Setting_t *setting, const char *path, const char **parsed_value );
 static Error_t _libconfig_setting_lookup_uint( Libconfig_Setting_t *setting, const char *path, unsigned int range_min, unsigned int range_max, unsigned int *parsed_value );
@@ -358,23 +361,8 @@ void config_cleanup( Parser_Config_t *config ) {
                 }
         }
 
-        if ( !config->default_keybinds_loaded ) {
-                for ( i = 0; i < config->keybind_array_size; i++ ) {
-                        if ( config->keybind_array[ i ].argument_type == TYPE_STRING ) {
-                                SAFE_FREE( config->keybind_array[ i ].arg.v );
-                        }
-                }
-                SAFE_FREE( config->keybind_array );
-        }
-
-        if ( !config->default_buttonbinds_loaded ) {
-                for ( i = 0; i < config->buttonbind_array_size; i++ ) {
-                        if ( config->buttonbind_array[ i ].argument_type == TYPE_STRING ) {
-                                SAFE_FREE( config->buttonbind_array[ i ].arg.v );
-                        }
-                }
-                SAFE_FREE( config->buttonbind_array );
-        }
+        SAFE_FREE( config->keybind_array );
+        SAFE_FREE( config->buttonbind_array );
 
         config_destroy( &config->libconfig_config );
 }
@@ -1024,48 +1012,33 @@ static Error_t _parser_backup_config( Libconfig_Config_t *libconfig_config ) {
  */
 static Error_t _parse_bind_argument( Libconfig_Setting_t *bind_setting, const Data_Type_t argument_type, const long double range_min, const long double range_max, Arg *parsed_argument ) {
 
-        if ( argument_type == TYPE_NONE ) return ERROR_NONE;
-
-        const char *argument_string = NULL;
-        const Error_t lookup_error = _libconfig_setting_lookup_string( bind_setting, "argument", &argument_string );
-
-        if ( lookup_error != ERROR_NONE ) return lookup_error;
-
         // @formatter:off
-        char *end_pointer;
+        Error_t lookup_error = ERROR_NONE;
         switch ( argument_type ) {
+                case TYPE_NONE:
+                        return ERROR_NONE;
+
                 case TYPE_BOOLEAN:
-                        log_error( "Argument type boolean, but converting from a string to a bool isn't supported. Please program the argument to use a numeric value instead\n" );
-                        return ERROR_TYPE;
+                        lookup_error = _libconfig_setting_lookup_bool( bind_setting, "argument", (bool *) &parsed_argument->ui );
+                        break;
 
                 case TYPE_INT: {
-                        const int tmp = strtol( argument_string, &end_pointer, 10 );
-                        if ( *end_pointer != '\0' ) return ERROR_NULL_VALUE;
-                        if ( tmp < range_min || tmp > range_max ) return ERROR_RANGE;
-                        parsed_argument->i = tmp;
+                        lookup_error = _libconfig_setting_lookup_int( bind_setting, "argument", range_min, range_max, &parsed_argument->i );
                         break;
                 }
 
                 case TYPE_UINT: {
-                        const unsigned int tmp = strtoul( argument_string, &end_pointer, 10 );
-                        if ( *end_pointer != '\0' ) return ERROR_NULL_VALUE;
-                        if ( tmp < range_min || tmp > range_max ) return ERROR_RANGE;
-                        parsed_argument->ui = tmp;
+                        lookup_error = _libconfig_setting_lookup_uint( bind_setting, "argument", range_min, range_max, &parsed_argument->ui );
                         break;
                 }
 
                 case TYPE_FLOAT: {
-                        const float tmp = strtof( argument_string, &end_pointer );
-                        if ( *end_pointer != '\0' ) return ERROR_NULL_VALUE;
-                        if ( tmp < range_min || tmp > range_max ) return ERROR_RANGE;
-                        parsed_argument->f = tmp;
+                        lookup_error = _libconfig_setting_lookup_float( bind_setting, "argument", range_min, range_max, &parsed_argument->f );
                         break;
                 }
 
                 case TYPE_STRING: {
-                        const char *tmp_string = strdup( argument_string );
-                        if ( tmp_string == NULL ) return ERROR_ALLOCATION;
-                        parsed_argument->v = tmp_string;
+                        lookup_error = _libconfig_setting_lookup_string( bind_setting, "argument", (const char **) &parsed_argument->v );
                         break;
                 }
 
@@ -1075,7 +1048,7 @@ static Error_t _parse_bind_argument( Libconfig_Setting_t *bind_setting, const Da
         }
         // @formatter:on
 
-        return ERROR_NONE;
+        return lookup_error;
 }
 
 /**
@@ -2264,6 +2237,62 @@ static Error_t _libconfig_lookup_uint( const Libconfig_Config_t *config, const c
         if ( tmp_uint < range_min || tmp_uint > range_max ) return ERROR_NOT_FOUND;
 
         *parsed_value = tmp_uint;
+
+        return ERROR_NONE;
+}
+
+/**
+ * @brief Look up a boolean value in a libconfig setting.
+ *
+ * TODO
+ *
+ * @param[in] setting Pointer to the libconfig setting.
+ * @param[in] path Path expression to search within @p setting.
+ * @param[out] parsed_value Pointer to where the parsed value will be stored on success.
+ *
+* @return TODO
+ */
+static Error_t _libconfig_setting_lookup_bool( Libconfig_Setting_t *setting, const char *path, bool *parsed_value ) {
+
+        if ( !setting || !path || !parsed_value ) return ERROR_NULL_VALUE;
+
+        config_setting_t *child_setting = config_setting_lookup( setting, path );
+
+        if ( !child_setting ) return ERROR_NOT_FOUND;
+        if ( config_setting_type( child_setting ) != CONFIG_TYPE_BOOL ) return ERROR_TYPE;
+
+        *parsed_value = config_setting_get_bool( child_setting );
+
+        return ERROR_NONE;
+}
+
+/**
+ * @brief Look up a float value in a libconfig setting.
+ *
+ * TODO
+ *
+ * @param[in] setting Pointer to the libconfig setting.
+ * @param[in] path Path expression to search within @p setting.
+ * @param[in] range_min Minimum value that can be saved to @p parsed_value.
+ * @param[in] range_max Maximum value that can be saved to @p parsed_value.
+ * @param[out] parsed_value Pointer to where the parsed value will be stored on success.
+ *
+ * @return TODO
+ */
+static Error_t _libconfig_setting_lookup_float( Libconfig_Setting_t *setting, const char *path, const float range_min, const float range_max, float *parsed_value ) {
+
+        if ( !setting || !path || !parsed_value ) return ERROR_NULL_VALUE;
+
+        config_setting_t *child_setting = config_setting_lookup( setting, path );
+
+        if ( !child_setting ) return ERROR_NOT_FOUND;
+        if ( config_setting_type( child_setting ) != CONFIG_TYPE_FLOAT ) return ERROR_TYPE;
+
+        const float tmp = config_setting_get_float( child_setting );
+
+        if ( tmp < range_min || tmp > range_max ) return ERROR_RANGE;
+
+        *parsed_value = tmp;
 
         return ERROR_NONE;
 }
