@@ -134,9 +134,9 @@ struct Monitor {
 };
 
 typedef struct {
-	char *class;
-	char *instance;
-	char *title;
+	const char *class;
+	const char *instance;
+	const char *title;
 	unsigned int tags;
 	int isfloating;
 	int monitor;

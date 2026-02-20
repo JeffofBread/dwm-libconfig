@@ -31,7 +31,6 @@
  * @todo Overhaul printing / logging to match the new error handling.
  * @todo Make sure function arguments are noted for being dynamically allocated in that function or its sub functions.
  * @todo It may be worth going back to having a header, this file is very heavy.
- * @todo Memory handling needs to be revised. There are plenty of instances of memory that is managed by libconfig, then dynamically allocated and copied for no real reason.
  */
 
 #include <ctype.h>
@@ -189,11 +188,11 @@ static Errors_t _parse_keybind( Libconfig_Setting_t *keybind_setting, unsigned i
 static Errors_t _parse_keybind_adapter( Libconfig_Setting_t *keybind_setting, unsigned int keybind_index, void *parsed_keybind );
 static Error_t _parse_keybind_keysym( Libconfig_Setting_t *keybind_setting, KeySym *parsed_keysym );
 static Errors_t _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded );
-static Errors_t _parser_load_default_config( Parser_Config_t *config );
+static void _parser_load_default_config( Parser_Config_t *config );
 static Errors_t _parser_open_config( Parser_Config_t *config );
 static Error_t _parser_resolve_include_directory( Parser_Config_t *config );
 static Errors_t _parse_rule( Libconfig_Setting_t *rule_libconfig_setting, int rule_index, Rule *parsed_rule );
-static Error_t _parse_rule_string( Libconfig_Setting_t *rule_libconfig_setting, const char *path, int rule_index, char **parsed_value );
+static Error_t _parse_rule_string( Libconfig_Setting_t *rule_libconfig_setting, const char *path, int rule_index, const char **parsed_value );
 static Errors_t _parse_rules_config( const Libconfig_Config_t *libconfig_config, Rule **rules_config, unsigned int *rules_count, bool *default_rules_loaded );
 static Errors_t _parse_tags_config( const Libconfig_Config_t *libconfig_config );
 static Errors_t _parse_theme( Libconfig_Setting_t *theme_libconfig_setting );
@@ -337,30 +336,7 @@ const struct {
  */
 void config_cleanup( Parser_Config_t *config ) {
 
-        int i;
-
         SAFE_FREE( config->config_filepath );
-
-        SAFE_FREE( fonts[ 0 ] );
-
-        for ( i = 0; i < LENGTH( tags ); i++ ) {
-                SAFE_FREE( tags[ i ] );
-        }
-
-        for ( i = 0; i < LENGTH( colors ); i++ ) {
-                for ( int j = 0; j < LENGTH( colors[ i ] ); j++ ) {
-                        SAFE_FREE( colors[ i ][ j ] );
-                }
-        }
-
-        if ( !config->default_rules_loaded ) {
-                for ( i = 0; i < config->rule_array_size; i++ ) {
-                        SAFE_FREE( config->rule_array[ i ].class );
-                        SAFE_FREE( config->rule_array[ i ].instance );
-                        SAFE_FREE( config->rule_array[ i ].title );
-                }
-        }
-
         SAFE_FREE( config->keybind_array );
         SAFE_FREE( config->buttonbind_array );
 
@@ -404,7 +380,8 @@ Errors_t parse_config( Parser_Config_t *config ) {
                 exit( EXIT_FAILURE );
         }
 
-        merge_errors( &errors, _parser_load_default_config( config ) );
+        _parser_load_default_config( config );
+
         merge_errors( &errors, _parser_open_config( config ) );
 
         // Exit the parser if we haven't acquired a configuration file.
@@ -1561,22 +1538,13 @@ static Errors_t _parse_keybinds_config( const Libconfig_Config_t *libconfig_conf
  * @param[in,out] config Pointer to the @ref Parser_Config_t struct to load default values
  * into. If the pointer is NULL, the program will exit with a failure exit code.
  *
- * @return TODO
- *
  * @note This function is an exit point in the program. If @p config
  * is NULL, the program will be unable to continue. Later attempts to access
  * values in @p config would just cause the program to either enter
  * undefined behavior or crash. Instead, the program will log the fatal error
  * and return a failure exit code.
- *
- * @todo Replace current colors array with a better solution. It should follow
- * a similar system to that of the other rules, keys, and buttons arrays, in that
- * it uses the original arrays from @ref config.h alongside a boolean to keep track
- * of the this until it is later dynamically allocated in the parser.
  */
-static Errors_t _parser_load_default_config( Parser_Config_t *config ) {
-
-        Errors_t returned_errors = { 0 };
+static void _parser_load_default_config( Parser_Config_t *config ) {
 
         if ( config == NULL ) {
                 log_fatal( "Unable to begin configuration parsing. Pointer to config is NULL\n" );
@@ -1597,28 +1565,7 @@ static Errors_t _parser_load_default_config( Parser_Config_t *config ) {
         config->buttonbind_array_size = LENGTH( buttons );
         config->buttonbind_array = (Button *) buttons;
 
-        // This is a bit lazy, but simplifies cleanup logic.
-        // We dynamically allocate all the values here so they
-        // can universally be freed instead of having to keep
-        // track of which are dynamic and which are static.
-        //
-        // TODO: Replace
-        fonts[ 0 ] = estrdup( fonts[ 0 ] );
-        if ( fonts[ 0 ] == NULL ) add_error( &returned_errors, ERROR_ALLOCATION );
-
-        // TODO: Replace
-        for ( int i = 0; i < LENGTH( colors ); i++ ) {
-                for ( int j = 0; j < LENGTH( colors[ i ] ); j++ ) {
-                        colors[ i ][ j ] = estrdup( colors[ i ][ j ] );
-                        if ( colors[ i ][ j ] == NULL ) {
-                                add_error( &returned_errors, ERROR_ALLOCATION );
-                        }
-                }
-        }
-
         config_init( &config->libconfig_config );
-
-        return returned_errors;
 }
 
 /**
@@ -1798,8 +1745,6 @@ static Error_t _parser_resolve_include_directory( Parser_Config_t *config ) {
  * @param[in] rule_index Index of the current rule in the larger array. Used purely for debug printing.
  * @param[out] parsed_rule Pointer to the @ref Rule struct where the values parsed from @p rule_libconfig_setting are stored.
  *
- * @note @p parsed_rule string struct members can be dynamically allocated and will need to be freed if not NULL.
- *
  * @return TODO
  */
 static Errors_t _parse_rule( Libconfig_Setting_t *rule_libconfig_setting, const int rule_index, Rule *parsed_rule ) {
@@ -1827,32 +1772,20 @@ static Errors_t _parse_rule( Libconfig_Setting_t *rule_libconfig_setting, const 
  * @param[in] rule_libconfig_setting Pointer to the libconfig setting containing the string to be parsed into @p parsed_value.
  * @param[in] path Path to the string value to be parsed from @p rule_libconfig_setting into @p parsed_value.
  * @param[in] rule_index Index of the current rule in the larger array. Used purely for debug printing.
- * @param[out] parsed_value Pointer to the string where the values parsed from @p rule_libconfig_setting is stored. This value
- * will either be NULL or a dynamically allocated string, which will need to be freed.
+ * @param[out] parsed_value Pointer to the string where the values parsed from @p rule_libconfig_setting is stored.
  *
  * @return TODO
- *
- * @note @p The string pointed to by @p parsed_value can be dynamically allocated and will need to be freed if not NULL.
  */
-static Error_t _parse_rule_string( Libconfig_Setting_t *rule_libconfig_setting, const char *path, const int rule_index, char **parsed_value ) {
+static Error_t _parse_rule_string( Libconfig_Setting_t *rule_libconfig_setting, const char *path, const int rule_index, const char **parsed_value ) {
 
-        const char *tmp_string = NULL;
+        const Error_t error = _libconfig_setting_lookup_string( rule_libconfig_setting, path, parsed_value );
 
-        const Error_t error = _libconfig_setting_lookup_string( rule_libconfig_setting, path, &tmp_string );
-        if ( tmp_string == NULL ) {
+        if ( *parsed_value == NULL ) {
                 log_error( "Problem parsing \"%s\" value of rule %d: %s\n", path, rule_index + 1, ERROR_ENUM_STRINGS[ error ] );
                 return error;
         }
 
-        if ( strcasecmp( tmp_string, "NULL" ) == 0 ) {
-                *parsed_value = NULL;
-        } else {
-                *parsed_value = estrdup( tmp_string );
-                if ( *parsed_value == NULL ) {
-                        log_error( "Out of memory copying \"%s\" into rule %d's %s field\n", tmp_string, rule_index + 1, path );
-                        return ERROR_NULL_VALUE;
-                }
-        }
+        if ( strcasecmp( *parsed_value, "NULL" ) == 0 ) *parsed_value = NULL;
 
         return ERROR_NONE;
 }
@@ -1948,8 +1881,6 @@ static Errors_t _parse_rules_config( const Libconfig_Config_t *libconfig_config,
  * @param[in] libconfig_config Pointer to the libconfig configuration containing the tags to be parsed.
  *
  * @return TODO
- *
- * @note All successfully parsed tags are dynamically allocated into @p tags and will need to be freed.
  */
 static Errors_t _parse_tags_config( const Libconfig_Config_t *libconfig_config ) {
 
@@ -1963,7 +1894,6 @@ static Errors_t _parse_tags_config( const Libconfig_Config_t *libconfig_config )
                 return returned_errors;
         }
 
-        const char *tag_name = NULL;
         int tags_count = config_setting_length( tag_names_libconfig_setting );
 
         if ( tags_count == 0 ) {
@@ -1982,24 +1912,15 @@ static Errors_t _parse_tags_config( const Libconfig_Config_t *libconfig_config )
         }
 
         for ( int i = 0; i < tags_count; i++ ) {
-                tag_name = config_setting_get_string_elem( tag_names_libconfig_setting, i );
+                const char *original_tag_name = tags[ i ];
 
                 // TODO: Is there no better way to get a string? We should be able to distinguish between not found and type errors
-                if ( tag_name == NULL ) {
+                tags[ i ] = config_setting_get_string_elem( tag_names_libconfig_setting, i );
+
+                if ( tags[ i ] == NULL ) {
                         log_error( "Problem reading tag array element %d: Value doesn't exist or isn't a string\n", i + 1 );
                         add_error( &returned_errors, ERROR_NULL_VALUE );
-                        continue;
-                }
-
-                char fallback_tag_name[ 32 ];
-                snprintf( fallback_tag_name, sizeof( fallback_tag_name ), "%d", i + 1 );
-
-                // TODO: This needs work. If the first fails, what are the odds the second will?
-                tags[ i ] = estrdup( tag_name );
-                if ( tags[ i ] == NULL ) {
-                        log_error( "Failed while copying parsed tag %d\n", i );
-                        tags[ i ] = estrdup( fallback_tag_name );
-                        add_error( &returned_errors, ERROR_ALLOCATION );
+                        tags[ i ] = original_tag_name;
                         continue;
                 }
         }
@@ -2015,23 +1936,17 @@ static Errors_t _parse_tags_config( const Libconfig_Config_t *libconfig_config )
  * @param[in] theme_libconfig_setting Pointer to the libconfig setting containing the theme to be parsed.
  *
  * @return TODO
- *
- * @note All successfully parsed theme values are dynamically allocated and will need to be freed.
  */
 static Errors_t _parse_theme( Libconfig_Setting_t *theme_libconfig_setting ) {
 
         Errors_t returned_errors = { 0 };
 
         for ( int i = 0; i < LENGTH( theme_alias_map ); i++ ) {
-                const char *tmp_string = NULL;
-
-                const Error_t returned_error = _libconfig_setting_lookup_string( theme_libconfig_setting, theme_alias_map[ i ].path, &tmp_string );
-                add_error( &returned_errors, returned_error );
-
-                SAFE_FREE( *theme_alias_map[ i ].value );
-                *theme_alias_map[ i ].value = estrdup( tmp_string );
-
-                if ( *theme_alias_map[ i ].value == NULL ) add_error( &returned_errors, ERROR_ALLOCATION );
+                const Error_t error = _libconfig_setting_lookup_string( theme_libconfig_setting, theme_alias_map[ i ].path, theme_alias_map[ i ].value );
+                add_error( &returned_errors, error );
+                if ( error != ERROR_NONE ) {
+                        log_error( "Failed to parse theme element \"%s\": %s\n", theme_alias_map[ i ].path, ERROR_ENUM_STRINGS[ error ] );
+                }
         }
 
         return returned_errors;
