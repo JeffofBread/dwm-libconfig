@@ -2159,7 +2159,7 @@ static Errors_t _parse_theme_config( const Libconfig_Config_t *libconfig_config 
 
                 merge_errors( &returned_errors, theme_errors );
 
-                log_debug( "%d elements failed to be parsed in theme number %d\n", _count_errors( theme_errors ), i + 1 );
+                log_debug( "%d elements failed to be parsed in theme number %d\n", count_errors( theme_errors ), i + 1 );
         }
 
         return returned_errors;
