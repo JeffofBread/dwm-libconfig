@@ -118,14 +118,14 @@ typedef struct Errors {
         unsigned int errors_count[ ERROR_ENUM_LENGTH - 1 ]; // -1 for ERROR_NONE
 } Errors_t;
 
-// Typedef used to abstract bind parsing functions.
-// Allows for more generic parsing of both Buttons and Keys.
-typedef Error_t ( *Bind_Parser_Function )( const char *bind_string, unsigned int max_keys, void *parsed_bind );
-
 // Alias libconfig structs for better name
 // separation from the parser's configuration struct
 typedef config_t Libconfig_Config_t;
 typedef config_setting_t Libconfig_Setting_t;
+
+// Typedef used to abstract bind parsing functions.
+// Allows for more generic parsing of both Buttons and Keys.
+typedef Errors_t ( *Bind_Parser_Function )( Libconfig_Setting_t *bind_setting, unsigned int bind_index, void *parsed_bind );
 
 // Struct to hold some parser internal data and
 // some of the configuration data that can't
@@ -135,7 +135,6 @@ typedef struct Parser_Config {
         bool default_keybinds_loaded;
         bool default_buttonbinds_loaded;
         bool default_rules_loaded;
-        unsigned int max_keys;
         unsigned int rule_array_size;
         unsigned int buttonbind_array_size;
         unsigned int keybind_array_size;
@@ -153,7 +152,7 @@ void config_cleanup( Parser_Config_t *config );
 Errors_t parse_config( Parser_Config_t *config );
 
 /// Public utility functions ///
-// TODO: Many of these should be converted to use Error_t returns
+// TODO: Some of these should be converted to use Error_t returns
 void add_error( Errors_t *errors, Error_t error );
 unsigned int count_errors( Errors_t errors );
 char *estrdup( const char *string );
@@ -169,25 +168,26 @@ void setlayout_floating( const Arg *arg );
 void setlayout_monocle( const Arg *arg );
 void setlayout_tiled( const Arg *arg );
 void spawn_simple( const Arg *arg );
-char *trim_whitespace( char *input_string );
 
 /// Parser internal functions ///
 static Error_t _parser_backup_config( Libconfig_Config_t *libconfig_config );
-static Error_t _parse_bind_argument( const char *argument_string, Data_Type_t arg_type, long double range_min, long double range_max, Arg *parsed_arg );
-static Error_t _parse_bind_function( const char *function_string, void ( **parsed_function )( const Arg * ), Data_Type_t *parsed_arg_type, long double *parsed_range_min, long double *parsed_range_max );
-static Error_t _parse_bind_modifier( const char *modifier_string, unsigned int *parsed_modifier );
-static Errors_t _parse_binds_config( const Libconfig_Config_t *libconfig_config, const char *config_array_name, size_t bind_struct_size, Bind_Parser_Function bind_parser_function, unsigned int max_keys,
-                                     bool *default_binds_loaded, void **parsed_config, unsigned int *parsed_config_length );
-static Error_t _parse_buttonbind( const char *buttonbind_string, unsigned int max_keys, Button *parsed_buttonbind );
-static Error_t _parse_buttonbind_adapter( const char *keybind_string, unsigned int max_keys, void *parsed_keybind );
-static Error_t _parse_buttonbind_button( const char *button_string, unsigned int *parsed_button );
-static Error_t _parse_buttonbind_click( const char *click_string, unsigned int *parsed_click );
-static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_config, unsigned int max_keys, Button **buttonbind_config, unsigned int *buttonbinds_count, bool *default_buttonbinds_loaded );
+static Error_t _parse_bind_argument( Libconfig_Setting_t *bind_setting, Data_Type_t argument_type, long double range_min, long double range_max, Arg *parsed_argument );
+static Errors_t _parse_bind_core( Libconfig_Setting_t *bind_setting, unsigned int bind_index, unsigned int *parsed_modifier, void ( **parsed_function )( const Arg * ), Arg *parsed_argument,
+                                  Data_Type_t *parsed_argument_type, const char *bind_array_path );
+static Error_t _parse_bind_function( Libconfig_Setting_t *bind_setting, void ( **parsed_function )( const Arg * ), Data_Type_t *parsed_arg_type, long double *parsed_range_min, long double *parsed_range_max );
+static Error_t _parse_bind_modifier( Libconfig_Setting_t *bind_setting, unsigned int *parsed_modifier );
+static Errors_t _parse_binds_config( const Libconfig_Config_t *libconfig_config, const char *config_array_name, size_t bind_struct_size, Bind_Parser_Function bind_parser_function, bool *default_binds_loaded,
+                                     void **parsed_config, unsigned int *parsed_config_length );
+static Errors_t _parse_buttonbind( Libconfig_Setting_t *buttonbind_setting, unsigned int buttonbind_index, Button *parsed_buttonbind );
+static Errors_t _parse_buttonbind_adapter( Libconfig_Setting_t *buttonbind_setting, unsigned int buttonbind_index, void *parsed_keybind );
+static Error_t _parse_buttonbind_button( Libconfig_Setting_t *buttonbind_setting, unsigned int *parsed_button );
+static Error_t _parse_buttonbind_click( Libconfig_Setting_t *buttonbind_setting, unsigned int *parsed_click );
+static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_config, Button **buttonbind_config, unsigned int *buttonbinds_count, bool *default_buttonbinds_loaded );
 static Errors_t _parse_generic_settings( const Libconfig_Config_t *libconfig_config );
-static Error_t _parse_keybind( const char *keybind_string, unsigned int max_keys, Key *parsed_keybind );
-static Error_t _parse_keybind_adapter( const char *keybind_string, unsigned int max_keys, void *parsed_keybind );
-static Error_t _parse_keybind_keysym( const char *keysym_string, KeySym *parsed_keysym );
-static Errors_t _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, unsigned int max_keys, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded );
+static Errors_t _parse_keybind( Libconfig_Setting_t *keybind_setting, unsigned int keybind_index, Key *parsed_keybind );
+static Errors_t _parse_keybind_adapter( Libconfig_Setting_t *keybind_setting, unsigned int keybind_index, void *parsed_keybind );
+static Error_t _parse_keybind_keysym( Libconfig_Setting_t *keybind_setting, KeySym *parsed_keysym );
+static Errors_t _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded );
 static Errors_t _parser_load_default_config( Parser_Config_t *config );
 static Errors_t _parser_open_config( Parser_Config_t *config );
 static Error_t _parser_resolve_include_directory( Parser_Config_t *config );
@@ -306,9 +306,6 @@ const struct Setting_Alias_Map {
         { "nmaster", &nmaster, TYPE_UINT, true, 0, 99 },
         { "refreshrate", &refreshrate, TYPE_UINT, true, 0, 999 },
         { "mfact", &mfact, TYPE_FLOAT, true, 0.05f, 0.95f },
-
-        // Advanced
-        { "max-keys", &dwm_config.max_keys, TYPE_UINT, true, 1, 10 },
 };
 
 const struct {
@@ -435,8 +432,8 @@ Errors_t parse_config( Parser_Config_t *config ) {
         config_set_tab_width( &config->libconfig_config, 4 );
 
         merge_errors( &errors, _parse_generic_settings( &config->libconfig_config ) );
-        merge_errors( &errors, _parse_keybinds_config( &config->libconfig_config, config->max_keys, &config->keybind_array, &config->keybind_array_size, &config->default_keybinds_loaded ) );
-        merge_errors( &errors, _parse_buttonbinds_config( &config->libconfig_config, config->max_keys, &config->buttonbind_array, &config->buttonbind_array_size, &config->default_buttonbinds_loaded ) );
+        merge_errors( &errors, _parse_keybinds_config( &config->libconfig_config, &config->keybind_array, &config->keybind_array_size, &config->default_keybinds_loaded ) );
+        merge_errors( &errors, _parse_buttonbinds_config( &config->libconfig_config, &config->buttonbind_array, &config->buttonbind_array_size, &config->default_buttonbinds_loaded ) );
         merge_errors( &errors, _parse_rules_config( &config->libconfig_config, &config->rule_array, &config->rule_array_size, &config->default_rules_loaded ) );
         merge_errors( &errors, _parse_tags_config( &config->libconfig_config ) );
         merge_errors( &errors, _parse_theme_config( &config->libconfig_config ) );
@@ -954,29 +951,6 @@ void spawn_simple( const Arg *arg ) {
         spawn( &tmp );
 }
 
-/**
- * @brief Removes the whitespace before and after @p input_string.
- *
- * This function trims the whitespace before and after @p input_string.
- * The trim is performed in place on @p input_string, and assumes it is
- * both mutable and null-terminated.
- *
- * @param[in,out] input_string Null-terminated, mutable string to be trimmed.
- *
- * @return On success, a pointer to the first non-space character in
- * the string is returned. If @p input_string was entirely whitespace, an
- * empty string is returned. If @p input_string was NULL, NULL is returned.
- */
-char *trim_whitespace( char *input_string ) {
-        if ( !input_string ) return NULL;
-        while ( isspace( (unsigned char) *input_string ) ) input_string++;
-        if ( *input_string == '\0' ) return input_string;
-        char *end = input_string + strlen( input_string ) - 1;
-        while ( end > input_string && isspace( (unsigned char) *end ) ) end--;
-        *( end + 1 ) = '\0';
-        return input_string;
-}
-
 /// Parser internal functions ///
 
 /**
@@ -1035,30 +1009,31 @@ static Error_t _parser_backup_config( Libconfig_Config_t *libconfig_config ) {
 }
 
 /**
- * @brief Parses a string containing the argument data of a function.
+ * @brief TODO
  *
  * TODO
  *
- * @param[in] argument_string String containing the data to be parsed into @p parsed_arg.
- * @param[in] arg_type Enum describing the type of data stored in @p parsed_arg.
- * @param[in] range_min Minimum value @p parsed_arg can have. Only applies to numerical types.
- * @param[in] range_max Maximum value @p parsed_arg can have. Only applies to numerical types.
- * @param[out] parsed_arg Pointer to an @ref Arg struct where the parsed value of type @p arg_type
- * in range @p range_min to @p range_max from @p argument_string will be stored.
+ * @param[in] bind_setting TODO
+ * @param[in] argument_type Enum describing the type of data stored in @p parsed_argument.
+ * @param[in] range_min Minimum value @p parsed_argument can have. Only applies to numerical types.
+ * @param[in] range_max Maximum value @p parsed_argument can have. Only applies to numerical types.
+ * @param[out] parsed_argument Pointer to an @ref Arg struct where the parsed value of type @p argument_type
+ * in range @p range_min to @p range_max will be stored.
  *
  * @return TODO
  */
-static Error_t _parse_bind_argument( const char *argument_string, const Data_Type_t arg_type, const long double range_min, const long double range_max, Arg *parsed_arg ) {
+static Error_t _parse_bind_argument( Libconfig_Setting_t *bind_setting, const Data_Type_t argument_type, const long double range_min, const long double range_max, Arg *parsed_argument ) {
 
-        if ( arg_type == TYPE_NONE ) return ERROR_NONE;
+        if ( argument_type == TYPE_NONE ) return ERROR_NONE;
 
-        if ( !argument_string || argument_string[ 0 ] == '\0' ) {
-                return ERROR_NULL_VALUE;
-        }
+        const char *argument_string = NULL;
+        const Error_t lookup_error = _libconfig_setting_lookup_string( bind_setting, "argument", &argument_string );
+
+        if ( lookup_error != ERROR_NONE ) return lookup_error;
 
         // @formatter:off
         char *end_pointer;
-        switch ( arg_type ) {
+        switch ( argument_type ) {
                 case TYPE_BOOLEAN:
                         log_error( "Argument type boolean, but converting from a string to a bool isn't supported. Please program the argument to use a numeric value instead\n" );
                         return ERROR_TYPE;
@@ -1067,7 +1042,7 @@ static Error_t _parse_bind_argument( const char *argument_string, const Data_Typ
                         const int tmp = strtol( argument_string, &end_pointer, 10 );
                         if ( *end_pointer != '\0' ) return ERROR_NULL_VALUE;
                         if ( tmp < range_min || tmp > range_max ) return ERROR_RANGE;
-                        parsed_arg->i = tmp;
+                        parsed_argument->i = tmp;
                         break;
                 }
 
@@ -1075,7 +1050,7 @@ static Error_t _parse_bind_argument( const char *argument_string, const Data_Typ
                         const unsigned int tmp = strtoul( argument_string, &end_pointer, 10 );
                         if ( *end_pointer != '\0' ) return ERROR_NULL_VALUE;
                         if ( tmp < range_min || tmp > range_max ) return ERROR_RANGE;
-                        parsed_arg->ui = tmp;
+                        parsed_argument->ui = tmp;
                         break;
                 }
 
@@ -1083,19 +1058,19 @@ static Error_t _parse_bind_argument( const char *argument_string, const Data_Typ
                         const float tmp = strtof( argument_string, &end_pointer );
                         if ( *end_pointer != '\0' ) return ERROR_NULL_VALUE;
                         if ( tmp < range_min || tmp > range_max ) return ERROR_RANGE;
-                        parsed_arg->f = tmp;
+                        parsed_argument->f = tmp;
                         break;
                 }
 
                 case TYPE_STRING: {
                         const char *tmp_string = strdup( argument_string );
                         if ( tmp_string == NULL ) return ERROR_ALLOCATION;
-                        parsed_arg->v = tmp_string;
+                        parsed_argument->v = tmp_string;
                         break;
                 }
 
                 default:
-                        log_error( "Unknown argument type during bind parsing: %d. Please reprogram to a valid type\n", arg_type );
+                        log_error( "Unknown argument type during bind parsing: %d. Please reprogram to a valid type\n", argument_type );
                         return ERROR_TYPE;
         }
         // @formatter:on
@@ -1104,20 +1079,74 @@ static Error_t _parse_bind_argument( const char *argument_string, const Data_Typ
 }
 
 /**
- * @brief Parses a string containing the name of a function and all its necessary arguments.
+ * @brief TODO
  *
  * TODO
  *
- * @param[in] function_string String to parse the function from.
- * @param[out] parsed_function Pointer to where to store the pointer to the function parsed from @p function_string.
+ * @param bind_setting TODO
+ * @param bind_index TODO
+ * @param parsed_modifier TODO
+ * @param parsed_function TODO
+ * @param parsed_argument TODO
+ * @param parsed_argument_type TODO
+ * @param bind_array_path
+ *
+ * @return TODO
+ */
+static Errors_t _parse_bind_core( Libconfig_Setting_t *bind_setting, const unsigned int bind_index, unsigned int *parsed_modifier, void ( **parsed_function )( const Arg * ), Arg *parsed_argument,
+                                  Data_Type_t *parsed_argument_type, const char *bind_array_path ) {
+
+        Errors_t returned_errors = { 0 };
+
+        // TODO: It would be nice to find a clean way to allow for no modifier at all in a bind, not just an empty string
+        const Error_t modifier_error = _parse_bind_modifier( bind_setting, parsed_modifier );
+        add_error( &returned_errors, modifier_error );
+
+        if ( modifier_error != ERROR_NONE ) {
+                log_error( "%s %d invalid, unable to parse bind's modifier: %s\n", bind_array_path, bind_index + 1, ERROR_ENUM_STRINGS[ modifier_error ] );
+                return returned_errors;
+        }
+
+        long double range_min = 0, range_max = 0;
+        const Error_t bind_error = _parse_bind_function( bind_setting, parsed_function, parsed_argument_type, &range_min, &range_max );
+        add_error( &returned_errors, bind_error );
+
+        if ( bind_error != ERROR_NONE ) {
+                log_error( "%s %d invalid, unable to parse bind's function: %s\n", bind_array_path, bind_index + 1, ERROR_ENUM_STRINGS[ bind_error ] );
+                return returned_errors;
+        }
+
+        const Error_t argument_error = _parse_bind_argument( bind_setting, *parsed_argument_type, range_min, range_max, parsed_argument );
+        add_error( &returned_errors, argument_error );
+
+        if ( argument_error != ERROR_NONE ) {
+                log_error( "%s %d invalid, unable to parse bind's arguments: %s\n", bind_array_path, bind_index + 1, ERROR_ENUM_STRINGS[ argument_error ] );
+                return returned_errors;
+        }
+
+        return returned_errors;
+}
+
+/**
+ * @brief TODO
+ *
+ * TODO
+ *
+ * @param[in] bind_setting TODO
+ * @param[out] parsed_function TODO
  * @param[out] parsed_arg_type Pointer to where to store the data type of the @ref Arg that can be passed to @p parsed_function.
  * @param[out] parsed_range_min Pointer to where to store the minimum value of the @ref Arg that can be passed to @p parsed_function.
  * @param[out] parsed_range_max Pointer to where to store the maximum value of the @ref Arg that can be passed to @p parsed_function.
  *
- * @return ERROR_NONE on success, ERROR_NOT_FOUND if @p function_string could not be found in `function_alias_map`.
+ * @return TODO
  */
 
-static Error_t _parse_bind_function( const char *function_string, void ( **parsed_function )( const Arg * ), Data_Type_t *parsed_arg_type, long double *parsed_range_min, long double *parsed_range_max ) {
+static Error_t _parse_bind_function( Libconfig_Setting_t *bind_setting, void ( **parsed_function )( const Arg * ), Data_Type_t *parsed_arg_type, long double *parsed_range_min, long double *parsed_range_max ) {
+
+        const char *function_string = NULL;
+        const Error_t lookup_error = _libconfig_setting_lookup_string( bind_setting, "function", &function_string );
+
+        if ( lookup_error != ERROR_NONE ) return lookup_error;
 
         for ( int i = 0; i < LENGTH( function_alias_map ); i++ ) {
                 if ( strcasecmp( function_string, function_alias_map[ i ].name ) == 0 ) {
@@ -1133,27 +1162,60 @@ static Error_t _parse_bind_function( const char *function_string, void ( **parse
 }
 
 /**
- * @brief Parse a string containing the name of a modifier key.
+ * @brief TODO
  *
  * TODO
  *
- * @param[in] modifier_string String to parse the modifier from.
- * @param[out] parsed_modifier Pointer to where to the modifier mask value parsed from @p modifier_string.
+ * @param[in] bind_setting TODO
+ * @param[out] parsed_modifier TODO
  *
  * @return TODO
  *
  * @see https://gitlab.freedesktop.org/xorg/proto/xorgproto/-/blob/master/include/X11/X.h
  */
-static Error_t _parse_bind_modifier( const char *modifier_string, unsigned int *parsed_modifier ) {
+static Error_t _parse_bind_modifier( Libconfig_Setting_t *bind_setting, unsigned int *parsed_modifier ) {
 
-        for ( int i = 0; i < LENGTH( modifier_alias_map ); i++ ) {
-                if ( strcasecmp( modifier_string, modifier_alias_map[ i ].name ) == 0 ) {
-                        *parsed_modifier |= modifier_alias_map[ i ].mask;
-                        return ERROR_NONE;
+        const char *modifier_string = NULL;
+        const Error_t lookup_error = _libconfig_setting_lookup_string( bind_setting, "modifier", &modifier_string );
+
+        if ( lookup_error != ERROR_NONE ) return lookup_error;
+
+        char *buffer = estrdup( modifier_string );
+
+        if ( !buffer ) return ERROR_ALLOCATION;
+
+        char *modifier_token = strtok( buffer, "+" );
+        while ( modifier_token != NULL ) {
+
+                while ( *modifier_token == ' ' || *modifier_token == '\t' ) modifier_token++;
+
+                char *end = modifier_token + strlen( modifier_token ) - 1;
+                while ( end > modifier_token && ( *end == ' ' || *end == '\t' ) ) {
+                        *end = '\0';
+                        end--;
                 }
+
+                bool found = false;
+                for ( int i = 0; i < LENGTH( modifier_alias_map ); i++ ) {
+                        if ( strcasecmp( modifier_token, modifier_alias_map[ i ].name ) == 0 ) {
+                                *parsed_modifier |= modifier_alias_map[ i ].mask;
+                                found = true;
+                                break;
+                        }
+                }
+
+                if ( !found ) {
+                        log_error( "Invalid modifier: \"%s\"\n", modifier_token );
+                        SAFE_FREE( buffer );
+                        return ERROR_NOT_FOUND;
+                }
+
+                modifier_token = strtok( NULL, "+" );
         }
 
-        return ERROR_NOT_FOUND;
+        SAFE_FREE( buffer );
+
+        return ERROR_NONE;
 }
 
 /**
@@ -1165,7 +1227,6 @@ static Error_t _parse_bind_modifier( const char *modifier_string, unsigned int *
  * @param config_array_name TODO
  * @param bind_struct_size TODO
  * @param bind_parser_function TODO
- * @param max_keys TODO
  * @param default_binds_loaded TODO
  * @param parsed_config TODO
  * @param parsed_config_length TODO
@@ -1173,7 +1234,7 @@ static Error_t _parse_bind_modifier( const char *modifier_string, unsigned int *
  * @return TODO
  */
 static Errors_t _parse_binds_config( const Libconfig_Config_t *libconfig_config, const char *config_array_name, const size_t bind_struct_size, const Bind_Parser_Function bind_parser_function,
-                                     const unsigned int max_keys, bool *default_binds_loaded, void **parsed_config, unsigned int *parsed_config_length ) {
+                                     bool *default_binds_loaded, void **parsed_config, unsigned int *parsed_config_length ) {
 
         Errors_t returned_errors = { 0 };
 
@@ -1204,117 +1265,19 @@ static Errors_t _parse_binds_config( const Libconfig_Config_t *libconfig_config,
 
         for ( unsigned int i = 0; i < *parsed_config_length; i++ ) {
 
-                const Libconfig_Setting_t *bind_setting = config_setting_get_elem( binds_setting, i );
+                Libconfig_Setting_t *bind_setting = config_setting_get_elem( binds_setting, i );
 
                 if ( bind_setting == NULL ) {
-                        log_warn( "%s element %u returned NULL\n", config_array_name, i + 1 );
+                        log_warn( "%s element index %u returned NULL\n", config_array_name, i );
                         add_error( &returned_errors, ERROR_NULL_VALUE );
                         continue;
                 }
 
-                const Error_t bind_parsing_error = bind_parser_function( config_setting_get_string( bind_setting ), max_keys, (char *) ( *parsed_config ) + ( i * bind_struct_size ) );
-
-                if ( bind_parsing_error != ERROR_NONE ) {
-                        log_warn( "%s element %u failed to parse: %s\n", config_array_name, i + 1, ERROR_ENUM_STRINGS[ bind_parsing_error ] );
-                        add_error( &returned_errors, bind_parsing_error );
-                }
+                const Errors_t bind_parsing_error = bind_parser_function( bind_setting, i, (char *) ( *parsed_config ) + ( i * bind_struct_size ) );
+                merge_errors( &returned_errors, bind_parsing_error );
         }
 
         return returned_errors;
-}
-
-/**
- * @brief Parse a string containing a complete buttonbind.
- *
- * TODO
- *
- * @param[in] buttonbind_string String to parse the buttonbind from.
- * @param[in] max_keys Maximum number of modifiers + buttons allowed in a buttonbind.
- * @param[out] parsed_buttonbind Pointer to @ref Button struct to store the buttonbind parsed from @p buttonbind_string.
- *
- * @return TODO
- */
-static Error_t _parse_buttonbind( const char *buttonbind_string, const unsigned int max_keys, Button *parsed_buttonbind ) {
-
-        log_debug( "Buttonbind string to parse: \"%s\"\n", buttonbind_string );
-
-        static char buttonbind_string_copy[ 512 ];
-        snprintf( buttonbind_string_copy, LENGTH( buttonbind_string_copy ), "%s", buttonbind_string );
-
-        char *modifier_token_list = strtok( buttonbind_string_copy, "," );
-
-        char *click_token = strtok( NULL, "," );
-        if ( click_token ) click_token = trim_whitespace( click_token );
-
-        char *function_token = strtok( NULL, "," );
-        if ( function_token ) function_token = trim_whitespace( function_token );
-
-        char *argument_token = strtok( NULL, "," );
-        if ( argument_token ) argument_token = trim_whitespace( argument_token );
-
-        if ( !modifier_token_list || !function_token || !click_token || modifier_token_list[ 0 ] == '\0' || function_token[ 0 ] == '\0' || click_token[ 0 ] == '\0' ) {
-                log_error( "Invalid buttonbind string. Expected format: \"mod+key, click, function, arg (if necessary)\" and got \"%s\"\n", buttonbind_string );
-                return ERROR_NULL_VALUE;
-        }
-
-        // Split `modifier_token_list` into tokens
-        unsigned int modifier_token_count = 0;
-        char *trimmed_modifier_token_list[ max_keys ];
-        memset( trimmed_modifier_token_list, 0, sizeof( trimmed_modifier_token_list ) );
-        char *tmp_token = strtok( modifier_token_list, "+" );
-        while ( tmp_token && modifier_token_count < max_keys ) {
-                char *trimmed = trim_whitespace( tmp_token );
-                if ( *trimmed ) {
-                        trimmed_modifier_token_list[ modifier_token_count ] = trimmed;
-                        modifier_token_count++;
-                }
-                tmp_token = strtok( NULL, "+" );
-        }
-
-        if ( modifier_token_count == 0 ) {
-                log_error( "Empty modifier+button field in buttonbind \"%s\"\n", buttonbind_string );
-                return ERROR_NOT_FOUND;
-        }
-
-        if ( modifier_token_count == max_keys && tmp_token ) {
-                log_error( "Too many binds (max_keys = %d) in modifier+button field in buttonbind \"%s\"\n", max_keys, buttonbind_string );
-                return ERROR_RANGE;
-        }
-
-        for ( int i = 0; i < modifier_token_count - 1; i++ ) {
-                const Error_t bind_error = _parse_bind_modifier( trimmed_modifier_token_list[ i ], &parsed_buttonbind->mask );
-                if ( bind_error != ERROR_NONE ) {
-                        log_error( "Invalid modifier \"%s\" in buttonbind \"%s\"\n", trimmed_modifier_token_list[ i ], buttonbind_string );
-                        return bind_error;
-                }
-        }
-
-        const Error_t button_error = _parse_buttonbind_button( trimmed_modifier_token_list[ modifier_token_count - 1 ], &parsed_buttonbind->button );
-        if ( button_error != ERROR_NONE ) {
-                log_error( "Invalid button \"%s\" in buttonbind \"%s\"\n", function_token, buttonbind_string );
-                return button_error;
-        }
-
-        const Error_t click_error = _parse_buttonbind_click( click_token, &parsed_buttonbind->click );
-        if ( click_error != ERROR_NONE ) {
-                log_error( "Invalid click \"%s\" in buttonbind \"%s\"\n", function_token, buttonbind_string );
-                return click_error;
-        }
-
-        long double range_min, range_max;
-        const Error_t function_error = _parse_bind_function( function_token, &parsed_buttonbind->func, (Data_Type_t *) &parsed_buttonbind->argument_type, &range_min, &range_max );
-        if ( function_error != ERROR_NONE ) {
-                log_error( "Invalid function \"%s\" in buttonbind \"%s\"\n", function_token, buttonbind_string );
-                return function_error;
-        }
-
-        const Error_t argument_error = _parse_bind_argument( argument_token, parsed_buttonbind->argument_type, range_min, range_max, &parsed_buttonbind->arg );
-        if ( argument_error != ERROR_NONE ) {
-                log_error( "Invalid argument \"%s\" in buttonbind \"%s\"\n", argument_token, buttonbind_string );
-                return argument_error;
-        }
-
-        return ERROR_NONE;
 }
 
 /**
@@ -1322,29 +1285,71 @@ static Error_t _parse_buttonbind( const char *buttonbind_string, const unsigned 
  *
  * TODO
  *
- * @param keybind_string TODO
- * @param max_keys TODO
+ * @param[in] buttonbind_setting TODO
+ * @param[in] buttonbind_index TODO
+ * @param[out] parsed_buttonbind TODO
+ *
+ * @return TODO
+ */
+static Errors_t _parse_buttonbind( Libconfig_Setting_t *buttonbind_setting, const unsigned int buttonbind_index, Button *parsed_buttonbind ) {
+
+        Errors_t returned_errors = { 0 };
+
+        merge_errors( &returned_errors, _parse_bind_core( buttonbind_setting, buttonbind_index, &parsed_buttonbind->mask, &parsed_buttonbind->func, &parsed_buttonbind->arg,
+                                                          (Data_Type_t *) &parsed_buttonbind->argument_type, "Buttonbind" ) );
+
+        const Error_t button_error = _parse_buttonbind_button( buttonbind_setting, &parsed_buttonbind->button );
+        add_error( &returned_errors, button_error );
+
+        if ( button_error != ERROR_NONE ) {
+                log_error( "Buttonbind %d invalid, unable to parse bind's button: %s\n", buttonbind_index + 1, ERROR_ENUM_STRINGS[ button_error ] );
+                return returned_errors;
+        }
+
+        const Error_t click_error = _parse_buttonbind_click( buttonbind_setting, &parsed_buttonbind->click );
+        add_error( &returned_errors, click_error );
+
+        if ( click_error != ERROR_NONE ) {
+                log_error( "Buttonbind %d invalid, unable to parse bind's click: %s\n", buttonbind_index + 1, ERROR_ENUM_STRINGS[ click_error ] );
+                return returned_errors;
+        }
+
+        return returned_errors;
+}
+
+/**
+ * @brief TODO
+ *
+ * TODO
+ *
+ * @param buttonbind_setting TODO
+ * @param buttonbind_index TODO
  * @param parsed_keybind TODO
  *
  * @return TODO
  */
-static Error_t _parse_buttonbind_adapter( const char *keybind_string, const unsigned int max_keys, void *parsed_keybind ) {
-        return _parse_buttonbind( keybind_string, max_keys, (Button *) parsed_keybind );
+static Errors_t _parse_buttonbind_adapter( Libconfig_Setting_t *buttonbind_setting, const unsigned int buttonbind_index, void *parsed_keybind ) {
+        return _parse_buttonbind( buttonbind_setting, buttonbind_index, (Button *) parsed_keybind );
 }
 
 /**
- * @brief Parse a string containing the name of a button.
+ * @brief TODO
  *
  * TODO
  *
- * @param[in] button_string String to parse the button from.
- * @param[out] parsed_button Pointer to where to store the button value parsed from @p button_string.
+ * @param buttonbind_setting
+ * @param[out] parsed_button TODO
  *
  * @return TODO
  *
  * @see https://gitlab.freedesktop.org/xorg/proto/xorgproto/-/blob/master/include/X11/X.h
  */
-static Error_t _parse_buttonbind_button( const char *button_string, unsigned int *parsed_button ) {
+static Error_t _parse_buttonbind_button( Libconfig_Setting_t *buttonbind_setting, unsigned int *parsed_button ) {
+
+        const char *button_string = NULL;
+        const Error_t lookup_error = _libconfig_setting_lookup_string( buttonbind_setting, "button", &button_string );
+
+        if ( lookup_error != ERROR_NONE ) return lookup_error;
 
         for ( int i = 0; i < LENGTH( button_alias_map ); i++ ) {
                 if ( strcasecmp( button_string, button_alias_map[ i ].name ) == 0 ) {
@@ -1368,16 +1373,21 @@ static Error_t _parse_buttonbind_button( const char *button_string, unsigned int
 }
 
 /**
- * @brief Parse a string containing the name of a clickable element.
+ * @brief TODO
  *
  * TODO
  *
- * @param[in] click_string String to parse the clickable element from.
- * @param[out] parsed_click Pointer to where to store the clickable element value parsed from @p click_string.
+ * @param[in] buttonbind_setting TODO
+ * @param[out] parsed_click TODO
  *
- * @return ERROR_NONE on success, ERROR_NOT_FOUND if @p click_string could not be found in `click_alias_map`.
+ * @return TODO
  */
-static Error_t _parse_buttonbind_click( const char *click_string, unsigned int *parsed_click ) {
+static Error_t _parse_buttonbind_click( Libconfig_Setting_t *buttonbind_setting, unsigned int *parsed_click ) {
+
+        const char *click_string = NULL;
+        const Error_t lookup_error = _libconfig_setting_lookup_string( buttonbind_setting, "click", &click_string );
+
+        if ( lookup_error != ERROR_NONE ) return lookup_error;
 
         for ( int i = 0; i < LENGTH( click_alias_map ); i++ ) {
                 if ( strcasecmp( click_string, click_alias_map[ i ].name ) == 0 ) {
@@ -1396,7 +1406,6 @@ static Error_t _parse_buttonbind_click( const char *click_string, unsigned int *
  *
  * @param[in] libconfig_config Pointer to the libconfig configuration containing the buttonbinds to
  * be parsed into @p buttonbind_config.
- * @param[in] max_keys Maximum number of modifiers + buttons allowed in a buttonbind.
  * @param[out] buttonbind_config Pointer to where to dynamically allocate and store all the parsed buttonbinds.
  * @param[out] buttonbinds_count Pointer to where to store the number of buttonbinds to be parsed.
  * This value does not take into account any failures during parsing the buttonbinds.
@@ -1408,9 +1417,8 @@ static Error_t _parse_buttonbind_click( const char *click_string, unsigned int *
  *
  * @note TODO Maybe mention dynamic allocation in _parse_binds_config()?
  */
-static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_config, const unsigned int max_keys, Button **buttonbind_config, unsigned int *buttonbinds_count,
-                                           bool *default_buttonbinds_loaded ) {
-        return _parse_binds_config( libconfig_config, "buttonbinds", sizeof( Button ), _parse_buttonbind_adapter, max_keys, default_buttonbinds_loaded, (void **) buttonbind_config, buttonbinds_count );
+static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_config, Button **buttonbind_config, unsigned int *buttonbinds_count, bool *default_buttonbinds_loaded ) {
+        return _parse_binds_config( libconfig_config, "buttonbinds", sizeof( Button ), _parse_buttonbind_adapter, default_buttonbinds_loaded, (void **) buttonbind_config, buttonbinds_count );
 }
 
 /**
@@ -1460,9 +1468,10 @@ static Errors_t _parse_generic_settings( const Libconfig_Config_t *libconfig_con
                                 break;
                 }
 
+                add_error( &returned_errors, returned_error );
+
                 if ( returned_error != ERROR_NONE && !settings_alias_map[ i ].optional ) {
                         log_error( "Issue while parsing \"%s\": %s\n", settings_alias_map[ i ].name, ERROR_ENUM_STRINGS[ returned_error ] );
-                        add_error( &returned_errors, returned_error );
                 }
         }
 
@@ -1470,90 +1479,32 @@ static Errors_t _parse_generic_settings( const Libconfig_Config_t *libconfig_con
 }
 
 /**
- * @brief Parse a string containing a complete keybind.
+ * @brief TODO
  *
  * TODO
  *
- * @param[in] keybind_string String to parse the keybind from.
- * @param[in] max_keys Maximum number of modifiers + keys allowed in a keybind.
- * @param[out] parsed_keybind Pointer to @ref Key struct to store the keybind parsed from @p keybind_string.
+ * @param[in] keybind_setting TODO
+ * @param[in] keybind_index TODO
+ * @param[out] parsed_keybind TODO
  *
  * @return TODO
  */
-static Error_t _parse_keybind( const char *keybind_string, const unsigned int max_keys, Key *parsed_keybind ) {
+static Errors_t _parse_keybind( Libconfig_Setting_t *keybind_setting, const unsigned int keybind_index, Key *parsed_keybind ) {
 
-        log_debug( "Keybind string to parse: \"%s\"\n", keybind_string );
+        Errors_t returned_errors = { 0 };
 
-        static char keybind_string_copy[ 512 ];
-        snprintf( keybind_string_copy, LENGTH( keybind_string_copy ), "%s", keybind_string );
+        merge_errors( &returned_errors, _parse_bind_core( keybind_setting, keybind_index, &parsed_keybind->mod, &parsed_keybind->func, &parsed_keybind->arg, (Data_Type_t *) &parsed_keybind->argument_type,
+                                                          "Keybind" ) );
 
-        char *modifier_token_list = strtok( keybind_string_copy, "," );
+        const Error_t keysym_error = _parse_keybind_keysym( keybind_setting, &parsed_keybind->keysym );
+        add_error( &returned_errors, keysym_error );
 
-        char *function_token = strtok( NULL, "," );
-        if ( function_token ) function_token = trim_whitespace( function_token );
-
-        char *argument_token = strtok( NULL, "," );
-        if ( argument_token ) argument_token = trim_whitespace( argument_token );
-
-        if ( !modifier_token_list || !function_token || modifier_token_list[ 0 ] == '\0' || function_token[ 0 ] == '\0' ) {
-                log_error( "Invalid keybind string. Expected format: \"mod+key, function, arg (if necessary)\" and got \"%s\"\n", keybind_string );
-                return ERROR_NULL_VALUE;
-        }
-
-        long double range_min, range_max;
-        const Error_t bind_error = _parse_bind_function( function_token, &parsed_keybind->func, (Data_Type_t *) &parsed_keybind->argument_type, &range_min, &range_max );
-        if ( bind_error != ERROR_NONE ) {
-                log_error( "Invalid function \"%s\" in keybind \"%s\"\n", function_token, keybind_string );
-                return bind_error;
-        }
-
-        if ( parsed_keybind->argument_type != TYPE_NONE ) {
-                const Error_t argument_error = _parse_bind_argument( argument_token, parsed_keybind->argument_type, range_min, range_max, &parsed_keybind->arg );
-                if ( argument_error != ERROR_NONE ) {
-                        log_error( "Invalid argument \"%s\" in keybind \"%s\"\n", argument_token, keybind_string );
-                        return argument_error;
-                }
-        }
-
-        // Split `modifier_token_list` into tokens
-        unsigned int modifier_token_count = 0;
-        char *trimmed_modifier_token_list[ max_keys ];
-        memset( trimmed_modifier_token_list, 0, sizeof( trimmed_modifier_token_list ) );
-        char *tmp_token = strtok( modifier_token_list, "+" );
-        while ( tmp_token && modifier_token_count < max_keys ) {
-                char *trimmed = trim_whitespace( tmp_token );
-                if ( *trimmed ) {
-                        trimmed_modifier_token_list[ modifier_token_count ] = trimmed;
-                        modifier_token_count++;
-                }
-                tmp_token = strtok( NULL, "+" );
-        }
-
-        if ( modifier_token_count == 0 ) {
-                log_error( "Empty modifier+key field in keybind \"%s\"\n", keybind_string );
-                return ERROR_NOT_FOUND;
-        }
-
-        if ( modifier_token_count == max_keys && tmp_token ) {
-                log_error( "Too many binds (max_keys = %d) in modifier+key field in keybind \"%s\"\n", max_keys, keybind_string );
-                return ERROR_RANGE;
-        }
-
-        for ( int i = 0; i < modifier_token_count - 1; i++ ) {
-                const Error_t modifier_error = _parse_bind_modifier( trimmed_modifier_token_list[ i ], &parsed_keybind->mod );
-                if ( modifier_error != ERROR_NONE ) {
-                        log_error( "Invalid modifier \"%s\" in keybind \"%s\"\n", trimmed_modifier_token_list[ i ], keybind_string );
-                        return modifier_error;
-                }
-        }
-
-        const Error_t keysym_error = _parse_keybind_keysym( trimmed_modifier_token_list[ modifier_token_count - 1 ], &parsed_keybind->keysym );
         if ( keysym_error != ERROR_NONE ) {
-                log_error( "Invalid keysym \"%s\" in keybind \"%s\"\n", trimmed_modifier_token_list[ modifier_token_count - 1 ], keybind_string );
-                return keysym_error;
+                log_error( "Keybind %d invalid, unable to parse bind's key: %s\n", keybind_index + 1, ERROR_ENUM_STRINGS[ keysym_error ] );
+                return returned_errors;
         }
 
-        return ERROR_NONE;
+        return returned_errors;
 }
 
 /**
@@ -1561,25 +1512,25 @@ static Error_t _parse_keybind( const char *keybind_string, const unsigned int ma
  *
  * TODO
  *
- * @param keybind_string TODO
- * @param max_keys TODO
+ * @param keybind_setting TODO
+ * @param keybind_index TODO
  * @param parsed_keybind TODO
  *
  * @return TODO
  */
-static Error_t _parse_keybind_adapter( const char *keybind_string, const unsigned int max_keys, void *parsed_keybind ) {
-        return _parse_keybind( keybind_string, max_keys, (Key *) parsed_keybind );
+static Errors_t _parse_keybind_adapter( Libconfig_Setting_t *keybind_setting, const unsigned int keybind_index, void *parsed_keybind ) {
+        return _parse_keybind( keybind_setting, keybind_index, (Key *) parsed_keybind );
 }
 
 /**
- * @brief Parse a string containing the name of a keysym.
+ * @brief TODO
  *
  * TODO
  *
- * @param[in] keysym_string String to parse the keysym from.
+ * @param keybind_setting TODO
  * @param[out] parsed_keysym Pointer to where to store the keysym value parsed from @p keysym_string.
  *
- * @return ERROR_NONE on success or ERROR_NOT_FOUND if @p keysym_string did not match a valid keysym.
+ * @return TODO
  *
  * @note `xev` is likely your best bet at finding the keysym values that will work with @ref XStringToKeysym().
  * If someone knows a better way, please reach out and let me know.
@@ -1587,9 +1538,14 @@ static Error_t _parse_keybind_adapter( const char *keybind_string, const unsigne
  * @see https://gitlab.freedesktop.org/xorg/app/xev
  * @see https://gitlab.freedesktop.org/xorg/lib/libx11/-/blob/master/src/StrKeysym.c?ref_type=heads#L74
  */
-static Error_t _parse_keybind_keysym( const char *keysym_string, KeySym *parsed_keysym ) {
+static Error_t _parse_keybind_keysym( Libconfig_Setting_t *keybind_setting, KeySym *parsed_keysym ) {
 
-        *parsed_keysym = XStringToKeysym( keysym_string );
+        const char *keybind_string = NULL;
+        const Error_t lookup_error = _libconfig_setting_lookup_string( keybind_setting, "key", &keybind_string );
+
+        if ( lookup_error != ERROR_NONE ) return lookup_error;
+
+        *parsed_keysym = XStringToKeysym( keybind_string );
 
         if ( *parsed_keysym == NoSymbol ) return ERROR_NOT_FOUND;
 
@@ -1607,7 +1563,6 @@ static Error_t _parse_keybind_keysym( const char *keysym_string, KeySym *parsed_
  *
  * @param[in] libconfig_config Pointer to the libconfig configuration containing the keybinds to
  * be parsed into @p keybind_config.
- * @param[in] max_keys Maximum number of modifiers + keys allowed in a keybind.
  * @param[out] keybind_config Pointer to where to dynamically allocate memory and store all the parsed keybinds.
  * @param[out] keybinds_count Pointer to where to store the number of keybinds to be parsed.
  * This value does not take into account any failures during parsing the keybinds.
@@ -1619,8 +1574,8 @@ static Error_t _parse_keybind_keysym( const char *keysym_string, KeySym *parsed_
  *
  * @note TODO Maybe mention dynamic allocation in _parse_binds_config()?
  */
-static Errors_t _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, const unsigned int max_keys, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded ) {
-        return _parse_binds_config( libconfig_config, "keybinds", sizeof( Key ), _parse_keybind_adapter, max_keys, default_keybinds_loaded, (void **) keybind_config, keybinds_count );
+static Errors_t _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded ) {
+        return _parse_binds_config( libconfig_config, "keybinds", sizeof( Key ), _parse_keybind_adapter, default_keybinds_loaded, (void **) keybind_config, keybinds_count );
 }
 
 /**
@@ -1655,7 +1610,6 @@ static Errors_t _parser_load_default_config( Parser_Config_t *config ) {
                 exit( EXIT_FAILURE );
         }
 
-        config->max_keys = 4;
         config->fallback_config_loaded = false;
 
         config->default_rules_loaded = true;
