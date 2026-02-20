@@ -118,6 +118,10 @@ typedef struct Errors {
         unsigned int errors_count[ ERROR_ENUM_LENGTH - 1 ]; // -1 for ERROR_NONE
 } Errors_t;
 
+// Typedef used to abstract bind parsing functions.
+// Allows for more generic parsing of both Buttons and Keys.
+typedef Error_t ( *Bind_Parser_Function )( const char *bind_string, unsigned int max_keys, void *parsed_bind );
+
 // Alias libconfig structs for better name
 // separation from the parser's configuration struct
 typedef config_t Libconfig_Config_t;
@@ -172,12 +176,16 @@ static Error_t _parser_backup_config( Libconfig_Config_t *libconfig_config );
 static Error_t _parse_bind_argument( const char *argument_string, Data_Type_t arg_type, long double range_min, long double range_max, Arg *parsed_arg );
 static Error_t _parse_bind_function( const char *function_string, void ( **parsed_function )( const Arg * ), Data_Type_t *parsed_arg_type, long double *parsed_range_min, long double *parsed_range_max );
 static Error_t _parse_bind_modifier( const char *modifier_string, unsigned int *parsed_modifier );
+static Errors_t _parse_binds_config( const Libconfig_Config_t *libconfig_config, const char *config_array_name, size_t bind_struct_size, Bind_Parser_Function bind_parser_function, unsigned int max_keys,
+                                     bool *default_binds_loaded, void **parsed_config, unsigned int *parsed_config_length );
 static Error_t _parse_buttonbind( const char *buttonbind_string, unsigned int max_keys, Button *parsed_buttonbind );
+static Error_t _parse_buttonbind_adapter( const char *keybind_string, unsigned int max_keys, void *parsed_keybind );
 static Error_t _parse_buttonbind_button( const char *button_string, unsigned int *parsed_button );
 static Error_t _parse_buttonbind_click( const char *click_string, unsigned int *parsed_click );
 static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_config, unsigned int max_keys, Button **buttonbind_config, unsigned int *buttonbinds_count, bool *default_buttonbinds_loaded );
 static Errors_t _parse_generic_settings( const Libconfig_Config_t *libconfig_config );
 static Error_t _parse_keybind( const char *keybind_string, unsigned int max_keys, Key *parsed_keybind );
+static Error_t _parse_keybind_adapter( const char *keybind_string, unsigned int max_keys, void *parsed_keybind );
 static Error_t _parse_keybind_keysym( const char *keysym_string, KeySym *parsed_keysym );
 static Errors_t _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, unsigned int max_keys, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded );
 static Errors_t _parser_load_default_config( Parser_Config_t *config );
@@ -1149,6 +1157,73 @@ static Error_t _parse_bind_modifier( const char *modifier_string, unsigned int *
 }
 
 /**
+ * @brief TODO
+ *
+ * TODO
+ *
+ * @param libconfig_config TODO
+ * @param config_array_name TODO
+ * @param bind_struct_size TODO
+ * @param bind_parser_function TODO
+ * @param max_keys TODO
+ * @param default_binds_loaded TODO
+ * @param parsed_config TODO
+ * @param parsed_config_length TODO
+ *
+ * @return TODO
+ */
+static Errors_t _parse_binds_config( const Libconfig_Config_t *libconfig_config, const char *config_array_name, const size_t bind_struct_size, const Bind_Parser_Function bind_parser_function,
+                                     const unsigned int max_keys, bool *default_binds_loaded, void **parsed_config, unsigned int *parsed_config_length ) {
+
+        Errors_t returned_errors = { 0 };
+
+        const Libconfig_Setting_t *binds_setting = config_lookup( libconfig_config, config_array_name );
+        if ( binds_setting == NULL ) {
+                log_error( "Problem reading config value \"%s\": Not found\n", config_array_name );
+                log_warn( "Default %s will be loaded.\n", config_array_name );
+                add_error( &returned_errors, ERROR_NOT_FOUND );
+                return returned_errors;
+        }
+
+        *parsed_config_length = config_setting_length( binds_setting );
+        if ( *parsed_config_length == 0 ) {
+                log_warn( "No %s listed. Minimal defaults will be used.\n", config_array_name );
+                add_error( &returned_errors, ERROR_NOT_FOUND );
+                return returned_errors;
+        }
+
+        log_debug( "%s detected: %u\n", config_array_name, *parsed_config_length );
+
+        *parsed_config = calloc( *parsed_config_length, bind_struct_size );
+        if ( *parsed_config == NULL ) {
+                add_error( &returned_errors, ERROR_ALLOCATION );
+                return returned_errors;
+        }
+
+        *default_binds_loaded = false;
+
+        for ( unsigned int i = 0; i < *parsed_config_length; i++ ) {
+
+                const Libconfig_Setting_t *bind_setting = config_setting_get_elem( binds_setting, i );
+
+                if ( bind_setting == NULL ) {
+                        log_warn( "%s element %u returned NULL\n", config_array_name, i + 1 );
+                        add_error( &returned_errors, ERROR_NULL_VALUE );
+                        continue;
+                }
+
+                const Error_t bind_parsing_error = bind_parser_function( config_setting_get_string( bind_setting ), max_keys, (char *) ( *parsed_config ) + ( i * bind_struct_size ) );
+
+                if ( bind_parsing_error != ERROR_NONE ) {
+                        log_warn( "%s element %u failed to parse: %s\n", config_array_name, i + 1, ERROR_ENUM_STRINGS[ bind_parsing_error ] );
+                        add_error( &returned_errors, bind_parsing_error );
+                }
+        }
+
+        return returned_errors;
+}
+
+/**
  * @brief Parse a string containing a complete buttonbind.
  *
  * TODO
@@ -1243,6 +1318,21 @@ static Error_t _parse_buttonbind( const char *buttonbind_string, const unsigned 
 }
 
 /**
+ * @brief TODO
+ *
+ * TODO
+ *
+ * @param keybind_string TODO
+ * @param max_keys TODO
+ * @param parsed_keybind TODO
+ *
+ * @return TODO
+ */
+static Error_t _parse_buttonbind_adapter( const char *keybind_string, const unsigned int max_keys, void *parsed_keybind ) {
+        return _parse_buttonbind( keybind_string, max_keys, (Button *) parsed_keybind );
+}
+
+/**
  * @brief Parse a string containing the name of a button.
  *
  * TODO
@@ -1316,69 +1406,11 @@ static Error_t _parse_buttonbind_click( const char *click_string, unsigned int *
  *
  * @return TODO
  *
- * @note @p buttonbind_config can be dynamically allocated here. It will need to be freed later
- * if @p default_buttonbinds_loaded is `false`.
+ * @note TODO Maybe mention dynamic allocation in _parse_binds_config()?
  */
 static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_config, const unsigned int max_keys, Button **buttonbind_config, unsigned int *buttonbinds_count,
                                            bool *default_buttonbinds_loaded ) {
-
-        // I may look at adjusting how memory is allocated and used here. For example,
-        // if a bind fails and is assigned. This just leaves empty unused memory. Not
-        // the worst, as most users should not have many or any failing keybinds in
-        // their config, certainly not enough to cause seriously egregious levels of
-        // memory waste, but still something to consider.
-
-        Errors_t returned_errors = { 0 };
-
-        const Libconfig_Setting_t *buttonbinds_libconfig_setting = config_lookup( libconfig_config, "buttonbinds" );
-
-        if ( buttonbinds_libconfig_setting == NULL ) {
-                log_error( "Problem reading config value \"buttonbinds\": Not found\n" );
-                log_warn( "Default buttonbinds will be loaded. It is recommended you fix the config and reload dwm\n" );
-                add_error( &returned_errors, ERROR_NOT_FOUND );
-                return returned_errors;
-        }
-
-        *buttonbinds_count = config_setting_length( buttonbinds_libconfig_setting );
-
-        if ( *buttonbinds_count == 0 ) {
-                log_warn( "No buttonbinds listed, minimal default buttonbinds will be used. Exiting buttonbind parsing\n" );
-                add_error( &returned_errors, ERROR_NOT_FOUND );
-                return returned_errors;
-        }
-
-        log_debug( "Buttonbinds detected: %d\n", *buttonbinds_count );
-
-        *buttonbind_config = calloc( *buttonbinds_count, sizeof( Button ) );
-
-        // TODO: Error print?
-        if ( *buttonbind_config == NULL ) {
-                add_error( &returned_errors, ERROR_ALLOCATION );
-                return returned_errors;
-        } else {
-                *default_buttonbinds_loaded = false;
-        }
-
-        for ( int i = 0; i < *buttonbinds_count; i++ ) {
-                const Libconfig_Setting_t *buttonbind_libconfig_setting = config_setting_get_elem( buttonbinds_libconfig_setting, i );
-
-                if ( buttonbind_libconfig_setting == NULL ) {
-                        log_warn( "Buttonbind element %d returned NULL, unable to parse\n", i + 1 );
-                        add_error( &returned_errors, ERROR_NULL_VALUE );
-                        continue;
-                }
-
-                const Error_t bind_error = _parse_buttonbind( config_setting_get_string( buttonbind_libconfig_setting ), max_keys, &( *buttonbind_config )[ i ] );
-
-                if ( bind_error != ERROR_NONE ) {
-                        ( *buttonbind_config )[ i ].button = 0;
-                        log_warn( "Buttonbind element %d failed to be parsed: %s\n", i + 1, ERROR_ENUM_STRINGS[ bind_error ] );
-                        add_error( &returned_errors, bind_error );
-                        continue;
-                }
-        }
-
-        return returned_errors;
+        return _parse_binds_config( libconfig_config, "buttonbinds", sizeof( Button ), _parse_buttonbind_adapter, max_keys, default_buttonbinds_loaded, (void **) buttonbind_config, buttonbinds_count );
 }
 
 /**
@@ -1525,6 +1557,21 @@ static Error_t _parse_keybind( const char *keybind_string, const unsigned int ma
 }
 
 /**
+ * @brief TODO
+ *
+ * TODO
+ *
+ * @param keybind_string TODO
+ * @param max_keys TODO
+ * @param parsed_keybind TODO
+ *
+ * @return TODO
+ */
+static Error_t _parse_keybind_adapter( const char *keybind_string, const unsigned int max_keys, void *parsed_keybind ) {
+        return _parse_keybind( keybind_string, max_keys, (Key *) parsed_keybind );
+}
+
+/**
  * @brief Parse a string containing the name of a keysym.
  *
  * TODO
@@ -1570,68 +1617,10 @@ static Error_t _parse_keybind_keysym( const char *keysym_string, KeySym *parsed_
  *
  * @return TODO
  *
- * @note @p keybind_config can be dynamically allocated here. It will need to be freed later
- * if @p default_keybinds_loaded is `false`.
+ * @note TODO Maybe mention dynamic allocation in _parse_binds_config()?
  */
 static Errors_t _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, const unsigned int max_keys, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded ) {
-
-        // I may look at adjusting how memory is allocated and used here. For example,
-        // if a bind fails and is assigned. This just leaves empty unused memory. Not
-        // the worst, as most users should not have many or any failing keybinds in
-        // their config, certainly not enough to cause seriously egregious levels of
-        // memory waste, but still something to consider.
-
-        Errors_t returned_errors = { 0 };
-
-        const Libconfig_Setting_t *keybinds_libconfig_setting = config_lookup( libconfig_config, "keybinds" );
-
-        if ( keybinds_libconfig_setting == NULL ) {
-                log_error( "Problem reading config value \"keybinds\": Not found\n" );
-                log_warn( "Default keybinds will be loaded. It is recommended you fix the config and reload dwm\n" );
-                add_error( &returned_errors, ERROR_NOT_FOUND );
-                return returned_errors;
-        }
-
-        *keybinds_count = config_setting_length( keybinds_libconfig_setting );
-
-        if ( *keybinds_count == 0 ) {
-                log_warn( "No keybinds listed, minimal default keybinds will be used. Exiting keybinds parsing\n" );
-                add_error( &returned_errors, ERROR_NOT_FOUND );
-                return returned_errors;
-        }
-
-        log_debug( "Keybinds detected: %d\n", *keybinds_count );
-
-        *keybind_config = calloc( *keybinds_count, sizeof( Key ) );
-
-        // TODO: Error print?
-        if ( *keybind_config == NULL ) {
-                add_error( &returned_errors, ERROR_ALLOCATION );
-                return returned_errors;
-        } else {
-                *default_keybinds_loaded = false;
-        }
-
-        for ( int i = 0; i < *keybinds_count; i++ ) {
-                const Libconfig_Setting_t *keybind_libconfig_setting = config_setting_get_elem( keybinds_libconfig_setting, i );
-
-                if ( keybind_libconfig_setting == NULL ) {
-                        log_error( "Keybind element %d returned NULL, unable to parse\n", i + 1 );
-                        add_error( &returned_errors, ERROR_NULL_VALUE );
-                        continue;
-                }
-
-                const Error_t keybind_error = _parse_keybind( config_setting_get_string( keybind_libconfig_setting ), max_keys, &( *keybind_config )[ i ] );
-
-                if ( keybind_error != ERROR_NONE ) {
-                        ( *keybind_config )[ i ].keysym = NoSymbol;
-                        log_warn( "Keybind element %d failed to be parsed: %s\n", i + 1, ERROR_ENUM_STRINGS[ keybind_error ] );
-                        add_error( &returned_errors, keybind_error );
-                        continue;
-                }
-        }
-
-        return returned_errors;
+        return _parse_binds_config( libconfig_config, "keybinds", sizeof( Key ), _parse_keybind_adapter, max_keys, default_keybinds_loaded, (void **) keybind_config, keybinds_count );
 }
 
 /**
