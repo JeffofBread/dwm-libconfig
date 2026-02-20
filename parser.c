@@ -1349,7 +1349,7 @@ static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_c
 
         log_debug( "Buttonbinds detected: %d\n", *buttonbinds_count );
 
-        *buttonbind_config = calloc( *buttonbinds_count, sizeof( Key ) );
+        *buttonbind_config = calloc( *buttonbinds_count, sizeof( Button ) );
 
         // TODO: Error print?
         if ( *buttonbind_config == NULL ) {
