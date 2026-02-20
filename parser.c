@@ -310,7 +310,7 @@ const struct Setting_Alias_Map {
         { "mfact", &mfact, TYPE_FLOAT, true, 0.05f, 0.95f },
 };
 
-const struct {
+const struct Theme_Alias_Map {
         const char *path;
         const char **value;
 } theme_alias_map[ ] = {
@@ -1941,6 +1941,7 @@ static Errors_t _parse_theme( Libconfig_Setting_t *theme_libconfig_setting ) {
 
         Errors_t returned_errors = { 0 };
 
+        // TODO: Font may be best as an array of strings to support many fonts
         for ( int i = 0; i < LENGTH( theme_alias_map ); i++ ) {
                 const Error_t error = _libconfig_setting_lookup_string( theme_libconfig_setting, theme_alias_map[ i ].path, theme_alias_map[ i ].value );
                 add_error( &returned_errors, error );
