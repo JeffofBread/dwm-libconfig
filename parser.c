@@ -211,14 +211,12 @@ static Error_t _libconfig_setting_lookup_string( Libconfig_Setting_t *setting, c
 static Error_t _libconfig_setting_lookup_uint( Libconfig_Setting_t *setting, const char *path, unsigned int range_min, unsigned int range_max, unsigned int *parsed_value );
 
 /// Parser alias maps ///
-// TODO: These alias maps may need a rename to clarify they're global
-
 const struct Function_Alias_Map {
         const char *name;
         void ( *func )( const Arg * );
         const Data_Type_t arg_type;
         const long double range_min, range_max;
-} function_alias_map[ ] = {
+} FUNCTION_ALIAS_MAP[ ] = {
         { "focusmon", focusmon, TYPE_INT, -99, 99 },
         { "focusstack", focusstack, TYPE_INT, -99, 99 },
         { "incnmaster", incnmaster, TYPE_INT, -99, 99 },
@@ -245,7 +243,7 @@ const struct Function_Alias_Map {
 const struct Modifier_Alias_Map {
         const char *name;
         const unsigned int mask;
-} modifier_alias_map[ ] = {
+} MODIFIER_ALIAS_MAP[ ] = {
         { "super", Mod4Mask },
         { "control", ControlMask },
         { "ctrl", ControlMask },
@@ -264,7 +262,7 @@ const struct Modifier_Alias_Map {
 const struct Click_Alias_Map{
         const char *name;
         const int click;
-} click_alias_map[ ] = {
+} CLICK_ALIAS_MAP[ ] = {
         { "tag", ClkTagBar },
         { "layout", ClkLtSymbol },
         { "status", ClkStatusText },
@@ -277,7 +275,7 @@ const struct Click_Alias_Map{
 const struct Button_Alias_Map {
         const char *name;
         const int button;
-} button_alias_map[ ] = {
+} BUTTON_ALIAS_MAP[ ] = {
         { "leftclick", Button1 },
         { "left-click", Button1 },
         { "middleclick", Button2 },
@@ -296,7 +294,7 @@ const struct Setting_Alias_Map {
         const Data_Type_t type;
         const bool optional;
         const long double range_min, range_max;
-} settings_alias_map[ ] = {
+} SETTING_ALIAS_MAP[ ] = {
 
         // General
         { "showbar", &showbar, TYPE_BOOLEAN, true },
@@ -313,7 +311,7 @@ const struct Setting_Alias_Map {
 const struct Theme_Alias_Map {
         const char *path;
         const char **value;
-} theme_alias_map[ ] = {
+} THEME_ALIAS_MAP[ ] = {
         { "font", &fonts[ 0 ] },
         { "normal-foreground", &colors[ SchemeNorm ][ ColFg ] },
         { "normal-background", &colors[ SchemeNorm ][ ColBg ] },
@@ -1098,12 +1096,12 @@ static Error_t _parse_bind_function( Libconfig_Setting_t *bind_setting, void ( *
 
         if ( lookup_error != ERROR_NONE ) return lookup_error;
 
-        for ( int i = 0; i < LENGTH( function_alias_map ); i++ ) {
-                if ( strcasecmp( function_string, function_alias_map[ i ].name ) == 0 ) {
-                        *parsed_function = function_alias_map[ i ].func;
-                        *parsed_arg_type = function_alias_map[ i ].arg_type;
-                        *parsed_range_min = function_alias_map[ i ].range_min;
-                        *parsed_range_max = function_alias_map[ i ].range_max;
+        for ( int i = 0; i < LENGTH( FUNCTION_ALIAS_MAP ); i++ ) {
+                if ( strcasecmp( function_string, FUNCTION_ALIAS_MAP[ i ].name ) == 0 ) {
+                        *parsed_function = FUNCTION_ALIAS_MAP[ i ].func;
+                        *parsed_arg_type = FUNCTION_ALIAS_MAP[ i ].arg_type;
+                        *parsed_range_min = FUNCTION_ALIAS_MAP[ i ].range_min;
+                        *parsed_range_max = FUNCTION_ALIAS_MAP[ i ].range_max;
                         return ERROR_NONE;
                 }
         }
@@ -1146,9 +1144,9 @@ static Error_t _parse_bind_modifier( Libconfig_Setting_t *bind_setting, unsigned
                 }
 
                 bool found = false;
-                for ( int i = 0; i < LENGTH( modifier_alias_map ); i++ ) {
-                        if ( strcasecmp( modifier_token, modifier_alias_map[ i ].name ) == 0 ) {
-                                *parsed_modifier |= modifier_alias_map[ i ].mask;
+                for ( int i = 0; i < LENGTH( MODIFIER_ALIAS_MAP ); i++ ) {
+                        if ( strcasecmp( modifier_token, MODIFIER_ALIAS_MAP[ i ].name ) == 0 ) {
+                                *parsed_modifier |= MODIFIER_ALIAS_MAP[ i ].mask;
                                 found = true;
                                 break;
                         }
@@ -1301,9 +1299,9 @@ static Error_t _parse_buttonbind_button( Libconfig_Setting_t *buttonbind_setting
 
         if ( lookup_error != ERROR_NONE ) return lookup_error;
 
-        for ( int i = 0; i < LENGTH( button_alias_map ); i++ ) {
-                if ( strcasecmp( button_string, button_alias_map[ i ].name ) == 0 ) {
-                        *parsed_button = button_alias_map[ i ].button;
+        for ( int i = 0; i < LENGTH( BUTTON_ALIAS_MAP ); i++ ) {
+                if ( strcasecmp( button_string, BUTTON_ALIAS_MAP[ i ].name ) == 0 ) {
+                        *parsed_button = BUTTON_ALIAS_MAP[ i ].button;
                         return ERROR_NONE;
                 }
         }
@@ -1339,9 +1337,9 @@ static Error_t _parse_buttonbind_click( Libconfig_Setting_t *buttonbind_setting,
 
         if ( lookup_error != ERROR_NONE ) return lookup_error;
 
-        for ( int i = 0; i < LENGTH( click_alias_map ); i++ ) {
-                if ( strcasecmp( click_string, click_alias_map[ i ].name ) == 0 ) {
-                        *parsed_click = click_alias_map[ i ].click;
+        for ( int i = 0; i < LENGTH( CLICK_ALIAS_MAP ); i++ ) {
+                if ( strcasecmp( click_string, CLICK_ALIAS_MAP[ i ].name ) == 0 ) {
+                        *parsed_click = CLICK_ALIAS_MAP[ i ].click;
                         return ERROR_NONE;
                 }
         }
@@ -1387,41 +1385,41 @@ static Errors_t _parse_generic_settings( const Libconfig_Config_t *libconfig_con
 
         log_debug( "Generic settings available: %lu\n", LENGTH( settings_alias_map ) );
 
-        for ( int i = 0; i < LENGTH( settings_alias_map ); ++i ) {
-                switch ( settings_alias_map[ i ].type ) {
+        for ( int i = 0; i < LENGTH( SETTING_ALIAS_MAP ); ++i ) {
+                switch ( SETTING_ALIAS_MAP[ i ].type ) {
                         case TYPE_BOOLEAN:
-                                returned_error = _libconfig_lookup_bool( libconfig_config, settings_alias_map[ i ].name, settings_alias_map[ i ].value );
+                                returned_error = _libconfig_lookup_bool( libconfig_config, SETTING_ALIAS_MAP[ i ].name, SETTING_ALIAS_MAP[ i ].value );
                                 break;
 
                         case TYPE_INT:
-                                returned_error = _libconfig_lookup_int( libconfig_config, settings_alias_map[ i ].name, (int) settings_alias_map[ i ].range_min, (int) settings_alias_map[ i ].range_max,
-                                                                        settings_alias_map[ i ].value );
+                                returned_error = _libconfig_lookup_int( libconfig_config, SETTING_ALIAS_MAP[ i ].name, (int) SETTING_ALIAS_MAP[ i ].range_min, (int) SETTING_ALIAS_MAP[ i ].range_max,
+                                                                        SETTING_ALIAS_MAP[ i ].value );
                                 break;
 
                         case TYPE_UINT:
-                                returned_error = _libconfig_lookup_uint( libconfig_config, settings_alias_map[ i ].name, (unsigned int) settings_alias_map[ i ].range_min,
-                                                                         (unsigned int) settings_alias_map[ i ].range_max, settings_alias_map[ i ].value );
+                                returned_error = _libconfig_lookup_uint( libconfig_config, SETTING_ALIAS_MAP[ i ].name, (unsigned int) SETTING_ALIAS_MAP[ i ].range_min,
+                                                                         (unsigned int) SETTING_ALIAS_MAP[ i ].range_max, SETTING_ALIAS_MAP[ i ].value );
                                 break;
 
                         case TYPE_FLOAT:
-                                returned_error = _libconfig_lookup_float( libconfig_config, settings_alias_map[ i ].name, (float) settings_alias_map[ i ].range_min, (float) settings_alias_map[ i ].range_max,
-                                                                          settings_alias_map[ i ].value );
+                                returned_error = _libconfig_lookup_float( libconfig_config, SETTING_ALIAS_MAP[ i ].name, (float) SETTING_ALIAS_MAP[ i ].range_min, (float) SETTING_ALIAS_MAP[ i ].range_max,
+                                                                          SETTING_ALIAS_MAP[ i ].value );
                                 break;
 
                         case TYPE_STRING:
-                                returned_error = _libconfig_lookup_string( libconfig_config, settings_alias_map[ i ].name, settings_alias_map[ i ].value );
+                                returned_error = _libconfig_lookup_string( libconfig_config, SETTING_ALIAS_MAP[ i ].name, SETTING_ALIAS_MAP[ i ].value );
                                 break;
 
                         default:
                                 returned_error = ERROR_TYPE;
-                                log_error( "Setting \"%s\" is programmed with an invalid type: \"%s\"\n", settings_alias_map[ i ].name, DATA_TYPE_ENUM_STRINGS[ settings_alias_map[ i ].type ] );
+                                log_error( "Setting \"%s\" is programmed with an invalid type: \"%s\"\n", SETTING_ALIAS_MAP[ i ].name, DATA_TYPE_ENUM_STRINGS[ SETTING_ALIAS_MAP[ i ].type ] );
                                 break;
                 }
 
                 add_error( &returned_errors, returned_error );
 
-                if ( returned_error != ERROR_NONE && !settings_alias_map[ i ].optional ) {
-                        log_error( "Issue while parsing \"%s\": %s\n", settings_alias_map[ i ].name, ERROR_ENUM_STRINGS[ returned_error ] );
+                if ( returned_error != ERROR_NONE && !SETTING_ALIAS_MAP[ i ].optional ) {
+                        log_error( "Issue while parsing \"%s\": %s\n", SETTING_ALIAS_MAP[ i ].name, ERROR_ENUM_STRINGS[ returned_error ] );
                 }
         }
 
@@ -1942,11 +1940,11 @@ static Errors_t _parse_theme( Libconfig_Setting_t *theme_libconfig_setting ) {
         Errors_t returned_errors = { 0 };
 
         // TODO: Font may be best as an array of strings to support many fonts
-        for ( int i = 0; i < LENGTH( theme_alias_map ); i++ ) {
-                const Error_t error = _libconfig_setting_lookup_string( theme_libconfig_setting, theme_alias_map[ i ].path, theme_alias_map[ i ].value );
+        for ( int i = 0; i < LENGTH( THEME_ALIAS_MAP ); i++ ) {
+                const Error_t error = _libconfig_setting_lookup_string( theme_libconfig_setting, THEME_ALIAS_MAP[ i ].path, THEME_ALIAS_MAP[ i ].value );
                 add_error( &returned_errors, error );
                 if ( error != ERROR_NONE ) {
-                        log_error( "Failed to parse theme element \"%s\": %s\n", theme_alias_map[ i ].path, ERROR_ENUM_STRINGS[ error ] );
+                        log_error( "Failed to parse theme element \"%s\": %s\n", THEME_ALIAS_MAP[ i ].path, ERROR_ENUM_STRINGS[ error ] );
                 }
         }
 
