@@ -72,7 +72,7 @@
 // logging system, which I didn't want to bring over just
 // for the config parser.
 #define log_trace( ... ) //_log( "TRACE", __VA_ARGS__ )
-#define log_debug( ... ) //_log( "DEBUG", __VA_ARGS__ )
+#define log_debug( ... ) _log( "DEBUG", __VA_ARGS__ )
 #define log_info( ... ) _log( "INFO", __VA_ARGS__ )
 #define log_warn( ... ) _log( "WARN", __VA_ARGS__ )
 #define log_error( ... ) _log( "ERROR", __VA_ARGS__ )
@@ -176,13 +176,13 @@ static Errors_t _parse_bind_core( Libconfig_Setting_t *bind_setting, unsigned in
                                   Data_Type_t *parsed_argument_type, const char *bind_array_path );
 static Error_t _parse_bind_function( Libconfig_Setting_t *bind_setting, void ( **parsed_function )( const Arg * ), Data_Type_t *parsed_arg_type, long double *parsed_range_min, long double *parsed_range_max );
 static Error_t _parse_bind_modifier( Libconfig_Setting_t *bind_setting, unsigned int *parsed_modifier );
-static Errors_t _parse_binds_config( const Libconfig_Config_t *libconfig_config, const char *config_array_name, size_t bind_struct_size, Bind_Parser_Function bind_parser_function, bool *default_binds_loaded,
-                                     void **parsed_config, unsigned int *parsed_config_length );
 static Errors_t _parse_buttonbind( Libconfig_Setting_t *buttonbind_setting, unsigned int buttonbind_index, Button *parsed_buttonbind );
 static Errors_t _parse_buttonbind_adapter( Libconfig_Setting_t *buttonbind_setting, unsigned int buttonbind_index, void *parsed_keybind );
 static Error_t _parse_buttonbind_button( Libconfig_Setting_t *buttonbind_setting, unsigned int *parsed_button );
 static Error_t _parse_buttonbind_click( Libconfig_Setting_t *buttonbind_setting, unsigned int *parsed_click );
 static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_config, Button **buttonbind_config, unsigned int *buttonbinds_count, bool *default_buttonbinds_loaded );
+static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config, const char *config_array_name, size_t bind_struct_size, Bind_Parser_Function bind_parser_function, bool *default_binds_loaded,
+                                     void **parsed_config, unsigned int *parsed_config_length );
 static Errors_t _parse_generic_settings( const Libconfig_Config_t *libconfig_config );
 static Errors_t _parse_keybind( Libconfig_Setting_t *keybind_setting, unsigned int keybind_index, Key *parsed_keybind );
 static Errors_t _parse_keybind_adapter( Libconfig_Setting_t *keybind_setting, unsigned int keybind_index, void *parsed_keybind );
@@ -192,10 +192,14 @@ static void _parser_load_default_config( Parser_Config_t *config );
 static Errors_t _parser_open_config( Parser_Config_t *config );
 static Error_t _parser_resolve_include_directory( Parser_Config_t *config );
 static Errors_t _parse_rule( Libconfig_Setting_t *rule_libconfig_setting, int rule_index, Rule *parsed_rule );
+static Errors_t _parse_rule_adapter( Libconfig_Setting_t *rule_setting, unsigned int rule_index, void *parsed_rule );
 static Error_t _parse_rule_string( Libconfig_Setting_t *rule_libconfig_setting, const char *path, int rule_index, const char **parsed_value );
 static Errors_t _parse_rules_config( const Libconfig_Config_t *libconfig_config, Rule **rules_config, unsigned int *rules_count, bool *default_rules_loaded );
+static Errors_t _parse_tag( Libconfig_Setting_t *tag_setting, unsigned int tag_index );
+static Errors_t _parse_tags_adapter( Libconfig_Setting_t *tags_setting, unsigned int tag_index, void *unused );
 static Errors_t _parse_tags_config( const Libconfig_Config_t *libconfig_config );
-static Errors_t _parse_theme( Libconfig_Setting_t *theme_libconfig_setting );
+static Errors_t _parse_theme( Libconfig_Setting_t *theme_libconfig_setting, unsigned int theme_index );
+static Errors_t _parse_theme_adapter( Libconfig_Setting_t *theme_setting, unsigned int theme_index, void *unused );
 static Errors_t _parse_theme_config( const Libconfig_Config_t *libconfig_config );
 
 /// Parser internal utility functions ///
@@ -335,6 +339,7 @@ const struct Theme_Alias_Map {
 void config_cleanup( Parser_Config_t *config ) {
 
         SAFE_FREE( config->config_filepath );
+        SAFE_FREE( config->rule_array );
         SAFE_FREE( config->keybind_array );
         SAFE_FREE( config->buttonbind_array );
 
@@ -1171,68 +1176,6 @@ static Error_t _parse_bind_modifier( Libconfig_Setting_t *bind_setting, unsigned
  *
  * TODO
  *
- * @param libconfig_config TODO
- * @param config_array_name TODO
- * @param bind_struct_size TODO
- * @param bind_parser_function TODO
- * @param default_binds_loaded TODO
- * @param parsed_config TODO
- * @param parsed_config_length TODO
- *
- * @return TODO
- */
-static Errors_t _parse_binds_config( const Libconfig_Config_t *libconfig_config, const char *config_array_name, const size_t bind_struct_size, const Bind_Parser_Function bind_parser_function,
-                                     bool *default_binds_loaded, void **parsed_config, unsigned int *parsed_config_length ) {
-
-        Errors_t returned_errors = { 0 };
-
-        const Libconfig_Setting_t *binds_setting = config_lookup( libconfig_config, config_array_name );
-        if ( binds_setting == NULL ) {
-                log_error( "Problem reading config value \"%s\": Not found\n", config_array_name );
-                log_warn( "Default %s will be loaded.\n", config_array_name );
-                add_error( &returned_errors, ERROR_NOT_FOUND );
-                return returned_errors;
-        }
-
-        *parsed_config_length = config_setting_length( binds_setting );
-        if ( *parsed_config_length == 0 ) {
-                log_warn( "No %s listed. Minimal defaults will be used.\n", config_array_name );
-                add_error( &returned_errors, ERROR_NOT_FOUND );
-                return returned_errors;
-        }
-
-        log_debug( "%s detected: %u\n", config_array_name, *parsed_config_length );
-
-        *parsed_config = calloc( *parsed_config_length, bind_struct_size );
-        if ( *parsed_config == NULL ) {
-                add_error( &returned_errors, ERROR_ALLOCATION );
-                return returned_errors;
-        }
-
-        *default_binds_loaded = false;
-
-        for ( unsigned int i = 0; i < *parsed_config_length; i++ ) {
-
-                Libconfig_Setting_t *bind_setting = config_setting_get_elem( binds_setting, i );
-
-                if ( bind_setting == NULL ) {
-                        log_warn( "%s element index %u returned NULL\n", config_array_name, i );
-                        add_error( &returned_errors, ERROR_NULL_VALUE );
-                        continue;
-                }
-
-                const Errors_t bind_parsing_error = bind_parser_function( bind_setting, i, (char *) ( *parsed_config ) + ( i * bind_struct_size ) );
-                merge_errors( &returned_errors, bind_parsing_error );
-        }
-
-        return returned_errors;
-}
-
-/**
- * @brief TODO
- *
- * TODO
- *
  * @param[in] buttonbind_setting TODO
  * @param[in] buttonbind_index TODO
  * @param[out] parsed_buttonbind TODO
@@ -1366,7 +1309,84 @@ static Error_t _parse_buttonbind_click( Libconfig_Setting_t *buttonbind_setting,
  * @note TODO Maybe mention dynamic allocation in _parse_binds_config()?
  */
 static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_config, Button **buttonbind_config, unsigned int *buttonbinds_count, bool *default_buttonbinds_loaded ) {
-        return _parse_binds_config( libconfig_config, "buttonbinds", sizeof( Button ), _parse_buttonbind_adapter, default_buttonbinds_loaded, (void **) buttonbind_config, buttonbinds_count );
+        return _parse_config_array( libconfig_config, "buttonbinds", sizeof( Button ), _parse_buttonbind_adapter, default_buttonbinds_loaded, (void **) buttonbind_config, buttonbinds_count );
+}
+
+/**
+ * @brief TODO
+ *
+ * TODO
+ *
+ * @param libconfig_config TODO
+ * @param config_array_name TODO
+ * @param bind_struct_size TODO
+ * @param bind_parser_function TODO
+ * @param default_binds_loaded TODO
+ * @param parsed_config TODO
+ * @param parsed_config_length TODO
+ *
+ * @return TODO
+ */
+static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config, const char *config_array_name, const size_t bind_struct_size, const Bind_Parser_Function bind_parser_function,
+                                     bool *default_binds_loaded, void **parsed_config, unsigned int *parsed_config_length ) {
+
+        Errors_t returned_errors = { 0 };
+
+        const Libconfig_Setting_t *binds_setting = config_lookup( libconfig_config, config_array_name );
+        if ( binds_setting == NULL ) {
+                log_error( "Problem reading config value \"%s\": Not found\n", config_array_name );
+                log_warn( "Default %s will be loaded.\n", config_array_name );
+                add_error( &returned_errors, ERROR_NOT_FOUND );
+                return returned_errors;
+        }
+
+        *parsed_config_length = config_setting_length( binds_setting );
+        if ( *parsed_config_length == 0 ) {
+                log_warn( "No %s listed. Minimal defaults will be used.\n", config_array_name );
+                add_error( &returned_errors, ERROR_NOT_FOUND );
+                return returned_errors;
+        }
+
+        log_debug( "%u %s detected\n", *parsed_config_length, config_array_name );
+
+        // default_binds_loaded is also used to determine if we
+        // should dynamically allocate the array or if it is already
+        // allocated some other way, usually on the stack.
+        if ( default_binds_loaded != NULL && parsed_config != NULL ) {
+                log_debug( "Dynamically allocating %s\n", config_array_name );
+                *parsed_config = calloc( *parsed_config_length, bind_struct_size );
+                if ( *parsed_config == NULL ) {
+                        add_error( &returned_errors, ERROR_ALLOCATION );
+                        return returned_errors;
+                } else {
+                        *default_binds_loaded = false;
+                }
+        }
+
+        for ( unsigned int i = 0; i < *parsed_config_length; i++ ) {
+
+                Libconfig_Setting_t *bind_setting = config_setting_get_elem( binds_setting, i );
+
+                if ( bind_setting == NULL ) {
+                        log_warn( "%s element index %u returned NULL\n", config_array_name, i );
+                        add_error( &returned_errors, ERROR_NULL_VALUE );
+                        continue;
+                }
+
+                // Yes, parsed_config can be NULL, that is intended. It is used by things like
+                // theme or tag parsing that rely on global values.
+                void *element = parsed_config ? (char *) ( *parsed_config ) + ( i * bind_struct_size ) : NULL;
+
+                const Errors_t bind_parsing_error = bind_parser_function( bind_setting, i, element );
+
+                if ( count_errors( bind_parsing_error ) ) {
+                        log_warn( "%s %d failed to be parsed. It had %d errors\n", config_array_name, i + 1, count_errors( bind_parsing_error ) );
+                        merge_errors( &returned_errors, bind_parsing_error );
+                        continue;
+                }
+        }
+
+        return returned_errors;
 }
 
 /**
@@ -1383,7 +1403,7 @@ static Errors_t _parse_generic_settings( const Libconfig_Config_t *libconfig_con
         Errors_t returned_errors = { 0 };
         Error_t returned_error = { 0 };
 
-        log_debug( "Generic settings available: %lu\n", LENGTH( settings_alias_map ) );
+        log_debug( "Generic settings available: %lu\n", LENGTH( SETTING_ALIAS_MAP ) );
 
         for ( int i = 0; i < LENGTH( SETTING_ALIAS_MAP ); ++i ) {
                 switch ( SETTING_ALIAS_MAP[ i ].type ) {
@@ -1523,7 +1543,7 @@ static Error_t _parse_keybind_keysym( Libconfig_Setting_t *keybind_setting, KeyS
  * @note TODO Maybe mention dynamic allocation in _parse_binds_config()?
  */
 static Errors_t _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded ) {
-        return _parse_binds_config( libconfig_config, "keybinds", sizeof( Key ), _parse_keybind_adapter, default_keybinds_loaded, (void **) keybind_config, keybinds_count );
+        return _parse_config_array( libconfig_config, "keybinds", sizeof( Key ), _parse_keybind_adapter, default_keybinds_loaded, (void **) keybind_config, keybinds_count );
 }
 
 /**
@@ -1586,6 +1606,7 @@ static void _parser_load_default_config( Parser_Config_t *config ) {
  * @return TODO
  *
  * @todo These error returns may not be the most accurate, not sure exactly the best fits.
+ * @todo This function is a bit of a mess, it could be cut down.
  */
 static Errors_t _parser_open_config( Parser_Config_t *config ) {
 
@@ -1763,6 +1784,21 @@ static Errors_t _parse_rule( Libconfig_Setting_t *rule_libconfig_setting, const 
 }
 
 /**
+ * @brief TODO
+ *
+ * TODO
+ *
+ * @param rule_setting TODO
+ * @param rule_index TODO
+ * @param parsed_rule TODO
+ *
+ * @return TODO
+ */
+static Errors_t _parse_rule_adapter( Libconfig_Setting_t *rule_setting, const unsigned int rule_index, void *parsed_rule ) {
+        return _parse_rule( rule_setting, rule_index, (Rule *) parsed_rule );
+}
+
+/**
  * @brief Parse a rule's string field value.
  *
  * TODO
@@ -1801,74 +1837,52 @@ static Error_t _parse_rule_string( Libconfig_Setting_t *rule_libconfig_setting, 
  * to if the default rules are being used or not. Value is set to `false` after allocation.
  *
  * @return TODO
- *
- * @note @p rules_config can be dynamically allocated here. It will need to be freed later
- * if @p default_rules_loaded is `false`.
  */
 static Errors_t _parse_rules_config( const Libconfig_Config_t *libconfig_config, Rule **rules_config, unsigned int *rules_count, bool *default_rules_loaded ) {
+        return _parse_config_array( libconfig_config, "rules", sizeof( Rule ), _parse_rule_adapter, default_rules_loaded, (void **) rules_config, rules_count );
+}
+
+/**
+ * @brief TODO
+ *
+ * TODO
+ *
+ * @param tag_setting TODO
+ * @param tag_index TODO
+ *
+ * @return TODO
+ */
+static Errors_t _parse_tag( Libconfig_Setting_t *tag_setting, const unsigned int tag_index ) {
 
         Errors_t returned_errors = { 0 };
 
-        const Libconfig_Setting_t *rules_libconfig_setting = config_lookup( libconfig_config, "rules" );
+        const char *original_tag_name = tags[ tag_index ];
 
-        if ( rules_libconfig_setting == NULL ) {
-                log_error( "Problem reading config value \"rules\": Not found\n" );
-                log_warn( "Default rules will be loaded. It is recommended you fix the config and reload dwm\n" );
-                add_error( &returned_errors, ERROR_NOT_FOUND );
-                return returned_errors;
-        }
+        // TODO: Is there a better way that will give a better error return?
+        tags[ tag_index ] = config_setting_get_string( tag_setting );
 
-        *rules_count = config_setting_length( rules_libconfig_setting );
-
-        if ( *rules_count == 0 ) {
-                log_warn( "No rules listed, exiting rules parsing\n" );
-                add_error( &returned_errors, ERROR_NOT_FOUND );
-                return returned_errors;
-        }
-
-        log_debug( "Rules detected: %d\n", *rules_count );
-
-        // Malloc is used here (instead of calloc for most other config parsing) because
-        // we will be copying a set of curated default values before parsing begins.
-        *rules_config = malloc( *rules_count * sizeof( Rule ) );
-
-        if ( *rules_config == NULL ) {
-                add_error( &returned_errors, ERROR_ALLOCATION );
-                return returned_errors;
-        } else {
-                *default_rules_loaded = false;
-        }
-
-        // Set some sane default values.
-        // TODO: This may be best to separate into a helper function.
-        for ( int i = 0; i < *rules_count; i++ ) {
-                ( *rules_config )[ i ].class = NULL;
-                ( *rules_config )[ i ].instance = NULL;
-                ( *rules_config )[ i ].title = NULL;
-                ( *rules_config )[ i ].tags = 0;
-                ( *rules_config )[ i ].isfloating = 0;
-                ( *rules_config )[ i ].monitor = -1;
-        }
-
-        for ( int i = 0; i < *rules_count; i++ ) {
-                Libconfig_Setting_t *rule_libconfig_setting = config_setting_get_elem( rules_libconfig_setting, i );
-
-                if ( rule_libconfig_setting == NULL ) {
-                        log_error( "Rule %d came back NULL, unable to parse\n", i + 1 );
-                        add_error( &returned_errors, ERROR_NULL_VALUE );
-                        continue;
-                }
-
-                const Errors_t rule_errors = _parse_rule( rule_libconfig_setting, i, &( *rules_config )[ i ] );
-
-                if ( count_errors( rule_errors ) ) {
-                        log_warn( "Rule %d failed to be parsed. It had %d errors\n", i + 1, count_errors( rule_errors ) );
-                        merge_errors( &returned_errors, rule_errors );
-                        continue;
-                }
+        if ( tags[ tag_index ] == NULL ) {
+                log_error( "Problem reading tag element %d: Value doesn't exist or isn't a string\n", tag_index + 1 );
+                add_error( &returned_errors, ERROR_NULL_VALUE );
+                tags[ tag_index ] = original_tag_name;
         }
 
         return returned_errors;
+}
+
+/**
+ * @brief TODO
+ *
+ * TODO
+ *
+ * @param tags_setting TODO
+ * @param tag_index TODO
+ * @param unused Unused.
+ *
+ * @return TODO
+ */
+static Errors_t _parse_tags_adapter( Libconfig_Setting_t *tags_setting, const unsigned int tag_index, void *unused ) {
+        return _parse_tag( tags_setting, tag_index );
 }
 
 /**
@@ -1881,46 +1895,14 @@ static Errors_t _parse_rules_config( const Libconfig_Config_t *libconfig_config,
  * @return TODO
  */
 static Errors_t _parse_tags_config( const Libconfig_Config_t *libconfig_config ) {
-
-        Errors_t returned_errors = { 0 };
-
-        const Libconfig_Setting_t *tag_names_libconfig_setting = config_lookup( libconfig_config, "tag-names" );
-        if ( tag_names_libconfig_setting == NULL ) {
-                log_error( "Problem reading config value \"tag-names\": Not found\n" );
-                log_warn( "Default tag names will be loaded. It is recommended you fix the config and reload dwm\n" );
-                add_error( &returned_errors, ERROR_NULL_VALUE );
-                return returned_errors;
-        }
-
-        int tags_count = config_setting_length( tag_names_libconfig_setting );
-
-        if ( tags_count == 0 ) {
-                log_warn( "No tag names detected while parsing config, default tag names will be used\n" );
-                add_error( &returned_errors, ERROR_NOT_FOUND );
-                return returned_errors;
-        }
-
-        log_debug( "Tags detected: %d\n", tags_count );
+        unsigned int tags_count = 0;
+        const Errors_t returned_errors = _parse_config_array( libconfig_config, "tags", 0, _parse_tags_adapter, NULL, NULL, &tags_count );
 
         if ( tags_count > LENGTH( tags ) ) {
                 log_warn( "More than %lu tag names detected (%d were detected) while parsing config, only the first %lu will be used\n", LENGTH( tags ), tags_count, LENGTH( tags ) );
                 tags_count = LENGTH( tags );
         } else if ( tags_count < LENGTH( tags ) ) {
                 log_warn( "Less than %lu tag names detected while parsing config, filler tags will be used for the remainder\n", LENGTH( tags ) );
-        }
-
-        for ( int i = 0; i < tags_count; i++ ) {
-                const char *original_tag_name = tags[ i ];
-
-                // TODO: Is there no better way to get a string? We should be able to distinguish between not found and type errors
-                tags[ i ] = config_setting_get_string_elem( tag_names_libconfig_setting, i );
-
-                if ( tags[ i ] == NULL ) {
-                        log_error( "Problem reading tag array element %d: Value doesn't exist or isn't a string\n", i + 1 );
-                        add_error( &returned_errors, ERROR_NULL_VALUE );
-                        tags[ i ] = original_tag_name;
-                        continue;
-                }
         }
 
         return returned_errors;
@@ -1932,23 +1914,45 @@ static Errors_t _parse_tags_config( const Libconfig_Config_t *libconfig_config )
  * TODO
  *
  * @param[in] theme_libconfig_setting Pointer to the libconfig setting containing the theme to be parsed.
+ * @param[in] theme_index Index of the current theme being parsed.
  *
  * @return TODO
  */
-static Errors_t _parse_theme( Libconfig_Setting_t *theme_libconfig_setting ) {
+static Errors_t _parse_theme( Libconfig_Setting_t *theme_libconfig_setting, const unsigned int theme_index ) {
 
         Errors_t returned_errors = { 0 };
+
+        // dwm does not support more than 1 theme
+        if ( theme_index > 0 ) {
+                add_error( &returned_errors, ERROR_RANGE );
+                return returned_errors;
+        }
 
         // TODO: Font may be best as an array of strings to support many fonts
         for ( int i = 0; i < LENGTH( THEME_ALIAS_MAP ); i++ ) {
                 const Error_t error = _libconfig_setting_lookup_string( theme_libconfig_setting, THEME_ALIAS_MAP[ i ].path, THEME_ALIAS_MAP[ i ].value );
                 add_error( &returned_errors, error );
                 if ( error != ERROR_NONE ) {
-                        log_error( "Failed to parse theme element \"%s\": %s\n", THEME_ALIAS_MAP[ i ].path, ERROR_ENUM_STRINGS[ error ] );
+                        log_error( "Failed to parse theme %d's element \"%s\": %s\n", theme_index, THEME_ALIAS_MAP[ i ].path, ERROR_ENUM_STRINGS[ error ] );
                 }
         }
 
         return returned_errors;
+}
+
+/**
+ * @brief TODO
+ *
+ * TODO
+ *
+ * @param theme_setting TODO
+ * @param theme_index TODO
+ * @param unused TODO
+ *
+ * @return TODO
+ */
+static Errors_t _parse_theme_adapter( Libconfig_Setting_t *theme_setting, const unsigned int theme_index, void *unused ) {
+        return _parse_theme( theme_setting, theme_index );
 }
 
 /**
@@ -1959,50 +1963,15 @@ static Errors_t _parse_theme( Libconfig_Setting_t *theme_libconfig_setting ) {
  * @param[in] libconfig_config Pointer to the libconfig configuration containing the theme to be parsed.
  *
  * @return TODO
+ *
+ * @note dwm only supports a single theme, so only the first theme in the list is parsed.
  */
 static Errors_t _parse_theme_config( const Libconfig_Config_t *libconfig_config ) {
-
-        Errors_t returned_errors = { 0 };
-
-        const Libconfig_Setting_t *themes_libconfig_setting = config_lookup( libconfig_config, "themes" );
-        if ( themes_libconfig_setting == NULL ) {
-                log_error( "Problem reading config value \"themes\": Not found\n" );
-                log_warn( "Default theme will be loaded. It is recommended you fix the config and reload dwm\n" );
-                add_error( &returned_errors, ERROR_NOT_FOUND );
-                return returned_errors;
+        unsigned int theme_count = 0;
+        const Errors_t returned_errors = _parse_config_array( libconfig_config, "themes", 0, _parse_theme_adapter, NULL, NULL, &theme_count );
+        if ( theme_count > 1 ) {
+                log_warn( "%d themes detected. dwm can only use the first theme in list \"themes\"\n", theme_count );
         }
-
-        int detected_theme_count = config_setting_length( themes_libconfig_setting );
-
-        if ( detected_theme_count == 0 ) {
-                log_warn( "No themes detected while parsing config, the default theme will be used\n" );
-                add_error( &returned_errors, ERROR_NOT_FOUND );
-                return returned_errors;
-        }
-
-        log_debug( "Themes detected: %d\n", detected_theme_count );
-
-        if ( detected_theme_count > 1 ) {
-                log_warn( "More than 1 theme detected. dwm can only use the first theme in list \"themes\"\n" );
-                detected_theme_count = 1;
-        }
-
-        for ( int i = 0; i < detected_theme_count; i++ ) {
-                Libconfig_Setting_t *theme_libconfig_setting = config_setting_get_elem( themes_libconfig_setting, i );
-
-                if ( theme_libconfig_setting == NULL ) {
-                        log_error( "Theme %d returned NULL, unable to parse\n", i + 1 );
-                        add_error( &returned_errors, ERROR_NULL_VALUE );
-                        continue;
-                }
-
-                const Errors_t theme_errors = _parse_theme( theme_libconfig_setting );
-
-                merge_errors( &returned_errors, theme_errors );
-
-                log_debug( "%d elements failed to be parsed in theme number %d\n", count_errors( theme_errors ), i + 1 );
-        }
-
         return returned_errors;
 }
 
