@@ -1326,6 +1326,10 @@ static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_c
  * @param parsed_config_length TODO
  *
  * @return TODO
+ *
+ * @todo It may be worth trying to add some kind of safeguard to fall back on default config if enough
+ * elements fail to be parsed. For example, if the keybinds all (or many) fail, it could soft-lock the
+ * user in the program. Not sure best way to do that, or if it is even the best idea to add.
  */
 static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config, const char *config_array_name, const size_t element_struct_size,
                                      const Array_Element_Parser_Function_t array_element_parser_function, bool *dynamically_allocated, void **parsed_config, unsigned int *parsed_config_length ) {
