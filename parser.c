@@ -418,7 +418,7 @@ Errors_t parse_config( Parser_Config_t *config ) {
         // passes, or is valid enough to warrant backing up.
 
         // TODO: This logic is clumsily structured, it should be improved. It also probably should include config->rules_dynamically_allocated
-        if ( count_errors( errors ) == 0 && config->keybinds_dynamically_allocated && config->buttonbinds_dynamically_allocated && fallback_config_loaded ) {
+        if ( count_errors( errors ) == 0 && config->keybinds_dynamically_allocated && config->buttonbinds_dynamically_allocated && !fallback_config_loaded ) {
                 const Error_t backup_error = _parser_backup_config( &config->libconfig_config );
                 add_error( &errors, backup_error );
         } else {
