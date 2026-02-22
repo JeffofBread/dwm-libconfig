@@ -57,7 +57,7 @@
 // logging system, which I didn't want to bring over just
 // for the config parser.
 #define log_trace( ... ) //_log( "TRACE", __VA_ARGS__ )
-#define log_debug( ... ) _log( "DEBUG", __VA_ARGS__ )
+#define log_debug( ... ) //_log( "DEBUG", __VA_ARGS__ )
 #define log_info( ... ) _log( "INFO", __VA_ARGS__ )
 #define log_warn( ... ) _log( "WARN", __VA_ARGS__ )
 #define log_error( ... ) _log( "ERROR", __VA_ARGS__ )
