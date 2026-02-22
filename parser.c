@@ -54,11 +54,6 @@
 #define LENGTH(X) (sizeof (X) / sizeof (X)[0])
 #endif
 
-// Some macros to make later code in dwm.c
-// a little smaller and easier to read.
-#define BUTTONBINDS dwm_config.buttonbind_array
-#define KEYBINDS dwm_config.keybind_array
-
 // Simple wrappers for free/fclose to improve NULL safety. It is not flawless or a catch-all however
 #define SAFE_FREE( p ) do { if ( p ) { free( ( void * ) ( p ) ); ( p ) = NULL; } } while ( 0 )
 #define SAFE_FCLOSE( f ) do { if ( f ) { fclose( f ); ( f ) = NULL; } } while ( 0 )
@@ -139,13 +134,16 @@ typedef struct Parser_Config {
         unsigned int buttonbind_array_size;
         unsigned int keybind_array_size;
         char *config_filepath;
-        Rule *rule_array;
-        Key *keybind_array;
-        Button *buttonbind_array;
         Libconfig_Config_t libconfig_config;
 } Parser_Config_t;
 
 Parser_Config_t dwm_config = { 0 };
+
+Key *keys = default_keys;
+Button *buttons = default_buttons;
+Rule *rules = default_rules;
+
+// TODO: I should find a way to smoothen / harden the length checking of keys, buttons, and rules
 
 /// Public parser functions ///
 void config_cleanup( Parser_Config_t *config );
@@ -342,15 +340,15 @@ void config_cleanup( Parser_Config_t *config ) {
         }
 
         if ( config->rules_dynamically_allocated == false ) {
-                free( config->rule_array );
+                free( rules );
         }
 
         if ( config->keybinds_dynamically_allocated == false ) {
-                free( config->keybind_array );
+                free( keys );
         }
 
         if ( config->buttonbinds_dynamically_allocated == false ) {
-                free( config->buttonbind_array );
+                free( buttons );
         }
 
         config_destroy( &config->libconfig_config );
@@ -410,9 +408,9 @@ Errors_t parse_config( Parser_Config_t *config ) {
         config_set_tab_width( &config->libconfig_config, 4 );
 
         merge_errors( &errors, _parse_generic_settings( &config->libconfig_config ) );
-        merge_errors( &errors, _parse_keybinds_config( &config->libconfig_config, &config->keybind_array, &config->keybind_array_size, &config->keybinds_dynamically_allocated ) );
-        merge_errors( &errors, _parse_buttonbinds_config( &config->libconfig_config, &config->buttonbind_array, &config->buttonbind_array_size, &config->buttonbinds_dynamically_allocated ) );
-        merge_errors( &errors, _parse_rules_config( &config->libconfig_config, &config->rule_array, &config->rule_array_size, &config->rules_dynamically_allocated ) );
+        merge_errors( &errors, _parse_keybinds_config( &config->libconfig_config, &keys, &config->keybind_array_size, &config->keybinds_dynamically_allocated ) );
+        merge_errors( &errors, _parse_buttonbinds_config( &config->libconfig_config, &buttons, &config->buttonbind_array_size, &config->buttonbinds_dynamically_allocated ) );
+        merge_errors( &errors, _parse_rules_config( &config->libconfig_config, &rules, &config->rule_array_size, &config->rules_dynamically_allocated ) );
         merge_errors( &errors, _parse_tags_config( &config->libconfig_config ) );
         merge_errors( &errors, _parse_theme_config( &config->libconfig_config ) );
 
@@ -1585,16 +1583,13 @@ static void _parser_load_default_config( Parser_Config_t *config ) {
         config->fallback_config_loaded = false;
 
         config->rules_dynamically_allocated = false;
-        config->rule_array_size = LENGTH( rules );
-        config->rule_array = (Rule *) rules;
+        config->rule_array_size = LENGTH( default_rules );
 
         config->keybinds_dynamically_allocated = false;
-        config->keybind_array_size = LENGTH( keys );
-        config->keybind_array = (Key *) keys;
+        config->keybind_array_size = LENGTH( default_keys );
 
         config->buttonbinds_dynamically_allocated = false;
-        config->buttonbind_array_size = LENGTH( buttons );
-        config->buttonbind_array = (Button *) buttons;
+        config->buttonbind_array_size = LENGTH( default_buttons );
 
         config_init( &config->libconfig_config );
 }
@@ -1874,6 +1869,7 @@ static Errors_t _parse_tag( Libconfig_Setting_t *tag_setting, const unsigned int
         // TODO: Is there a better way that will give a better error return?
         tags[ tag_index ] = config_setting_get_string( tag_setting );
 
+        // TODO: Ensure it fits into a 32 bit unsigned int like NumTags does
         if ( tags[ tag_index ] == NULL ) {
                 log_error( "Problem reading tag element %d: Value doesn't exist or isn't a string\n", tag_index + 1 );
                 add_error( &returned_errors, ERROR_NULL_VALUE );
@@ -2283,8 +2279,3 @@ static Error_t _libconfig_setting_lookup_uint( Libconfig_Setting_t *setting, con
 
         return ERROR_NONE;
 }
-
-/// Warning macros ///
-#define buttons buttons_ARRAY_REPLACED_WITH_dwm_config_buttons_array_BY_LIBCONFIG_PATCH
-#define keys keys_ARRAY_REPLACED_WITH_dwm_config_keybind_array_BY_LIBCONFIG_PATCH
-#define rules rules_ARRAY_REPLACED_WITH_dwm_config_rules_array_BY_LIBCONFIG_PATCH
