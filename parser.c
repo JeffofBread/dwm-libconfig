@@ -183,8 +183,8 @@ static Errors_t _parse_rule( Libconfig_Setting_t *rule_libconfig_setting, int ru
 static Errors_t _parse_rule_adapter( Libconfig_Setting_t *rule_setting, unsigned int rule_index, void *parsed_rule );
 static Error_t _parse_rule_string( Libconfig_Setting_t *rule_libconfig_setting, const char *path, int rule_index, const char **parsed_value );
 static Errors_t _parse_rules_config( const Libconfig_Config_t *libconfig_config, Rule **rules_config, unsigned int *rules_count, bool *rules_dynamically_allocated );
-static Errors_t _parse_tag( Libconfig_Setting_t *tag_setting, unsigned int tag_index );
-static Errors_t _parse_tags_adapter( Libconfig_Setting_t *tags_setting, unsigned int tag_index, void *unused );
+static Errors_t _parse_tag( Libconfig_Setting_t *tags_setting, unsigned int tags_index );
+static Errors_t _parse_tags_adapter( Libconfig_Setting_t *tags_setting, unsigned int tags_index, void *unused );
 static Errors_t _parse_tags_config( const Libconfig_Config_t *libconfig_config );
 static Errors_t _parse_theme( Libconfig_Setting_t *theme_libconfig_setting, unsigned int theme_index );
 static Errors_t _parse_theme_adapter( Libconfig_Setting_t *theme_setting, unsigned int theme_index, void *unused );
@@ -1849,25 +1849,25 @@ static Errors_t _parse_rules_config( const Libconfig_Config_t *libconfig_config,
  *
  * TODO
  *
- * @param tag_setting TODO
- * @param tag_index TODO
+ * @param tags_setting TODO
+ * @param tags_index TODO
  *
  * @return TODO
  */
-static Errors_t _parse_tag( Libconfig_Setting_t *tag_setting, const unsigned int tag_index ) {
+static Errors_t _parse_tag( Libconfig_Setting_t *tags_setting, const unsigned int tags_index ) {
 
         Errors_t returned_errors = { 0 };
 
-        const char *original_tag_name = tags[ tag_index ];
+        const char *original_tag_name = tags[ tags_index ];
 
         // TODO: Is there a better way that will give a better error return?
-        tags[ tag_index ] = config_setting_get_string( tag_setting );
+        tags[ tags_index ] = config_setting_get_string( tags_setting );
 
         // TODO: Ensure it fits into a 32 bit unsigned int like NumTags does
-        if ( tags[ tag_index ] == NULL ) {
-                log_error( "Problem reading tag element %d: Value doesn't exist or isn't a string\n", tag_index + 1 );
+        if ( tags[ tags_index ] == NULL ) {
+                log_error( "Problem reading tag element %d: Value doesn't exist or isn't a string\n", tags_index + 1 );
                 add_error( &returned_errors, ERROR_NULL_VALUE );
-                tags[ tag_index ] = original_tag_name;
+                tags[ tags_index ] = original_tag_name;
         }
 
         return returned_errors;
@@ -1879,13 +1879,13 @@ static Errors_t _parse_tag( Libconfig_Setting_t *tag_setting, const unsigned int
  * TODO
  *
  * @param tags_setting TODO
- * @param tag_index TODO
+ * @param tags_index TODO
  * @param unused Unused.
  *
  * @return TODO
  */
-static Errors_t _parse_tags_adapter( Libconfig_Setting_t *tags_setting, const unsigned int tag_index, void *unused ) {
-        return _parse_tag( tags_setting, tag_index );
+static Errors_t _parse_tags_adapter( Libconfig_Setting_t *tags_setting, const unsigned int tags_index, void *unused ) {
+        return _parse_tag( tags_setting, tags_index );
 }
 
 /**
@@ -1927,6 +1927,7 @@ static Errors_t _parse_theme( Libconfig_Setting_t *theme_libconfig_setting, cons
 
         // dwm does not support more than 1 theme
         if ( theme_index > 0 ) {
+                log_warn( "%d themes detected. dwm can only use the first theme in list \"themes\"\n", theme_index + 1 );
                 add_error( &returned_errors, ERROR_RANGE );
                 return returned_errors;
         }
@@ -1970,12 +1971,8 @@ static Errors_t _parse_theme_adapter( Libconfig_Setting_t *theme_setting, const 
  * @note dwm only supports a single theme, so only the first theme in the list is parsed.
  */
 static Errors_t _parse_theme_config( const Libconfig_Config_t *libconfig_config ) {
-        unsigned int theme_count = 0;
-        const Errors_t returned_errors = _parse_config_array( libconfig_config, "themes", 0, _parse_theme_adapter, NULL, NULL, &theme_count );
-        if ( theme_count > 1 ) {
-                log_warn( "%d themes detected. dwm can only use the first theme in list \"themes\"\n", theme_count );
-        }
-        return returned_errors;
+        unsigned int unused = 0;
+        return _parse_config_array( libconfig_config, "themes", 0, _parse_theme_adapter, NULL, NULL, &unused );
 }
 
 /// Parser internal utility functions ///
