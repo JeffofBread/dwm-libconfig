@@ -48,16 +48,6 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 
-// Length is used heavily in this file. This just ensures
-// it is present if the include order is changed in dwm.c
-#ifndef LENGTH
-#define LENGTH(X) (sizeof (X) / sizeof (X)[0])
-#endif
-
-// Simple wrappers for free/fclose to improve NULL safety. It is not flawless or a catch-all however
-#define SAFE_FREE( p ) do { if ( p ) { free( ( void * ) ( p ) ); ( p ) = NULL; } } while ( 0 )
-#define SAFE_FCLOSE( f ) do { if ( f ) { fclose( f ); ( f ) = NULL; } } while ( 0 )
-
 // Preprocessor string manipulation used in the logging macros
 #define _TOSTRING( X ) #X
 #define TOSTRING( X ) _TOSTRING( X )
@@ -976,12 +966,12 @@ static Error_t _parser_backup_config( Libconfig_Config_t *libconfig_config ) {
 
         if ( config_write_file( libconfig_config, buffer ) == CONFIG_FALSE ) {
                 log_error( "Problem backing up current config to \"%s\"\n", buffer );
-                SAFE_FREE( buffer );
+                free( buffer );
                 return ERROR_IO;
         }
 
         log_info( "Current config backed up to \"%s\"\n", buffer );
-        SAFE_FREE( buffer );
+        free( buffer );
 
         return ERROR_NONE;
 }
@@ -1169,14 +1159,14 @@ static Error_t _parse_bind_modifier( Libconfig_Setting_t *bind_setting, unsigned
 
                 if ( !found ) {
                         log_error( "Invalid modifier: \"%s\"\n", modifier_token );
-                        SAFE_FREE( buffer );
+                        free( buffer );
                         return ERROR_NOT_FOUND;
                 }
 
                 modifier_token = strtok( NULL, "+" );
         }
 
-        SAFE_FREE( buffer );
+        free( buffer );
 
         return ERROR_NONE;
 }
@@ -1632,7 +1622,7 @@ static Errors_t _parser_open_config( Parser_Config_t *config ) {
                 config_filepaths[ config_filepaths_length ] = estrdup( config->config_filepath );
                 if ( config_filepaths[ config_filepaths_length ] == NULL ) add_error( &returned_errors, ERROR_NULL_VALUE );
                 config_filepaths_length++;
-                SAFE_FREE( config->config_filepath );
+                free( config->config_filepath );
         }
 
         // $XDG_CONFIG_HOME/.config/dwm.conf or $HOME/.config/dwm.conf
@@ -1695,12 +1685,11 @@ static Errors_t _parser_open_config( Parser_Config_t *config ) {
                 if ( config_read( &config->libconfig_config, tmp_file ) == CONFIG_FALSE ) {
                         log_warn( "Problem parsing config file \"%s\", line %d: %s\n", config_filepaths[ i ], config_error_line( &config->libconfig_config ), config_error_text( &config->libconfig_config ) );
                         add_error( &returned_errors, ERROR_NULL_VALUE );
-                        SAFE_FCLOSE( tmp_file );
+                        fclose( tmp_file );
                         continue;
                 }
 
                 // Save found config filepath
-                SAFE_FREE( config->config_filepath );
                 config->config_filepath = estrdup( config_filepaths[ i ] );
                 if ( config->config_filepath == NULL ) add_error( &returned_errors, ERROR_NULL_VALUE );
 
@@ -1710,10 +1699,12 @@ static Errors_t _parser_open_config( Parser_Config_t *config ) {
                 }
 
                 for ( i = 0; i < config_filepaths_length; i++ ) {
-                        SAFE_FREE( config_filepaths[ i ] );
+                        if ( config_filepaths[ i ] != NULL ) {
+                                free( config_filepaths[ i ] );
+                        }
                 }
 
-                SAFE_FCLOSE( tmp_file );
+                fclose( tmp_file );
 
                 return returned_errors;
         }
@@ -1721,11 +1712,14 @@ static Errors_t _parser_open_config( Parser_Config_t *config ) {
         log_error( "Unable to load any configs. Hardcoded default config values will be used. Exiting parsing\n" );
 
         for ( i = 0; i < config_filepaths_length; i++ ) {
-                SAFE_FREE( config_filepaths[ i ] );
+                if ( config_filepaths[ i ] != NULL ) {
+                        free( config_filepaths[ i ] );
+                }
         }
 
         config_destroy( &config->libconfig_config );
-        SAFE_FCLOSE( tmp_file );
+
+        fclose( tmp_file );
 
         return returned_errors;
 }
@@ -1743,7 +1737,7 @@ static Error_t _parser_resolve_include_directory( Parser_Config_t *config ) {
 
         char *config_include_directory = realpath( config->config_filepath, NULL );
 
-        if ( !config_include_directory ) {
+        if ( config_include_directory == NULL ) {
                 log_warn( "Failed to allocate memory for the configuration file's include path\n" );
                 return ERROR_ALLOCATION;
         }
@@ -1752,13 +1746,13 @@ static Error_t _parser_resolve_include_directory( Parser_Config_t *config ) {
 
         if ( config_include_directory[ 0 ] == '.' ) {
                 log_warn( "Unable to resolve configuration file's include directory\n" );
-                SAFE_FREE( config_include_directory );
+                free( config_include_directory );
                 return ERROR_NOT_FOUND;
         }
 
         config_set_include_dir( &config->libconfig_config, config_include_directory );
 
-        SAFE_FREE( config_include_directory );
+        free( config_include_directory );
 
         return ERROR_NONE;
 }
