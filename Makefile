@@ -24,9 +24,9 @@ clean:
 
 dist: clean
 	mkdir -p dwm-${VERSION}
-	cp -R LICENSE Makefile README config.mk dwm.1\
-		drw.h util.h ${SRC} dwm.conf dwm.png \
-		parser.c transient.c dwm-${VERSION}
+	cp -R LICENSE Makefile README config.def.h config.mk\
+		parser.c dwm.conf dwm.1 drw.h util.h ${SRC} dwm.png\
+		transient.c dwm-${VERSION}
 	tar -cf dwm-${VERSION}.tar dwm-${VERSION}
 	gzip dwm-${VERSION}.tar
 	rm -rf dwm-${VERSION}
