@@ -123,18 +123,18 @@ typedef struct Errors {
 typedef config_t Libconfig_Config_t;
 typedef config_setting_t Libconfig_Setting_t;
 
-// Typedef used to abstract bind parsing functions.
-// Allows for more generic parsing of both Buttons and Keys.
-typedef Errors_t ( *Bind_Parser_Function )( Libconfig_Setting_t *bind_setting, unsigned int bind_index, void *parsed_bind );
+// Typedef used to abstract config array parsing functions.
+// Allows for more generic parsing of multiple types.
+typedef Errors_t ( *Array_Element_Parser_Function_t )( Libconfig_Setting_t *element_setting, unsigned int element_index, void *parsed_element );
 
 // Struct to hold some parser internal data and
 // some of the configuration data that can't
 // be written to variables in `config.(def.).h`
 typedef struct Parser_Config {
         bool fallback_config_loaded;
-        bool default_keybinds_loaded;
-        bool default_buttonbinds_loaded;
-        bool default_rules_loaded;
+        bool rules_dynamically_allocated;
+        bool keybinds_dynamically_allocated;
+        bool buttonbinds_dynamically_allocated;
         unsigned int rule_array_size;
         unsigned int buttonbind_array_size;
         unsigned int keybind_array_size;
@@ -180,21 +180,21 @@ static Errors_t _parse_buttonbind( Libconfig_Setting_t *buttonbind_setting, unsi
 static Errors_t _parse_buttonbind_adapter( Libconfig_Setting_t *buttonbind_setting, unsigned int buttonbind_index, void *parsed_keybind );
 static Error_t _parse_buttonbind_button( Libconfig_Setting_t *buttonbind_setting, unsigned int *parsed_button );
 static Error_t _parse_buttonbind_click( Libconfig_Setting_t *buttonbind_setting, unsigned int *parsed_click );
-static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_config, Button **buttonbind_config, unsigned int *buttonbinds_count, bool *default_buttonbinds_loaded );
-static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config, const char *config_array_name, size_t bind_struct_size, Bind_Parser_Function bind_parser_function, bool *default_binds_loaded,
-                                     void **parsed_config, unsigned int *parsed_config_length );
+static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_config, Button **buttonbind_config, unsigned int *buttonbinds_count, bool *buttonbinds_dynamically_allocated );
+static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config, const char *config_array_name, size_t element_struct_size, Array_Element_Parser_Function_t array_element_parser_function,
+                                     bool *dynamically_allocated, void **parsed_config, unsigned int *parsed_config_length );
 static Errors_t _parse_generic_settings( const Libconfig_Config_t *libconfig_config );
 static Errors_t _parse_keybind( Libconfig_Setting_t *keybind_setting, unsigned int keybind_index, Key *parsed_keybind );
 static Errors_t _parse_keybind_adapter( Libconfig_Setting_t *keybind_setting, unsigned int keybind_index, void *parsed_keybind );
 static Error_t _parse_keybind_keysym( Libconfig_Setting_t *keybind_setting, KeySym *parsed_keysym );
-static Errors_t _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded );
+static Errors_t _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, Key **keybind_config, unsigned int *keybinds_count, bool *keybinds_dynamically_allocated );
 static void _parser_load_default_config( Parser_Config_t *config );
 static Errors_t _parser_open_config( Parser_Config_t *config );
 static Error_t _parser_resolve_include_directory( Parser_Config_t *config );
 static Errors_t _parse_rule( Libconfig_Setting_t *rule_libconfig_setting, int rule_index, Rule *parsed_rule );
 static Errors_t _parse_rule_adapter( Libconfig_Setting_t *rule_setting, unsigned int rule_index, void *parsed_rule );
 static Error_t _parse_rule_string( Libconfig_Setting_t *rule_libconfig_setting, const char *path, int rule_index, const char **parsed_value );
-static Errors_t _parse_rules_config( const Libconfig_Config_t *libconfig_config, Rule **rules_config, unsigned int *rules_count, bool *default_rules_loaded );
+static Errors_t _parse_rules_config( const Libconfig_Config_t *libconfig_config, Rule **rules_config, unsigned int *rules_count, bool *rules_dynamically_allocated );
 static Errors_t _parse_tag( Libconfig_Setting_t *tag_setting, unsigned int tag_index );
 static Errors_t _parse_tags_adapter( Libconfig_Setting_t *tags_setting, unsigned int tag_index, void *unused );
 static Errors_t _parse_tags_config( const Libconfig_Config_t *libconfig_config );
@@ -316,7 +316,6 @@ const struct Theme_Alias_Map {
         const char *path;
         const char **value;
 } THEME_ALIAS_MAP[ ] = {
-        { "font", &fonts[ 0 ] },
         { "normal-foreground", &colors[ SchemeNorm ][ ColFg ] },
         { "normal-background", &colors[ SchemeNorm ][ ColBg ] },
         { "normal-border", &colors[ SchemeNorm ][ ColBorder ] },
@@ -338,10 +337,21 @@ const struct Theme_Alias_Map {
  */
 void config_cleanup( Parser_Config_t *config ) {
 
-        SAFE_FREE( config->config_filepath );
-        SAFE_FREE( config->rule_array );
-        SAFE_FREE( config->keybind_array );
-        SAFE_FREE( config->buttonbind_array );
+        if ( config->config_filepath != NULL ) {
+                free( config->config_filepath );
+        }
+
+        if ( config->rules_dynamically_allocated == false ) {
+                free( config->rule_array );
+        }
+
+        if ( config->keybinds_dynamically_allocated == false ) {
+                free( config->keybind_array );
+        }
+
+        if ( config->buttonbinds_dynamically_allocated == false ) {
+                free( config->buttonbind_array );
+        }
 
         config_destroy( &config->libconfig_config );
 }
@@ -400,20 +410,22 @@ Errors_t parse_config( Parser_Config_t *config ) {
         config_set_tab_width( &config->libconfig_config, 4 );
 
         merge_errors( &errors, _parse_generic_settings( &config->libconfig_config ) );
-        merge_errors( &errors, _parse_keybinds_config( &config->libconfig_config, &config->keybind_array, &config->keybind_array_size, &config->default_keybinds_loaded ) );
-        merge_errors( &errors, _parse_buttonbinds_config( &config->libconfig_config, &config->buttonbind_array, &config->buttonbind_array_size, &config->default_buttonbinds_loaded ) );
-        merge_errors( &errors, _parse_rules_config( &config->libconfig_config, &config->rule_array, &config->rule_array_size, &config->default_rules_loaded ) );
+        merge_errors( &errors, _parse_keybinds_config( &config->libconfig_config, &config->keybind_array, &config->keybind_array_size, &config->keybinds_dynamically_allocated ) );
+        merge_errors( &errors, _parse_buttonbinds_config( &config->libconfig_config, &config->buttonbind_array, &config->buttonbind_array_size, &config->buttonbinds_dynamically_allocated ) );
+        merge_errors( &errors, _parse_rules_config( &config->libconfig_config, &config->rule_array, &config->rule_array_size, &config->rules_dynamically_allocated ) );
         merge_errors( &errors, _parse_tags_config( &config->libconfig_config ) );
         merge_errors( &errors, _parse_theme_config( &config->libconfig_config ) );
 
         // The error requirement being 0 may be a bit strict, I am not sure. May need
         // some relaxing or possibly come up with a better way of calculating if a config
         // passes, or is valid enough to warrant backing up.
-        if ( count_errors( errors ) == 0 && !( config->default_keybinds_loaded || config->default_buttonbinds_loaded || config->fallback_config_loaded ) ) {
+
+        // TODO: This logic is clumsily structured, it should be improved. It also probably should include config->rules_dynamically_allocated
+        if ( count_errors( errors ) == 0 && config->keybinds_dynamically_allocated && config->buttonbinds_dynamically_allocated && config->fallback_config_loaded ) {
                 const Error_t backup_error = _parser_backup_config( &config->libconfig_config );
                 add_error( &errors, backup_error );
         } else {
-                if ( config->default_keybinds_loaded || config->default_buttonbinds_loaded ) {
+                if ( !config->keybinds_dynamically_allocated || !config->buttonbinds_dynamically_allocated ) {
                         log_warn( "Not saving config as backup, as hardcoded default bind values were used, not the user's\n" );
                 }
                 if ( config->fallback_config_loaded ) {
@@ -1300,7 +1312,7 @@ static Error_t _parse_buttonbind_click( Libconfig_Setting_t *buttonbind_setting,
  * @param[out] buttonbind_config Pointer to where to dynamically allocate and store all the parsed buttonbinds.
  * @param[out] buttonbinds_count Pointer to where to store the number of buttonbinds to be parsed.
  * This value does not take into account any failures during parsing the buttonbinds.
- * @param[out] default_buttonbinds_loaded Boolean to track if @p buttonbind_config has been dynamically
+ * @param[out] buttonbinds_dynamically_allocated Boolean to track if @p buttonbind_config has been dynamically
  * allocated yet or not, analogous to if the default buttonbinds are being used or not. Value is set
  * to `false` after allocation.
  *
@@ -1308,8 +1320,8 @@ static Error_t _parse_buttonbind_click( Libconfig_Setting_t *buttonbind_setting,
  *
  * @note TODO Maybe mention dynamic allocation in _parse_binds_config()?
  */
-static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_config, Button **buttonbind_config, unsigned int *buttonbinds_count, bool *default_buttonbinds_loaded ) {
-        return _parse_config_array( libconfig_config, "buttonbinds", sizeof( Button ), _parse_buttonbind_adapter, default_buttonbinds_loaded, (void **) buttonbind_config, buttonbinds_count );
+static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_config, Button **buttonbind_config, unsigned int *buttonbinds_count, bool *buttonbinds_dynamically_allocated ) {
+        return _parse_config_array( libconfig_config, "buttonbinds", sizeof( Button ), _parse_buttonbind_adapter, buttonbinds_dynamically_allocated, (void **) buttonbind_config, buttonbinds_count );
 }
 
 /**
@@ -1319,28 +1331,28 @@ static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_c
  *
  * @param libconfig_config TODO
  * @param config_array_name TODO
- * @param bind_struct_size TODO
- * @param bind_parser_function TODO
- * @param default_binds_loaded TODO
+ * @param element_struct_size TODO
+ * @param array_element_parser_function TODO
+ * @param dynamically_allocated TODO
  * @param parsed_config TODO
  * @param parsed_config_length TODO
  *
  * @return TODO
  */
-static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config, const char *config_array_name, const size_t bind_struct_size, const Bind_Parser_Function bind_parser_function,
-                                     bool *default_binds_loaded, void **parsed_config, unsigned int *parsed_config_length ) {
+static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config, const char *config_array_name, const size_t element_struct_size,
+                                     const Array_Element_Parser_Function_t array_element_parser_function, bool *dynamically_allocated, void **parsed_config, unsigned int *parsed_config_length ) {
 
         Errors_t returned_errors = { 0 };
 
-        const Libconfig_Setting_t *binds_setting = config_lookup( libconfig_config, config_array_name );
-        if ( binds_setting == NULL ) {
+        const Libconfig_Setting_t *parent_setting = config_lookup( libconfig_config, config_array_name );
+        if ( parent_setting == NULL ) {
                 log_error( "Problem reading config value \"%s\": Not found\n", config_array_name );
                 log_warn( "Default %s will be loaded.\n", config_array_name );
                 add_error( &returned_errors, ERROR_NOT_FOUND );
                 return returned_errors;
         }
 
-        *parsed_config_length = config_setting_length( binds_setting );
+        *parsed_config_length = config_setting_length( parent_setting );
         if ( *parsed_config_length == 0 ) {
                 log_warn( "No %s listed. Minimal defaults will be used.\n", config_array_name );
                 add_error( &returned_errors, ERROR_NOT_FOUND );
@@ -1349,25 +1361,26 @@ static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config,
 
         log_debug( "%u %s detected\n", *parsed_config_length, config_array_name );
 
-        // default_binds_loaded is also used to determine if we
+        // dynamically_allocated is also used to determine if we
         // should dynamically allocate the array or if it is already
-        // allocated some other way, usually on the stack.
-        if ( default_binds_loaded != NULL && parsed_config != NULL ) {
+        // allocated some other way, usually on the stack, as well
+        // as report that it has been dynamically allocated here.
+        if ( dynamically_allocated != NULL && parsed_config != NULL ) {
                 log_debug( "Dynamically allocating %s\n", config_array_name );
-                *parsed_config = calloc( *parsed_config_length, bind_struct_size );
+                *parsed_config = calloc( *parsed_config_length, element_struct_size );
                 if ( *parsed_config == NULL ) {
                         add_error( &returned_errors, ERROR_ALLOCATION );
                         return returned_errors;
                 } else {
-                        *default_binds_loaded = false;
+                        *dynamically_allocated = true;
                 }
         }
 
         for ( unsigned int i = 0; i < *parsed_config_length; i++ ) {
 
-                Libconfig_Setting_t *bind_setting = config_setting_get_elem( binds_setting, i );
+                Libconfig_Setting_t *child_setting = config_setting_get_elem( parent_setting, i );
 
-                if ( bind_setting == NULL ) {
+                if ( child_setting == NULL ) {
                         log_warn( "%s element index %u returned NULL\n", config_array_name, i );
                         add_error( &returned_errors, ERROR_NULL_VALUE );
                         continue;
@@ -1375,13 +1388,13 @@ static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config,
 
                 // Yes, parsed_config can be NULL, that is intended. It is used by things like
                 // theme or tag parsing that rely on global values.
-                void *element = parsed_config ? (char *) ( *parsed_config ) + ( i * bind_struct_size ) : NULL;
+                void *element = parsed_config ? (char *) ( *parsed_config ) + ( i * element_struct_size ) : NULL;
 
-                const Errors_t bind_parsing_error = bind_parser_function( bind_setting, i, element );
+                const Errors_t parsing_error = array_element_parser_function( child_setting, i, element );
 
-                if ( count_errors( bind_parsing_error ) ) {
-                        log_warn( "%s %d failed to be parsed. It had %d errors\n", config_array_name, i + 1, count_errors( bind_parsing_error ) );
-                        merge_errors( &returned_errors, bind_parsing_error );
+                if ( count_errors( parsing_error ) ) {
+                        log_warn( "%s %d failed to be parsed. It had %d errors\n", config_array_name, i + 1, count_errors( parsing_error ) );
+                        merge_errors( &returned_errors, parsing_error );
                         continue;
                 }
         }
@@ -1534,7 +1547,7 @@ static Error_t _parse_keybind_keysym( Libconfig_Setting_t *keybind_setting, KeyS
  * @param[out] keybind_config Pointer to where to dynamically allocate memory and store all the parsed keybinds.
  * @param[out] keybinds_count Pointer to where to store the number of keybinds to be parsed.
  * This value does not take into account any failures during parsing the keybinds.
- * @param[out] default_keybinds_loaded Boolean to track if @p keybind_config has been dynamically
+ * @param[out] keybinds_dynamically_allocated Boolean to track if @p keybind_config has been dynamically
  * allocated yet or not, analogous to if the default keybinds are being used or not. Value is set
  * to `false` after allocation.
  *
@@ -1542,8 +1555,8 @@ static Error_t _parse_keybind_keysym( Libconfig_Setting_t *keybind_setting, KeyS
  *
  * @note TODO Maybe mention dynamic allocation in _parse_binds_config()?
  */
-static Errors_t _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, Key **keybind_config, unsigned int *keybinds_count, bool *default_keybinds_loaded ) {
-        return _parse_config_array( libconfig_config, "keybinds", sizeof( Key ), _parse_keybind_adapter, default_keybinds_loaded, (void **) keybind_config, keybinds_count );
+static Errors_t _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, Key **keybind_config, unsigned int *keybinds_count, bool *keybinds_dynamically_allocated ) {
+        return _parse_config_array( libconfig_config, "keybinds", sizeof( Key ), _parse_keybind_adapter, keybinds_dynamically_allocated, (void **) keybind_config, keybinds_count );
 }
 
 /**
@@ -1571,15 +1584,15 @@ static void _parser_load_default_config( Parser_Config_t *config ) {
 
         config->fallback_config_loaded = false;
 
-        config->default_rules_loaded = true;
+        config->rules_dynamically_allocated = false;
         config->rule_array_size = LENGTH( rules );
         config->rule_array = (Rule *) rules;
 
-        config->default_keybinds_loaded = true;
+        config->keybinds_dynamically_allocated = false;
         config->keybind_array_size = LENGTH( keys );
         config->keybind_array = (Key *) keys;
 
-        config->default_buttonbinds_loaded = true;
+        config->buttonbinds_dynamically_allocated = false;
         config->buttonbind_array_size = LENGTH( buttons );
         config->buttonbind_array = (Button *) buttons;
 
@@ -1833,13 +1846,13 @@ static Error_t _parse_rule_string( Libconfig_Setting_t *rule_libconfig_setting, 
  * @param[out] rules_config Pointer to where to dynamically allocate memory and store all the parsed rules.
  * @param[out] rules_count Pointer to where to store the number of rules to be parsed. This value does not take into account
  * any failures during parsing the rules.
- * @param[out] default_rules_loaded Boolean to track if @p rules_config has been dynamically allocated yet or not, analogous
+ * @param[out] rules_dynamically_allocated Boolean to track if @p rules_config has been dynamically allocated yet or not, analogous
  * to if the default rules are being used or not. Value is set to `false` after allocation.
  *
  * @return TODO
  */
-static Errors_t _parse_rules_config( const Libconfig_Config_t *libconfig_config, Rule **rules_config, unsigned int *rules_count, bool *default_rules_loaded ) {
-        return _parse_config_array( libconfig_config, "rules", sizeof( Rule ), _parse_rule_adapter, default_rules_loaded, (void **) rules_config, rules_count );
+static Errors_t _parse_rules_config( const Libconfig_Config_t *libconfig_config, Rule **rules_config, unsigned int *rules_count, bool *rules_dynamically_allocated ) {
+        return _parse_config_array( libconfig_config, "rules", sizeof( Rule ), _parse_rule_adapter, rules_dynamically_allocated, (void **) rules_config, rules_count );
 }
 
 /**
