@@ -142,7 +142,6 @@ void config_cleanup( Parser_Config_t *config );
 Errors_t parse_config( Parser_Config_t *config );
 
 /// Public utility functions ///
-// TODO: Some of these should be converted to use Error_t returns
 void add_error( Errors_t *errors, Error_t error );
 unsigned int count_errors( Errors_t errors );
 char *estrdup( const char *string );
@@ -291,8 +290,6 @@ const struct Setting_Alias_Map {
         const bool optional;
         const long double range_min, range_max;
 } SETTING_ALIAS_MAP[ ] = {
-
-        // General
         { "showbar", &showbar, TYPE_BOOLEAN, true },
         { "topbar", &topbar, TYPE_BOOLEAN, true },
         { "resizehints", &resizehints, TYPE_BOOLEAN, true },
@@ -329,25 +326,11 @@ const struct Theme_Alias_Map {
  */
 void config_cleanup( Parser_Config_t *config ) {
 
-        if ( config->config_filepath != NULL ) {
-                free( config->config_filepath );
-        }
-
-        if ( config->rules_dynamically_allocated == false ) {
-                free( rules );
-        }
-
-        if ( config->keybinds_dynamically_allocated == false ) {
-                free( keys );
-        }
-
-        if ( config->buttonbinds_dynamically_allocated == false ) {
-                free( buttons );
-        }
-
-        if ( config->fonts_dynamically_allocated == false ) {
-                free( fonts );
-        }
+        if ( config->config_filepath != NULL ) free( config->config_filepath );
+        if ( config->rules_dynamically_allocated == false ) free( rules );
+        if ( config->keybinds_dynamically_allocated == false ) free( keys );
+        if ( config->buttonbinds_dynamically_allocated == false ) free( buttons );
+        if ( config->fonts_dynamically_allocated == false ) free( fonts );
 
         config_destroy( &config->libconfig_config );
 }
