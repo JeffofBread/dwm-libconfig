@@ -491,7 +491,7 @@ cleanup(void)
 	for (i = 0; i < CurLast; i++)
 		drw_cur_free(drw, cursor[i]);
 	for (i = 0; i < LENGTH(colors); i++)
-		free(scheme[i]);
+	        drw_scm_free(drw, scheme[i], 3);
 	free(scheme);
 	config_cleanup( &dwm_config );
 	XDestroyWindow(dpy, wmcheckwin);
@@ -1564,7 +1564,7 @@ setup(void)
 	root = RootWindow(dpy, screen);
 	drw = drw_create(dpy, screen, root, sw, sh);
 	parse_config( &dwm_config );
-	if (!drw_fontset_create(drw, fonts, LENGTH(fonts)))
+	if (!drw_fontset_create(drw, fonts, dwm_config.fonts_array_size))
 		die("no fonts could be loaded.");
 	lrpad = drw->fonts->h;
 	bh = drw->fonts->h + 2;

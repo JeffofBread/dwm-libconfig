@@ -120,9 +120,11 @@ typedef struct Parser_Config {
         bool rules_dynamically_allocated;
         bool keybinds_dynamically_allocated;
         bool buttonbinds_dynamically_allocated;
+        bool fonts_dynamically_allocated;
         unsigned int rule_array_size;
         unsigned int buttonbind_array_size;
         unsigned int keybind_array_size;
+        unsigned int fonts_array_size;
         char *config_filepath;
         Libconfig_Config_t libconfig_config;
 } Parser_Config_t;
@@ -132,6 +134,7 @@ Parser_Config_t dwm_config = { 0 };
 Key *keys = default_keys;
 Button *buttons = default_buttons;
 Rule *rules = default_rules;
+const char **fonts = default_fonts;
 
 // TODO: I should find a way to smoothen / harden the length checking of keys, buttons, and rules
 
@@ -169,8 +172,10 @@ static Errors_t _parse_buttonbind_adapter( Libconfig_Setting_t *buttonbind_setti
 static Error_t _parse_buttonbind_button( Libconfig_Setting_t *buttonbind_setting, unsigned int *parsed_button );
 static Error_t _parse_buttonbind_click( Libconfig_Setting_t *buttonbind_setting, unsigned int *parsed_click );
 static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_config, Button **buttonbind_config, unsigned int *buttonbinds_count, bool *buttonbinds_dynamically_allocated );
-static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config, const char *config_array_name, size_t element_struct_size, Array_Element_Parser_Function_t array_element_parser_function,
-                                     bool *dynamically_allocated, void **parsed_config, unsigned int *parsed_config_length );
+static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config, Libconfig_Setting_t *libconfig_setting, const char *config_array_name, size_t element_struct_size,
+                                     Array_Element_Parser_Function_t array_element_parser_function, bool *dynamically_allocated, void **parsed_config, unsigned int *parsed_config_length );
+static Errors_t _parse_font( Libconfig_Setting_t *fonts_setting, unsigned int fonts_index, const char *parsed_font );
+static Errors_t _parse_font_adapter( Libconfig_Setting_t *fonts_setting, unsigned int fonts_index, void *parsed_font );
 static Errors_t _parse_generic_settings( const Libconfig_Config_t *libconfig_config );
 static Errors_t _parse_keybind( Libconfig_Setting_t *keybind_setting, unsigned int keybind_index, Key *parsed_keybind );
 static Errors_t _parse_keybind_adapter( Libconfig_Setting_t *keybind_setting, unsigned int keybind_index, void *parsed_keybind );
@@ -339,6 +344,10 @@ void config_cleanup( Parser_Config_t *config ) {
 
         if ( config->buttonbinds_dynamically_allocated == false ) {
                 free( buttons );
+        }
+
+        if ( config->fonts_dynamically_allocated == false ) {
+                free( fonts );
         }
 
         config_destroy( &config->libconfig_config );
@@ -1309,7 +1318,7 @@ static Error_t _parse_buttonbind_click( Libconfig_Setting_t *buttonbind_setting,
  * @note TODO Maybe mention dynamic allocation in _parse_binds_config()?
  */
 static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_config, Button **buttonbind_config, unsigned int *buttonbinds_count, bool *buttonbinds_dynamically_allocated ) {
-        return _parse_config_array( libconfig_config, "buttonbinds", sizeof( Button ), _parse_buttonbind_adapter, buttonbinds_dynamically_allocated, (void **) buttonbind_config, buttonbinds_count );
+        return _parse_config_array( libconfig_config, NULL, "buttonbinds", sizeof( Button ), _parse_buttonbind_adapter, buttonbinds_dynamically_allocated, (void **) buttonbind_config, buttonbinds_count );
 }
 
 /**
@@ -1318,6 +1327,7 @@ static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_c
  * TODO
  *
  * @param libconfig_config TODO
+ * @param libconfig_setting TODO
  * @param config_array_name TODO
  * @param element_struct_size TODO
  * @param array_element_parser_function TODO
@@ -1331,12 +1341,29 @@ static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_c
  * elements fail to be parsed. For example, if the keybinds all (or many) fail, it could soft-lock the
  * user in the program. Not sure best way to do that, or if it is even the best idea to add.
  */
-static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config, const char *config_array_name, const size_t element_struct_size,
+static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config, Libconfig_Setting_t *libconfig_setting, const char *config_array_name, const size_t element_struct_size,
                                      const Array_Element_Parser_Function_t array_element_parser_function, bool *dynamically_allocated, void **parsed_config, unsigned int *parsed_config_length ) {
 
         Errors_t returned_errors = { 0 };
 
-        const Libconfig_Setting_t *parent_setting = config_lookup( libconfig_config, config_array_name );
+        if ( libconfig_config == NULL && libconfig_setting == NULL ) {
+                log_error( "libconfig_config and libconfig_setting were both NULL. Cannot parse without a context, please fix programming error\n" );
+                add_error( &returned_errors, ERROR_NULL_VALUE );
+                return returned_errors;
+        } else if ( libconfig_config != NULL && libconfig_setting != NULL ) {
+                log_error( "libconfig_config and libconfig_setting were both given. It is unable to tell which context was intended to be searched, please fix programming error\n" );
+                add_error( &returned_errors, ERROR_NULL_VALUE );
+                return returned_errors;
+        }
+
+        const Libconfig_Setting_t *parent_setting = NULL;
+
+        if ( libconfig_config != NULL ) {
+                parent_setting = config_lookup( libconfig_config, config_array_name );
+        } else if ( libconfig_setting != NULL ) {
+                parent_setting = config_setting_lookup( libconfig_setting, config_array_name );
+        }
+
         if ( parent_setting == NULL ) {
                 log_error( "Problem reading config value \"%s\": Not found. Default %s will be loaded\n", config_array_name, config_array_name );
                 add_error( &returned_errors, ERROR_NOT_FOUND );
@@ -1372,7 +1399,7 @@ static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config,
                 Libconfig_Setting_t *child_setting = config_setting_get_elem( parent_setting, i );
 
                 if ( child_setting == NULL ) {
-                        log_warn( "%s element index %u returned NULL\n", config_array_name, i );
+                        log_warn( "\"%s\" element number %u returned NULL\n", config_array_name, i + 1 );
                         add_error( &returned_errors, ERROR_NULL_VALUE );
                         continue;
                 }
@@ -1384,13 +1411,54 @@ static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config,
                 const Errors_t parsing_error = array_element_parser_function( child_setting, i, element );
 
                 if ( count_errors( parsing_error ) ) {
-                        log_warn( "%s %d failed to be parsed. It had %d errors\n", config_array_name, i + 1, count_errors( parsing_error ) );
+                        log_warn( "\"%s\" element number %d failed to be parsed. It had %d errors\n", config_array_name, i + 1, count_errors( parsing_error ) );
                         merge_errors( &returned_errors, parsing_error );
                         continue;
                 }
         }
 
         return returned_errors;
+}
+
+/**
+ * @brief TODO
+ *
+ * TODO
+ *
+ * @param fonts_setting TODO
+ * @param fonts_index TODO
+ * @param parsed_font TODO
+ *
+ * @return TODO
+ */
+static Errors_t _parse_font( Libconfig_Setting_t *fonts_setting, const unsigned int fonts_index, const char *parsed_font ) {
+
+        Errors_t returned_errors = { 0 };
+
+        // TODO: Is there a better way that will give a better error return?
+        parsed_font = config_setting_get_string( fonts_setting );
+
+        if ( parsed_font == NULL ) {
+                log_error( "Problem reading font element %d: Value doesn't exist or isn't a string\n", fonts_index + 1 );
+                add_error( &returned_errors, ERROR_NULL_VALUE );
+        }
+
+        return returned_errors;
+}
+
+/**
+ * @brief TODO
+ *
+ * TODO
+ *
+ * @param fonts_setting TODO
+ * @param fonts_index TODO
+ * @param parsed_font TODO
+ *
+ * @return TODO
+ */
+static Errors_t _parse_font_adapter( Libconfig_Setting_t *fonts_setting, const unsigned int fonts_index, void *parsed_font ) {
+        return _parse_font( fonts_setting, fonts_index, (const char *) parsed_font );
 }
 
 /**
@@ -1547,7 +1615,7 @@ static Error_t _parse_keybind_keysym( Libconfig_Setting_t *keybind_setting, KeyS
  * @note TODO Maybe mention dynamic allocation in _parse_binds_config()?
  */
 static Errors_t _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, Key **keybind_config, unsigned int *keybinds_count, bool *keybinds_dynamically_allocated ) {
-        return _parse_config_array( libconfig_config, "keybinds", sizeof( Key ), _parse_keybind_adapter, keybinds_dynamically_allocated, (void **) keybind_config, keybinds_count );
+        return _parse_config_array( libconfig_config, NULL, "keybinds", sizeof( Key ), _parse_keybind_adapter, keybinds_dynamically_allocated, (void **) keybind_config, keybinds_count );
 }
 
 /**
@@ -1583,6 +1651,9 @@ static void _parser_load_default_config( Parser_Config_t *config ) {
 
         config->buttonbinds_dynamically_allocated = false;
         config->buttonbind_array_size = LENGTH( default_buttons );
+
+        config->fonts_dynamically_allocated = false;
+        config->fonts_array_size = LENGTH( default_fonts );
 
         config_init( &config->libconfig_config );
 }
@@ -1843,7 +1914,7 @@ static Error_t _parse_rule_string( Libconfig_Setting_t *rule_libconfig_setting, 
  * @return TODO
  */
 static Errors_t _parse_rules_config( const Libconfig_Config_t *libconfig_config, Rule **rules_config, unsigned int *rules_count, bool *rules_dynamically_allocated ) {
-        return _parse_config_array( libconfig_config, "rules", sizeof( Rule ), _parse_rule_adapter, rules_dynamically_allocated, (void **) rules_config, rules_count );
+        return _parse_config_array( libconfig_config, NULL, "rules", sizeof( Rule ), _parse_rule_adapter, rules_dynamically_allocated, (void **) rules_config, rules_count );
 }
 
 /**
@@ -1859,6 +1930,11 @@ static Errors_t _parse_rules_config( const Libconfig_Config_t *libconfig_config,
 static Errors_t _parse_tag( Libconfig_Setting_t *tags_setting, const unsigned int tags_index ) {
 
         Errors_t returned_errors = { 0 };
+
+        if ( tags_index >= LENGTH( tags ) ) {
+                add_error( &returned_errors, ERROR_RANGE );
+                return returned_errors;
+        }
 
         const char *original_tag_name = tags[ tags_index ];
 
@@ -1901,11 +1977,10 @@ static Errors_t _parse_tags_adapter( Libconfig_Setting_t *tags_setting, const un
  */
 static Errors_t _parse_tags_config( const Libconfig_Config_t *libconfig_config ) {
         unsigned int tags_count = 0;
-        const Errors_t returned_errors = _parse_config_array( libconfig_config, "tags", 0, _parse_tags_adapter, NULL, NULL, &tags_count );
+        const Errors_t returned_errors = _parse_config_array( libconfig_config, NULL, "tags", 0, _parse_tags_adapter, NULL, NULL, &tags_count );
 
         if ( tags_count > LENGTH( tags ) ) {
                 log_warn( "More than %lu tag names detected (%d were detected) while parsing config, only the first %lu will be used\n", LENGTH( tags ), tags_count, LENGTH( tags ) );
-                tags_count = LENGTH( tags );
         } else if ( tags_count < LENGTH( tags ) ) {
                 log_warn( "Less than %lu tag names detected while parsing config, filler tags will be used for the remainder\n", LENGTH( tags ) );
         }
@@ -1934,7 +2009,11 @@ static Errors_t _parse_theme( Libconfig_Setting_t *theme_libconfig_setting, cons
                 return returned_errors;
         }
 
-        // TODO: Font may be best as an array of strings to support many fonts
+        const Errors_t font_errors = _parse_config_array( NULL, theme_libconfig_setting, "fonts", sizeof( char * ), _parse_font_adapter, &dwm_config.fonts_dynamically_allocated, (void **) fonts,
+                                                          &dwm_config.fonts_array_size );
+
+        merge_errors( &returned_errors, font_errors );
+
         for ( int i = 0; i < LENGTH( THEME_ALIAS_MAP ); i++ ) {
                 const Error_t error = _libconfig_setting_lookup_string( theme_libconfig_setting, THEME_ALIAS_MAP[ i ].path, THEME_ALIAS_MAP[ i ].value );
                 add_error( &returned_errors, error );
@@ -1974,7 +2053,7 @@ static Errors_t _parse_theme_adapter( Libconfig_Setting_t *theme_setting, const 
  */
 static Errors_t _parse_theme_config( const Libconfig_Config_t *libconfig_config ) {
         unsigned int unused = 0;
-        return _parse_config_array( libconfig_config, "themes", 0, _parse_theme_adapter, NULL, NULL, &unused );
+        return _parse_config_array( libconfig_config, NULL, "themes", 0, _parse_theme_adapter, NULL, NULL, &unused );
 }
 
 /// Parser internal utility functions ///
