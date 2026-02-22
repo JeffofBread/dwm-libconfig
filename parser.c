@@ -1334,15 +1334,14 @@ static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config,
 
         const Libconfig_Setting_t *parent_setting = config_lookup( libconfig_config, config_array_name );
         if ( parent_setting == NULL ) {
-                log_error( "Problem reading config value \"%s\": Not found\n", config_array_name );
-                log_warn( "Default %s will be loaded.\n", config_array_name );
+                log_error( "Problem reading config value \"%s\": Not found. Default %s will be loaded\n", config_array_name, config_array_name );
                 add_error( &returned_errors, ERROR_NOT_FOUND );
                 return returned_errors;
         }
 
         *parsed_config_length = config_setting_length( parent_setting );
         if ( *parsed_config_length == 0 ) {
-                log_warn( "No %s listed. Minimal defaults will be used.\n", config_array_name );
+                log_warn( "No %s listed. Default %s will be used\n", config_array_name, config_array_name );
                 add_error( &returned_errors, ERROR_NOT_FOUND );
                 return returned_errors;
         }
@@ -1623,6 +1622,7 @@ static Errors_t _parser_open_config( Parser_Config_t *config ) {
                 if ( config_filepaths[ config_filepaths_length ] == NULL ) add_error( &returned_errors, ERROR_NULL_VALUE );
                 config_filepaths_length++;
                 free( config->config_filepath );
+                config->config_filepath = NULL;
         }
 
         // $XDG_CONFIG_HOME/.config/dwm.conf or $HOME/.config/dwm.conf
@@ -1718,8 +1718,6 @@ static Errors_t _parser_open_config( Parser_Config_t *config ) {
         }
 
         config_destroy( &config->libconfig_config );
-
-        fclose( tmp_file );
 
         return returned_errors;
 }
