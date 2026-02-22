@@ -116,7 +116,6 @@ typedef Errors_t ( *Array_Element_Parser_Function_t )( Libconfig_Setting_t *elem
 // some of the configuration data that can't
 // be written to variables in `config.(def.).h`
 typedef struct Parser_Config {
-        bool fallback_config_loaded;
         bool rules_dynamically_allocated;
         bool keybinds_dynamically_allocated;
         bool buttonbinds_dynamically_allocated;
@@ -182,7 +181,7 @@ static Errors_t _parse_keybind_adapter( Libconfig_Setting_t *keybind_setting, un
 static Error_t _parse_keybind_keysym( Libconfig_Setting_t *keybind_setting, KeySym *parsed_keysym );
 static Errors_t _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, Key **keybind_config, unsigned int *keybinds_count, bool *keybinds_dynamically_allocated );
 static void _parser_load_default_config( Parser_Config_t *config );
-static Errors_t _parser_open_config( Parser_Config_t *config );
+static Errors_t _parser_open_config( Parser_Config_t *config, bool *fallback_config_loaded );
 static Error_t _parser_resolve_include_directory( Parser_Config_t *config );
 static Errors_t _parse_rule( Libconfig_Setting_t *rule_libconfig_setting, int rule_index, Rule *parsed_rule );
 static Errors_t _parse_rule_adapter( Libconfig_Setting_t *rule_setting, unsigned int rule_index, void *parsed_rule );
@@ -392,7 +391,8 @@ Errors_t parse_config( Parser_Config_t *config ) {
 
         _parser_load_default_config( config );
 
-        merge_errors( &errors, _parser_open_config( config ) );
+        bool fallback_config_loaded = false;
+        merge_errors( &errors, _parser_open_config( config, &fallback_config_loaded ) );
 
         // Exit the parser if we haven't acquired a configuration file.
         // Without a configuration file, there isn't a reason to continue parsing.
@@ -418,14 +418,14 @@ Errors_t parse_config( Parser_Config_t *config ) {
         // passes, or is valid enough to warrant backing up.
 
         // TODO: This logic is clumsily structured, it should be improved. It also probably should include config->rules_dynamically_allocated
-        if ( count_errors( errors ) == 0 && config->keybinds_dynamically_allocated && config->buttonbinds_dynamically_allocated && config->fallback_config_loaded ) {
+        if ( count_errors( errors ) == 0 && config->keybinds_dynamically_allocated && config->buttonbinds_dynamically_allocated && fallback_config_loaded ) {
                 const Error_t backup_error = _parser_backup_config( &config->libconfig_config );
                 add_error( &errors, backup_error );
         } else {
                 if ( !config->keybinds_dynamically_allocated || !config->buttonbinds_dynamically_allocated ) {
                         log_warn( "Not saving config as backup, as hardcoded default bind values were used, not the user's\n" );
                 }
-                if ( config->fallback_config_loaded ) {
+                if ( fallback_config_loaded ) {
                         log_warn( "Not saving config as backup, as the parsed configuration file is a system fallback configuration\n" );
                 }
                 if ( count_errors( errors ) != 0 ) {
@@ -1641,8 +1641,6 @@ static void _parser_load_default_config( Parser_Config_t *config ) {
                 exit( EXIT_FAILURE );
         }
 
-        config->fallback_config_loaded = false;
-
         config->rules_dynamically_allocated = false;
         config->rule_array_size = LENGTH( default_rules );
 
@@ -1674,13 +1672,14 @@ static void _parser_load_default_config( Parser_Config_t *config ) {
  * the value of @ref Parser_Config_t::config_filepath to see if the user passed in a
  * custom configuration filepath from the cli. In @p config, we also store the filepath
  * and libconfig configuration if we find and parse a valid configuration file.
+ * @param fallback_config_loaded
  *
  * @return TODO
  *
  * @todo These error returns may not be the most accurate, not sure exactly the best fits.
  * @todo This function is a bit of a mess, it could be cut down.
  */
-static Errors_t _parser_open_config( Parser_Config_t *config ) {
+static Errors_t _parser_open_config( Parser_Config_t *config, bool *fallback_config_loaded ) {
 
         Errors_t returned_errors = { 0 };
         int i, config_filepaths_length = 0;
@@ -1770,7 +1769,7 @@ static Errors_t _parser_open_config( Parser_Config_t *config ) {
 
                 // Check if it's a user's custom configuration
                 if ( strcmp( config_filepaths[ i ], config_backup ) == 0 || strcmp( config_filepaths[ i ], config_fallback ) == 0 ) {
-                        config->fallback_config_loaded = true;
+                        *fallback_config_loaded = true;
                 }
 
                 for ( i = 0; i < config_filepaths_length; i++ ) {
