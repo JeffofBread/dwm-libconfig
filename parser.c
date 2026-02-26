@@ -163,7 +163,8 @@ static Error_t _parser_backup_config( Libconfig_Config_t *libconfig_config );
 static Error_t _parse_bind_argument( Libconfig_Setting_t *bind_setting, Data_Type_t argument_type, long double range_min, long double range_max, Arg *parsed_argument );
 static Errors_t _parse_bind_core( Libconfig_Setting_t *bind_setting, unsigned int bind_index, unsigned int *parsed_modifier, void ( **parsed_function )( const Arg * ), Arg *parsed_argument,
                                   Data_Type_t *parsed_argument_type, const char *bind_array_path );
-static Error_t _parse_bind_function( Libconfig_Setting_t *bind_setting, void ( **parsed_function )( const Arg * ), Data_Type_t *parsed_arg_type, long double *parsed_range_min, long double *parsed_range_max );
+static Error_t _parse_bind_function( Libconfig_Setting_t *bind_setting, void ( **parsed_function )( const Arg * ), Data_Type_t *parsed_argument_type, long double *parsed_range_min,
+                                     long double *parsed_range_max );
 static Error_t _parse_bind_modifier( Libconfig_Setting_t *bind_setting, unsigned int *parsed_modifier );
 static Errors_t _parse_buttonbind( Libconfig_Setting_t *buttonbind_setting, unsigned int buttonbind_index, Button *parsed_buttonbind );
 static Errors_t _parse_buttonbind_adapter( Libconfig_Setting_t *buttonbind_setting, unsigned int buttonbind_index, void *parsed_keybind );
@@ -1079,14 +1080,15 @@ static Errors_t _parse_bind_core( Libconfig_Setting_t *bind_setting, const unsig
  *
  * @param[in] bind_setting TODO
  * @param[out] parsed_function TODO
- * @param[out] parsed_arg_type Pointer to where to store the data type of the @ref Arg that can be passed to @p parsed_function.
+ * @param[out] parsed_argument_type Pointer to where to store the data type of the @ref Arg that can be passed to @p parsed_function.
  * @param[out] parsed_range_min Pointer to where to store the minimum value of the @ref Arg that can be passed to @p parsed_function.
  * @param[out] parsed_range_max Pointer to where to store the maximum value of the @ref Arg that can be passed to @p parsed_function.
  *
  * @return TODO
  */
 
-static Error_t _parse_bind_function( Libconfig_Setting_t *bind_setting, void ( **parsed_function )( const Arg * ), Data_Type_t *parsed_arg_type, long double *parsed_range_min, long double *parsed_range_max ) {
+static Error_t _parse_bind_function( Libconfig_Setting_t *bind_setting, void ( **parsed_function )( const Arg * ), Data_Type_t *parsed_argument_type, long double *parsed_range_min,
+                                     long double *parsed_range_max ) {
 
         const char *function_string = NULL;
         const Error_t lookup_error = _libconfig_setting_lookup_string( bind_setting, "function", &function_string );
@@ -1096,7 +1098,7 @@ static Error_t _parse_bind_function( Libconfig_Setting_t *bind_setting, void ( *
         for ( int i = 0; i < LENGTH( FUNCTION_ALIAS_MAP ); i++ ) {
                 if ( strcasecmp( function_string, FUNCTION_ALIAS_MAP[ i ].name ) == 0 ) {
                         *parsed_function = FUNCTION_ALIAS_MAP[ i ].func;
-                        *parsed_arg_type = FUNCTION_ALIAS_MAP[ i ].arg_type;
+                        *parsed_argument_type = FUNCTION_ALIAS_MAP[ i ].arg_type;
                         *parsed_range_min = FUNCTION_ALIAS_MAP[ i ].range_min;
                         *parsed_range_max = FUNCTION_ALIAS_MAP[ i ].range_max;
                         return ERROR_NONE;
@@ -1301,7 +1303,8 @@ static Error_t _parse_buttonbind_click( Libconfig_Setting_t *buttonbind_setting,
  * @note TODO Maybe mention dynamic allocation in _parse_binds_config()?
  */
 static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_config, Button **buttonbind_config, unsigned int *buttonbinds_count, bool *buttonbinds_dynamically_allocated ) {
-        return _parse_config_array( libconfig_config, NULL, "buttonbinds", sizeof( Button ), _parse_buttonbind_adapter, buttonbinds_dynamically_allocated, (void **) buttonbind_config, buttonbinds_count );
+        return _parse_config_array( libconfig_config, NULL, "buttonbinds", sizeof( Button ), _parse_buttonbind_adapter, buttonbinds_dynamically_allocated, (void **) buttonbind_config,
+                                    buttonbinds_count );
 }
 
 /**
@@ -1477,8 +1480,8 @@ static Errors_t _parse_generic_settings( const Libconfig_Config_t *libconfig_con
                                 break;
 
                         case TYPE_FLOAT:
-                                returned_error = _libconfig_lookup_float( libconfig_config, SETTING_ALIAS_MAP[ i ].name, (float) SETTING_ALIAS_MAP[ i ].range_min, (float) SETTING_ALIAS_MAP[ i ].range_max,
-                                                                          SETTING_ALIAS_MAP[ i ].value );
+                                returned_error = _libconfig_lookup_float( libconfig_config, SETTING_ALIAS_MAP[ i ].name, (float) SETTING_ALIAS_MAP[ i ].range_min,
+                                                                          (float) SETTING_ALIAS_MAP[ i ].range_max, SETTING_ALIAS_MAP[ i ].value );
                                 break;
 
                         case TYPE_STRING:
@@ -1516,8 +1519,8 @@ static Errors_t _parse_keybind( Libconfig_Setting_t *keybind_setting, const unsi
 
         Errors_t returned_errors = { 0 };
 
-        merge_errors( &returned_errors, _parse_bind_core( keybind_setting, keybind_index, &parsed_keybind->mod, &parsed_keybind->func, &parsed_keybind->arg, (Data_Type_t *) &parsed_keybind->argument_type,
-                                                          "Keybind" ) );
+        merge_errors( &returned_errors, _parse_bind_core( keybind_setting, keybind_index, &parsed_keybind->mod, &parsed_keybind->func, &parsed_keybind->arg,
+                                                          (Data_Type_t *) &parsed_keybind->argument_type, "Keybind" ) );
 
         const Error_t keysym_error = _parse_keybind_keysym( keybind_setting, &parsed_keybind->keysym );
         add_error( &returned_errors, keysym_error );
@@ -1740,7 +1743,8 @@ static Errors_t _parser_open_config( Parser_Config_t *config, bool *fallback_con
                 }
 
                 if ( config_read( &config->libconfig_config, tmp_file ) == CONFIG_FALSE ) {
-                        log_warn( "Problem parsing config file \"%s\", line %d: %s\n", config_filepaths[ i ], config_error_line( &config->libconfig_config ), config_error_text( &config->libconfig_config ) );
+                        log_warn( "Problem parsing config file \"%s\", line %d: %s\n", config_filepaths[ i ], config_error_line( &config->libconfig_config ),
+                                  config_error_text( &config->libconfig_config ) );
                         add_error( &returned_errors, ERROR_NULL_VALUE );
                         fclose( tmp_file );
                         continue;
@@ -2180,7 +2184,7 @@ static Error_t _libconfig_lookup_uint( const Libconfig_Config_t *config, const c
 
         const unsigned int tmp_uint = (unsigned int) tmp_int;
 
-        if ( tmp_uint < range_min || tmp_uint > range_max ) return ERROR_NOT_FOUND;
+        if ( tmp_uint < range_min || tmp_uint > range_max ) return ERROR_RANGE;
 
         *parsed_value = tmp_uint;
 
