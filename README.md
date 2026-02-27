@@ -8,12 +8,12 @@ you don't need to recompile and re-install. Want to change your theme? A keybind
 simple as that. I highly recommend pairing dwm-libconfig with the [restartsig](https://dwm.suckless.org/patches/restartsig/) patch for easy 
 hot-reloading of dwm. 
 
-Some notes however, this is a backported featured from a very different project. Certain design choices or style are definitely a little
-out of place for a [suckless](https://suckless.org/) application. It is quite overbuild for the level of configuration dwm offers by default,
-and is a bit "bloated" for that reason. It could definitely be slimmed down to a much lower line count at the sacrifice of modularity or
-verbosity. That being said, I did design it to be quite robust, extensible, and modular. With a little editing you can add just about anything
-you would like to the configuration relative ease, or slim down what already exists. If you would like to reach out, please do, I am more than 
-happy to help. See [Reaching Out](#reaching-out) for contact info.
+Some notes however, this is a backported featured from a different project. The code style and design choices are definitely a little
+out of place for a [suckless](https://suckless.org/) application. It is also quite overbuild for the level of configuration dwm offers by
+default, and is a bit "bloated" for that reason. It could definitely be slimmed down to a much lower line count at the sacrifice of
+modularity or verbosity. That being said, I did design it to be quite robust, extensible, and modular. With a little editing you can add
+just about anything you would like to the configuration relative ease, or slim down what already exists. If you would like to reach out,
+please do, I am more than happy to help. See [Reaching Out](#reaching-out) for contact info.
 
 ## Requirements
 The patch is based on dwm 6.8, so it is recommended to start there. You will need all the base dwm dependencies plus 
@@ -36,46 +36,49 @@ sudo zypper install libconfig-devel
 ```
 
 ## Configuration
+dwm-libconfig will search for a configuration in a few places (in this order):
 
-dwm-libconfig will search for a configuration in a few places. It will first look for any configuration file passed from the CLI using 
-`-c PATH`. If it finds no file or an invalid configuration file, it will continue. It will then search `~/.config/`, `~/.config/dwm/`.
-If it is still unable to find a configuration, it will try and locate a backup of your latest successfully parsed configuration. 
-This will be located at `~/.local/share/dwm/dwm_last.conf`. Note, this is NOT where YOU should save a file to. This is used as a backup
-of your configuration, created and managed by dwm. Finally, if it can't find any user configurations, it will search in `/etc/dwm/`.
-This is where a default, minimal configuration is saved. It will not be backed up, and purely exists as a fallback configuration. You
-can edit this if you feel you need to, but it is probably best to leave it alone. Finally, should the parser completely fail and be
-unable to locate a single valid configuration file, it will use an internal, hardcoded set of default values. 
+1. Configuration file passed in through the CLI (`-c PATH`)
+2. `$XDG_CONFIG_HOME/.config/dwm.conf` or `$HOME/.config/dwm.conf` if `$XDG_CONFIG_HOME` isn't defined
+3. `$XDG_CONFIG_HOME/.config/dwm/dwm.conf` or `$HOME/.config/dwm/dwm.conf` if `$XDG_CONFIG_HOME` isn't defined
+
+If those three paths fail or lead to invalid configurations, dwm will try and use fallback configurations. These are not intended to be
+managed or edited directly by the user, and will not be backed up at the end of parsing. 
+
+4. `$XDG_DATA_HOME/.local/share/dwm/dwm_last.conf` or `$HOME/.local/share/dwm/dwm_last.conf` if `$XDG_CONFIG_HOME` isn't defined
+5. `/etc/dwm/dwm.conf`
+
+The first of these two is a backup of the last successfully parsed user configuration. The second is a system-wide default configuration
+installed alongside dwm during `make install`. In the event all configuration files fail to be found or contain major syntax errors
+making parsing impossible, dwm will fall back to the default values defined in `config.h`.
 
 Now about the configuration file itself. The example configuration provided with this repository (`dwm.conf`) contains most of the
-documentation you should need. All elements in the file must follow the libconfig file syntax, read up on it here: 
+documentation you should need. I recommend starting with this file and tweaking to fit your needs. All elements in the file must
+follow the [libconfig](https://hyperrealm.github.io/libconfig/) file syntax, read up on it here: 
+
  - https://hyperrealm.github.io/libconfig/libconfig_manual.html#Configuration-Files
 
-Any issues with the syntax will cause parsing to fail, as libconfig is not very fault-tolerant when it comes to syntax. Warning,
-older versions of libconfig do not support trailing commas. This means that parsing could fail if you place a comma after the final
-element in a list. Please be careful about this, it can catch you off guard quite easily. Also, be careful with commas surrounding
-the button/key binds. libconfig supports multi-line strings, meaning if you forget a comma after a line of binds, libconfig will
-combine the line you just wrote and the next together into one long bind, causing that keybind to likely fail to parse.
+If there are major syntax errors, [libconfig](https://hyperrealm.github.io/libconfig/) will not be able to parse the file correctly, and parsing will fail, with dwm
+falling back on the default configuration values specified in `config.h`. Minor syntax errors however, like an incorrect field in
+a bind or a single setting, will not cause parsing to fail. In the case of a bind, that bind will simply be skipped, or in the case
+of a setting, the default value from `config.h` will be used instead. 
 
 ## Performance Impact
-There is definitely a performance impact, but it is generally minimal. In my testing, even in extremely resource limited VM or emulated
+
+There is definitely a performance impact, but it is quite minimal. In my testing, even in extremely resource limited VM or emulated
 systems, the time to parse a configuration is negligible. The longest time I found in my testing was around 400ms, with the rest of the
 setup of dwm (mainly `setup()` and `scan()`) taking roughly 1s. During runtime, there are also some small performance losses, mainly
-surrounding access time on elements in the key and button bind arrays. In dwm-libconfig, they are allocated on the heap, vs in
-traditional dwm where they are on the stack. Combined with the loss of some compiler optimizations made in default dwm, you can run
-into higher input latency on dwm key and button bind actions. Though, again, this is generally quite minimal. In the worst case
-scenarios I found that it can add around 20-25ms of delay when accessing elements on opposite sides of the array in an extremely low
-resource system or VM.
+surrounding access time on elements in the key and button bind arrays. In dwm-libconfig, they are not defined at compile time, vs in
+traditional dwm where they are. Combined with the loss of compiler optimizations, this can lead to higher input latency on dwm key and
+button bind actions. Though, again, this is generally extremely minimal. In the worst case scenarios I found that it can add around
+20-25ms of delay when accessing elements on opposite sides of the array in low resource VM or emulated environments.
 
 With all that said, real world performance losses are generally imperceptible. I have a relatively modern laptop and desktop PC, and both
-see less than 3ms to parse a complex configuration, and key / button bind latency of less than .3ms at worst. And, lets be honest, if
-you are here looking at this patch, optimizing down to the last atom is not likely your chief concern.
+see less than .75ms to parse a complex configuration, and key / button bind latency of less than .2ms at worst.
 
 ## TODOs
 There are still a few things I want to adjust before releasing this as a proper patch:
 - [ ] Complete the documentation.
-- [x] Fix the very clumsy logging. `print_log()` is just a placeholder macro to bridge the gap between my fully fledged logger and dwm's original source. It needs a little more polish.
-- [x] If I can, I want to remove the need for most functions called by a bind to be made a non-const `Arg`. If I can solve this, it will reduce the codebase impact of the patch and reduce conflicts with other patches a little.
-- [x] Reduce codebase impact as much as possible to improve patch compatability.
 - [ ] Add an extra diff(s) to support patches like [restartsig](https://dwm.suckless.org/patches/restartsig/) out of the box
 
 ## Reaching Out
