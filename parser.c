@@ -1051,7 +1051,7 @@ static Error_t _parse_bind_argument( Libconfig_Setting_t *bind_setting, const Da
  * @param parsed_modifier TODO
  * @param parsed_function TODO
  * @param parsed_argument TODO
- * @param bind_array_path
+ * @param bind_array_path TODO
  *
  * @return TODO
  */
@@ -1212,7 +1212,16 @@ static Errors_t _parse_buttonbind( Libconfig_Setting_t *buttonbind_setting, cons
 
         if ( click_error != ERROR_NONE ) {
                 log_error( "Buttonbind %d invalid, unable to parse bind's click: %s\n", buttonbind_index + 1, ERROR_ENUM_STRINGS[ click_error ] );
-                return returned_errors;
+        }
+
+        // Ensure button is zeroed and doesn't accidentally have any
+        // data left over from parsing that could cause unusual behavior
+        if ( errors_failure_count( &returned_errors ) != 0 ) {
+                parsed_buttonbind->click = 0;
+                parsed_buttonbind->mask = 0;
+                parsed_buttonbind->button = 0;
+                parsed_buttonbind->func = NULL;
+                parsed_buttonbind->arg.i = 0;
         }
 
         return returned_errors;
@@ -1238,7 +1247,7 @@ static Errors_t _parse_buttonbind_adapter( Libconfig_Setting_t *buttonbind_setti
  *
  * TODO
  *
- * @param buttonbind_setting
+ * @param[in] buttonbind_setting
  * @param[out] parsed_button TODO
  *
  * @return TODO
@@ -1542,7 +1551,15 @@ static Errors_t _parse_keybind( Libconfig_Setting_t *keybind_setting, const unsi
 
         if ( keysym_error != ERROR_NONE ) {
                 log_error( "Keybind %d invalid, unable to parse bind's key: %s\n", keybind_index + 1, ERROR_ENUM_STRINGS[ keysym_error ] );
-                return returned_errors;
+        }
+
+        // Ensure key is zeroed and doesn't accidentally have any
+        // data left over from parsing that could cause unusual behavior
+        if ( errors_failure_count( &returned_errors ) != 0 ) {
+                parsed_keybind->mod = 0;
+                parsed_keybind->keysym = NoSymbol;
+                parsed_keybind->func = NULL;
+                parsed_keybind->arg.i = 0;
         }
 
         return returned_errors;
@@ -1568,7 +1585,7 @@ static Errors_t _parse_keybind_adapter( Libconfig_Setting_t *keybind_setting, co
  *
  * TODO
  *
- * @param keybind_setting TODO
+ * @param[in] keybind_setting TODO
  * @param[out] parsed_keysym Pointer to where to store the keysym value parsed from @p keysym_string.
  *
  * @return TODO
@@ -1679,6 +1696,7 @@ static void _parser_load_default_config( Parser_Config_t *config ) {
  *
  * @todo These error returns may not be the most accurate, not sure exactly the best fits.
  * @todo This function is a bit of a mess, it could be cut down.
+ * @todo Should the parser even look for another config file if one is passed from the CLI? Could be deceptive behavior.
  */
 static Errors_t _parser_open_config( Parser_Config_t *config, bool *fallback_config_loaded ) {
 
@@ -1702,7 +1720,7 @@ static Errors_t _parser_open_config( Parser_Config_t *config, bool *fallback_con
 
         // $XDG_CONFIG_HOME/.config/dwm.conf or $HOME/.config/dwm.conf
         char *config_top_directory = get_xdg_config_home();
-        if ( !config_top_directory ) {
+        if ( config_top_directory == NULL ) {
                 log_warn( "Unable to acquire top level configuration directory\n" );
                 add_error( &returned_errors, ERROR_NULL_VALUE );
         } else {
@@ -1712,7 +1730,7 @@ static Errors_t _parser_open_config( Parser_Config_t *config, bool *fallback_con
 
         // $XDG_CONFIG_HOME/.config/dwm/dwm.conf or $HOME/.config/dwm/dwm.conf
         char *config_sub_directory = get_xdg_config_home();
-        if ( !config_sub_directory ) {
+        if ( config_sub_directory == NULL ) {
                 log_warn( "Unable to acquire dwm configuration directory\n" );
                 add_error( &returned_errors, ERROR_NULL_VALUE );
         } else {
@@ -1722,7 +1740,7 @@ static Errors_t _parser_open_config( Parser_Config_t *config, bool *fallback_con
 
         // $XDG_DATA_HOME/.local/share/dwm/dwm_last.conf or $HOME/.local/share/dwm/dwm_last.conf
         char *config_backup = get_xdg_data_home();
-        if ( !config_backup ) {
+        if ( config_backup == NULL ) {
                 log_warn( "Unable to acquire dwm configuration backup directory\n" );
                 add_error( &returned_errors, ERROR_NULL_VALUE );
         } else {
@@ -1732,7 +1750,7 @@ static Errors_t _parser_open_config( Parser_Config_t *config, bool *fallback_con
 
         // /etc/dwm/dwm.conf
         char *config_fallback = estrdup( "/etc/dwm/dwm.conf" );
-        if ( !config_fallback ) {
+        if ( config_fallback == NULL ) {
                 log_warn( "Unable to acquire dwm system configuration fallback directory\n" );
                 add_error( &returned_errors, ERROR_ALLOCATION );
         } else {
@@ -1851,7 +1869,21 @@ static Errors_t _parse_rule( Libconfig_Setting_t *rule_libconfig_setting, const 
         add_error( &returned_errors, _parse_rule_string( rule_libconfig_setting, "title", rule_index, &parsed_rule->title ) );
         add_error( &returned_errors, _libconfig_setting_lookup_uint( rule_libconfig_setting, "tag-mask", 0, TAGMASK, &parsed_rule->tags ) );
         add_error( &returned_errors, _libconfig_setting_lookup_int( rule_libconfig_setting, "monitor", -1, 99, &parsed_rule->monitor ) );
+
+        // Note: This logically should be a boolean value, but I didn't want to
+        // deviate from the coded type, so I kept it an int and range check it.
         add_error( &returned_errors, _libconfig_setting_lookup_int( rule_libconfig_setting, "floating", 0, 1, &parsed_rule->isfloating ) );
+
+        // Ensure rule is zeroed and doesn't accidentally have any
+        // data left over from parsing that could cause unusual behavior
+        if ( errors_failure_count( &returned_errors ) != 0 ) {
+                parsed_rule->class = NULL;
+                parsed_rule->instance = NULL;
+                parsed_rule->title = NULL;
+                parsed_rule->tags = 0;
+                parsed_rule->isfloating = 0;
+                parsed_rule->monitor = 0;
+        }
 
         log_debug( "Rule %d: class: \"%s\", instance: \"%s\", title: \"%s\", tag-mask: %d, monitor: %d, floating: %d\n", rule_index, parsed_rule->class, parsed_rule->instance, parsed_rule->title,
                    parsed_rule->tags, parsed_rule->monitor, parsed_rule->isfloating );
