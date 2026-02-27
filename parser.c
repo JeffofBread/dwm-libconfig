@@ -25,19 +25,16 @@
  *
  * @note I (JeffOfBread) did not write all the code present in this file. Though I have made minor changes,
  * it's still not fair to say I wrote the code. I have listed them above as authors, and all code I used from
- * them (most of the utility functions) has been credited accordingly.
+ * them (many of the utility functions) has been credited accordingly.
  *
- * @todo Finish documentation
+ * @todo Finish documentation. Make sure function arguments are noted for being dynamically allocated in that function or its sub functions.
  * @todo Overhaul printing / logging to match the new error handling.
- * @todo Make sure function arguments are noted for being dynamically allocated in that function or its sub functions.
  * @todo It may be worth going back to having a header, this file is very heavy.
  */
 
-#include <ctype.h>
 #include <errno.h>
 #include <libconfig.h>
 #include <libgen.h>
-#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -52,21 +49,23 @@
 #define _TOSTRING( X ) #X
 #define TOSTRING( X ) _TOSTRING( X )
 
-// Uncomment as necessary to enable log printing for debugging.
-// This is just a crude compatability macro between my own
-// logging system, which I didn't want to bring over just
-// for the config parser.
-#define log_trace( ... ) //_log( "TRACE", __VA_ARGS__ )
-#define log_debug( ... ) //_log( "DEBUG", __VA_ARGS__ )
+// Comment or uncomment as necessary to customize the level of logging.
+// I would prefer a proper logging system, but that seems out the scope
+// of this patch, and this works good enough for the patch's needs.
+
+//#define log_trace( ... ) _log( "TRACE", __VA_ARGS__ ) // Unused, but you are welcome to enable and use it.
+#define log_debug( ... ) _log( "DEBUG", __VA_ARGS__ )
 #define log_info( ... ) _log( "INFO", __VA_ARGS__ )
 #define log_warn( ... ) _log( "WARN", __VA_ARGS__ )
 #define log_error( ... ) _log( "ERROR", __VA_ARGS__ )
 #define log_fatal( ... ) _log( "FATAL", __VA_ARGS__ )
 #define _log( LEVEL, ... ) fprintf( stdout, LEVEL ": [" __FILE__ "::" TOSTRING(__LINE__) "]: "  __VA_ARGS__ )
 
-/**
- * TODO
- */
+// Enum used to keep track of what kind of data
+// is to be stored in an Arg struct. This is
+// needed to properly parse the correct type
+// of data for whatever variable the data will
+// be stored in.
 typedef enum Data_Type {
         TYPE_NONE = 0,
         TYPE_BOOLEAN,
@@ -100,7 +99,7 @@ const char *ERROR_ENUM_STRINGS[ ] = { "None", "Not found", "Invalid type", "Out 
 // logging system, it just seems a bit outside
 // the scope of the patch.
 typedef struct Errors {
-        unsigned int errors_count[ ERROR_ENUM_LENGTH - 1 ]; // -1 for ERROR_NONE
+        unsigned int errors_count[ ERROR_ENUM_LENGTH ];
 } Errors_t;
 
 // Alias libconfig structs for better name
@@ -143,7 +142,7 @@ Errors_t parse_config( Parser_Config_t *config );
 
 /// Public utility functions ///
 void add_error( Errors_t *errors, Error_t error );
-unsigned int count_errors( Errors_t errors );
+int errors_failure_count( const Errors_t *errors );
 char *estrdup( const char *string );
 void extend_string( char **source_string_pointer, const char *addition );
 Arg find_layout( void ( *arrange )( Monitor * ) );
@@ -402,7 +401,7 @@ Errors_t parse_config( Parser_Config_t *config ) {
         // passes, or is valid enough to warrant backing up.
 
         // TODO: This logic is clumsily structured, it should be improved. It also probably should include config->rules_dynamically_allocated
-        if ( count_errors( errors ) == 0 && config->keybinds_dynamically_allocated && config->buttonbinds_dynamically_allocated && !fallback_config_loaded ) {
+        if ( errors_failure_count( &errors ) == 0 && config->keybinds_dynamically_allocated && config->buttonbinds_dynamically_allocated && !fallback_config_loaded ) {
                 const Error_t backup_error = _parser_backup_config( &config->libconfig_config );
                 add_error( &errors, backup_error );
         } else {
@@ -412,8 +411,8 @@ Errors_t parse_config( Parser_Config_t *config ) {
                 if ( fallback_config_loaded ) {
                         log_warn( "Not saving config as backup, as the parsed configuration file is a system fallback configuration\n" );
                 }
-                if ( count_errors( errors ) != 0 ) {
-                        log_warn( "Not saving config as backup, as the parsed config had too many (%d) errors\n", count_errors( errors ) );
+                if ( errors_failure_count( &errors ) != 0 ) {
+                        log_warn( "Not saving config as backup, as the parsed config had too many (%d) errors\n", errors_failure_count( &errors ) );
                 }
         }
 
@@ -423,59 +422,77 @@ Errors_t parse_config( Parser_Config_t *config ) {
 /// Public utility functions ///
 
 /**
- * @brief TODO
+ * @brief Adds an error to an @ref Errors_t struct.
  *
- * TODO
+ * This function acts as a simple way to increment the error
+ * count of an @ref Errors_t struct at the correct error index.
  *
- * @param errors TODO
- * @param error TODO
+ * @param[out] errors Pointer to an @ref Errors_t struct to add @p error to.
+ * @param[in] error Error to be added to the error count in @p errors.
  */
 void add_error( Errors_t *errors, const Error_t error ) {
-        if ( error > ERROR_NONE && error < ERROR_ENUM_LENGTH ) {
-                errors->errors_count[ error - 1 ]++; // -1 for ERROR_NONE. We don't track them.
+
+        if ( errors == NULL ) {
+                log_warn( "Pointer to errors NULL, cannot add error\n" );
+                return;
+        }
+
+        if ( error < ERROR_ENUM_LENGTH ) {
+                errors->errors_count[ error ]++;
         }
 }
 
 /**
- * @brief TODO
+ * @brief Counts the number of failure errors present in an @ref Errors_t struct.
  *
- * TODO
+ * This function acts as a simple way to count the number of failure errors
+ * present in an @ref Errors_t struct.
  *
- * @param errors TODO
+ * @param[in] errors Pointer to an @ref Errors_t struct to count errors from.
  *
- * @return TODO
+ * @return -1 if @p errors is NULL, else the total of the number of failure
+ * errors present in @p errors.
  */
-unsigned int count_errors( const Errors_t errors ) {
+int errors_failure_count( const Errors_t *errors ) {
+
+        if ( errors == NULL ) {
+                log_warn( "Pointer to errors NULL, cannot count errors\n" );
+                return -1;
+        }
 
         unsigned int count = 0;
 
-        for ( int i = 0; i < LENGTH( errors.errors_count ); i++ ) {
-                count += errors.errors_count[ i ];
+        for ( int i = ERROR_NONE + 1; i < ERROR_ENUM_LENGTH; i++ ) {
+                count += errors->errors_count[ i ];
         }
 
         return count;
 }
 
 /**
- * @brief Simple wrapper around @ref strdup() to provide error logging.
+ * @brief Simple wrapper around strdup() to provide error logging.
  *
- * TODO
+ * This function acts as a simple wrapper around strdup() that provides
+ * some NULL safety as well as error logging around strdup(). It can
+ * be used as a drop in replacement for strdup() safely.
  *
- * @param[in] string String to be copied using @ref strdup().
+ * @param[in] string String to be copied.
  *
- * @return Pointer of the string dynamically allocated using @ref strdup()
- * or NULL if @ref strdup() failed.
+ * @return NULL if allocation failed or @p string was NULL, or the pointer
+ * to a dynamically allocated duplicate of @p string.
  *
- * @note String is dynamically allocated using @ref strdup(), and will need
- * to be manually freed.
+ * @note Returned string is dynamically allocated and will need to be manually freed.
  */
 char *estrdup( const char *string ) {
         if ( !string ) return NULL;
+
         char *return_string = strdup( string );
-        if ( !return_string ) {
+
+        if ( return_string == NULL ) {
                 log_error( "strdup failed to copy \"%s\": %s\n", string, strerror(errno) );
                 errno = 0;
         }
+
         return return_string;
 }
 
@@ -488,9 +505,9 @@ char *estrdup( const char *string ) {
  * @param[in] addition Additional string to be appended to the string pointed to by @p source_string_pointer.
  *
  * @warning @p source_string_pointer must be NULL or heap allocated. If it points to a string
- * literal, @ref realloc() will crash the program. See @ref join_strings() if you wish to append a string literal.
+ * literal, realloc() will crash the program. See @ref join_strings() if you wish to append a string literal.
  *
- * @note @p source_string_pointer is or will be dynamically allocated on the heap and must be freed.
+ * @note @p source_string_pointer is or will be dynamically allocated and must be manually freed.
  *
  * @note This function is derived from [picom's](https://github.com/yshui/picom/) mstrextend().
  * Credit more or less goes to [Yuxuan Shui](yshuiv7@gmail.com), I just made some minor adjustments.
@@ -502,7 +519,7 @@ char *estrdup( const char *string ) {
  */
 void extend_string( char **source_string_pointer, const char *addition ) {
 
-        if ( !*source_string_pointer ) {
+        if ( *source_string_pointer == NULL ) {
                 *source_string_pointer = estrdup( addition );
                 return;
         }
@@ -548,7 +565,7 @@ Arg find_layout( void ( *arrange )( Monitor * ) ) {
  * configuration directory, or NULL if no directory was able to be found.
  *
  * @note If the function is successful, the returned string will have been dynamically allocated
- * and will need to be freed.
+ * and will need to be manually freed.
  *
  * @note This function is derived from [picom's](https://github.com/yshui/picom/) xdg_config_home().
  * Credit more or less goes to [Yuxuan Shui](yshuiv7@gmail.com), I just made some minor adjustments.
@@ -633,16 +650,16 @@ char *get_xdg_data_home( void ) {
  * @return Pointer of a dynamically allocated string containing the now joined strings,
  * or NULL on failure.
  *
- * @note Returned string is dynamically allocated and will need to be freed.
+ * @note Returned string is dynamically allocated and will need to be manually freed.
  *
  * @note This function is derived from [picom's](https://github.com/yshui/picom/) mstrjoin().
  * Credit more or less goes to [Yuxuan Shui](yshuiv7@gmail.com), I just made some minor adjustments.
  *
- * @note gcc warns about legitimate truncation worries in @ref strncpy() in @ref join_strings().
+ * @note gcc warns about legitimate truncation worries in strncpy() in @ref join_strings().
  * `strncpy( joined_string, string_1, length_1 )` intentionally truncates the null byte
  * from @p string_1, however. `strncpy( joined_string + length_1, string_2, length_2 )`
  * uses bounds depending on the source argument, but `joined_string` is allocated with
- * `length_1 + length_2 + 1`, so this @ref strncpy() can't overflow.
+ * `length_1 + length_2 + 1`, so this strncpy() can't overflow.
  *
  * @author Yuxuan Shui - <yshuiv7@gmail.com>
  *
@@ -767,7 +784,7 @@ int make_directory_path( const char *path ) {
  * @return TODO
  */
 void merge_errors( Errors_t *destination, const Errors_t source ) {
-        for ( int i = 0; i < LENGTH( destination->errors_count ); i++ ) {
+        for ( int i = 0; i < ERROR_ENUM_LENGTH; i++ ) {
                 destination->errors_count[ i ] += source.errors_count[ i ];
         }
 }
@@ -779,11 +796,11 @@ void merge_errors( Errors_t *destination, const Errors_t source ) {
  *
  * @param[in] original_path String containing the path to be normalized.
  * @param[out] normalized_path Pointer to where to store the normalized path. It is dynamically
- * allocated and will need to be freed.
+ * allocated and will need to be manually freed.
  *
  * @return TODO
  *
- * @note @p normalized_path can be dynamically allocated and will need to be freed.
+ * @note @p normalized_path can be dynamically allocated and will need to be manually freed.
  *
  * @note This function is derived from [dwm-ipc's](https://github.com/mihirlad55/dwm-ipc) normalizepath().
  * Credit more or less goes to [Mihir Lad](mihirlad55@gmail.com), I just made some minor adjustments.
@@ -1396,8 +1413,8 @@ static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config,
 
                 const Errors_t parsing_error = array_element_parser_function( child_setting, i, element );
 
-                if ( count_errors( parsing_error ) ) {
-                        log_warn( "\"%s\" element number %d failed to be parsed. It had %d errors\n", config_array_name, i + 1, count_errors( parsing_error ) );
+                if ( errors_failure_count( &parsing_error ) ) {
+                        log_warn( "\"%s\" element number %d failed to be parsed. It had %d errors\n", config_array_name, i + 1, errors_failure_count( &parsing_error ) );
                         merge_errors( &returned_errors, parsing_error );
                         continue;
                 }
@@ -1558,7 +1575,7 @@ static Errors_t _parse_keybind_adapter( Libconfig_Setting_t *keybind_setting, co
  *
  * @return TODO
  *
- * @note `xev` is likely your best bet at finding the keysym values that will work with @ref XStringToKeysym().
+ * @note `xev` is likely your best bet at finding the keysym values that will work with XStringToKeysym().
  * If someone knows a better way, please reach out and let me know.
  *
  * @see https://gitlab.freedesktop.org/xorg/app/xev
