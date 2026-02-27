@@ -79,7 +79,6 @@ typedef struct {
 	unsigned int button;
 	void (*func)(const Arg *arg);
 	Arg arg;
-	unsigned int argument_type;
 } Button;
 
 typedef struct Monitor Monitor;
@@ -104,7 +103,6 @@ typedef struct {
 	KeySym keysym;
 	void (*func)(const Arg *);
 	Arg arg;
-	unsigned int argument_type;
 } Key;
 
 typedef struct {

@@ -161,7 +161,7 @@ void spawn_simple( const Arg *arg );
 static Error_t _parser_backup_config( Libconfig_Config_t *libconfig_config );
 static Error_t _parse_bind_argument( Libconfig_Setting_t *bind_setting, Data_Type_t argument_type, long double range_min, long double range_max, Arg *parsed_argument );
 static Errors_t _parse_bind_core( Libconfig_Setting_t *bind_setting, unsigned int bind_index, unsigned int *parsed_modifier, void ( **parsed_function )( const Arg * ), Arg *parsed_argument,
-                                  Data_Type_t *parsed_argument_type, const char *bind_array_path );
+                                  const char *bind_array_path );
 static Error_t _parse_bind_function( Libconfig_Setting_t *bind_setting, void ( **parsed_function )( const Arg * ), Data_Type_t *parsed_argument_type, long double *parsed_range_min,
                                      long double *parsed_range_max );
 static Error_t _parse_bind_modifier( Libconfig_Setting_t *bind_setting, unsigned int *parsed_modifier );
@@ -1051,13 +1051,12 @@ static Error_t _parse_bind_argument( Libconfig_Setting_t *bind_setting, const Da
  * @param parsed_modifier TODO
  * @param parsed_function TODO
  * @param parsed_argument TODO
- * @param parsed_argument_type TODO
  * @param bind_array_path
  *
  * @return TODO
  */
 static Errors_t _parse_bind_core( Libconfig_Setting_t *bind_setting, const unsigned int bind_index, unsigned int *parsed_modifier, void ( **parsed_function )( const Arg * ), Arg *parsed_argument,
-                                  Data_Type_t *parsed_argument_type, const char *bind_array_path ) {
+                                  const char *bind_array_path ) {
 
         Errors_t returned_errors = { 0 };
 
@@ -1070,8 +1069,9 @@ static Errors_t _parse_bind_core( Libconfig_Setting_t *bind_setting, const unsig
                 return returned_errors;
         }
 
+        Data_Type_t argument_type = TYPE_NONE;
         long double range_min = 0, range_max = 0;
-        const Error_t bind_error = _parse_bind_function( bind_setting, parsed_function, parsed_argument_type, &range_min, &range_max );
+        const Error_t bind_error = _parse_bind_function( bind_setting, parsed_function, &argument_type, &range_min, &range_max );
         add_error( &returned_errors, bind_error );
 
         if ( bind_error != ERROR_NONE ) {
@@ -1079,7 +1079,7 @@ static Errors_t _parse_bind_core( Libconfig_Setting_t *bind_setting, const unsig
                 return returned_errors;
         }
 
-        const Error_t argument_error = _parse_bind_argument( bind_setting, *parsed_argument_type, range_min, range_max, parsed_argument );
+        const Error_t argument_error = _parse_bind_argument( bind_setting, argument_type, range_min, range_max, parsed_argument );
         add_error( &returned_errors, argument_error );
 
         if ( argument_error != ERROR_NONE ) {
@@ -1197,8 +1197,7 @@ static Errors_t _parse_buttonbind( Libconfig_Setting_t *buttonbind_setting, cons
 
         Errors_t returned_errors = { 0 };
 
-        merge_errors( &returned_errors, _parse_bind_core( buttonbind_setting, buttonbind_index, &parsed_buttonbind->mask, &parsed_buttonbind->func, &parsed_buttonbind->arg,
-                                                          (Data_Type_t *) &parsed_buttonbind->argument_type, "Buttonbind" ) );
+        merge_errors( &returned_errors, _parse_bind_core( buttonbind_setting, buttonbind_index, &parsed_buttonbind->mask, &parsed_buttonbind->func, &parsed_buttonbind->arg, "Buttonbind" ) );
 
         const Error_t button_error = _parse_buttonbind_button( buttonbind_setting, &parsed_buttonbind->button );
         add_error( &returned_errors, button_error );
@@ -1536,8 +1535,7 @@ static Errors_t _parse_keybind( Libconfig_Setting_t *keybind_setting, const unsi
 
         Errors_t returned_errors = { 0 };
 
-        merge_errors( &returned_errors, _parse_bind_core( keybind_setting, keybind_index, &parsed_keybind->mod, &parsed_keybind->func, &parsed_keybind->arg,
-                                                          (Data_Type_t *) &parsed_keybind->argument_type, "Keybind" ) );
+        merge_errors( &returned_errors, _parse_bind_core( keybind_setting, keybind_index, &parsed_keybind->mod, &parsed_keybind->func, &parsed_keybind->arg, "Keybind" ) );
 
         const Error_t keysym_error = _parse_keybind_keysym( keybind_setting, &parsed_keybind->keysym );
         add_error( &returned_errors, keysym_error );
