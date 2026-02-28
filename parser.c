@@ -67,12 +67,12 @@
 // of data for whatever variable the data will
 // be stored in.
 typedef enum Data_Type {
-        TYPE_NONE = 0,
-        TYPE_BOOLEAN,
-        TYPE_INT,
-        TYPE_UINT,
-        TYPE_FLOAT,
-        TYPE_STRING,
+	TYPE_NONE = 0,
+	TYPE_BOOLEAN,
+	TYPE_INT,
+	TYPE_UINT,
+	TYPE_FLOAT,
+	TYPE_STRING,
 } Data_Type_t;
 
 // String name pairs to the Data_Type enum
@@ -80,15 +80,17 @@ const char *DATA_TYPE_ENUM_STRINGS[ ] = { "None", "Boolean", "Int", "Unsigned In
 
 // Enum to categorize the types of errors that
 // can occur during parsing.
+
+// TODO: Maybe reword IO vs NOT_FOUND, instead do FILE_NOT_FOUND and VALUE_NOT_FOUND?
 typedef enum Error {
-        ERROR_NONE = 0,
-        ERROR_NOT_FOUND,
-        ERROR_TYPE,
-        ERROR_RANGE,
-        ERROR_NULL_VALUE,
-        ERROR_ALLOCATION,
-        ERROR_IO,
-        ERROR_ENUM_LENGTH // Always must be last
+	ERROR_NONE = 0,
+	ERROR_NOT_FOUND,
+	ERROR_TYPE,
+	ERROR_RANGE,
+	ERROR_NULL_VALUE,
+	ERROR_ALLOCATION,
+	ERROR_IO,
+	ERROR_ENUM_LENGTH // Always must be last
 } Error_t;
 
 // String name pairs to the Error_t enum
@@ -99,7 +101,7 @@ const char *ERROR_ENUM_STRINGS[ ] = { "None", "Not found", "Invalid type", "Out 
 // logging system, it just seems a bit outside
 // the scope of the patch.
 typedef struct Errors {
-        unsigned int errors_count[ ERROR_ENUM_LENGTH ];
+	unsigned int errors_count[ ERROR_ENUM_LENGTH ];
 } Errors_t;
 
 // Alias libconfig structs for better name
@@ -114,27 +116,28 @@ typedef Errors_t ( *Array_Element_Parser_Function_t )( Libconfig_Setting_t *elem
 // Struct to hold some parser internal data and
 // some of the configuration data that can't
 // be written to variables in `config.(def.).h`
+
+// TODO: Some of these variables may be better off in a global scope, not in a global struct
 typedef struct Parser_Config {
-        bool rules_dynamically_allocated;
-        bool keybinds_dynamically_allocated;
-        bool buttonbinds_dynamically_allocated;
-        bool fonts_dynamically_allocated;
-        unsigned int rule_array_size;
-        unsigned int buttonbind_array_size;
-        unsigned int keybind_array_size;
-        unsigned int fonts_array_size;
-        char *config_filepath;
-        Libconfig_Config_t libconfig_config;
+	bool rules_dynamically_allocated;
+	bool keybinds_dynamically_allocated;
+	bool buttonbinds_dynamically_allocated;
+	bool fonts_dynamically_allocated;
+	unsigned int rule_array_size;
+	unsigned int buttonbind_array_size;
+	unsigned int keybind_array_size;
+	unsigned int fonts_array_size;
+	char *config_filepath;
+	Libconfig_Config_t libconfig_config;
 } Parser_Config_t;
 
 Parser_Config_t dwm_config = { 0 };
 
+// TODO: I should find a way to smoothen / harden the length checking of keys, buttons, and rules
 Key *keys = default_keys;
 Button *buttons = default_buttons;
 Rule *rules = default_rules;
 const char **fonts = default_fonts;
-
-// TODO: I should find a way to smoothen / harden the length checking of keys, buttons, and rules
 
 /// Public parser functions ///
 void config_cleanup( Parser_Config_t *config );
@@ -161,17 +164,17 @@ void spawn_simple( const Arg *arg );
 static Error_t _parser_backup_config( Libconfig_Config_t *libconfig_config );
 static Error_t _parse_bind_argument( Libconfig_Setting_t *bind_setting, Data_Type_t argument_type, long double range_min, long double range_max, Arg *parsed_argument );
 static Errors_t _parse_bind_core( Libconfig_Setting_t *bind_setting, unsigned int bind_index, unsigned int *parsed_modifier, void ( **parsed_function )( const Arg * ), Arg *parsed_argument,
-                                  const char *bind_array_path );
+				  const char *bind_array_path );
 static Error_t _parse_bind_function( Libconfig_Setting_t *bind_setting, void ( **parsed_function )( const Arg * ), Data_Type_t *parsed_argument_type, long double *parsed_range_min,
-                                     long double *parsed_range_max );
+				     long double *parsed_range_max );
 static Error_t _parse_bind_modifier( Libconfig_Setting_t *bind_setting, unsigned int *parsed_modifier );
 static Errors_t _parse_buttonbind( Libconfig_Setting_t *buttonbind_setting, unsigned int buttonbind_index, Button *parsed_buttonbind );
 static Errors_t _parse_buttonbind_adapter( Libconfig_Setting_t *buttonbind_setting, unsigned int buttonbind_index, void *parsed_keybind );
 static Error_t _parse_buttonbind_button( Libconfig_Setting_t *buttonbind_setting, unsigned int *parsed_button );
 static Error_t _parse_buttonbind_click( Libconfig_Setting_t *buttonbind_setting, unsigned int *parsed_click );
 static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_config, Button **buttonbind_config, unsigned int *buttonbinds_count, bool *buttonbinds_dynamically_allocated );
-static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config, Libconfig_Setting_t *libconfig_setting, const char *config_array_name, size_t element_struct_size,
-                                     Array_Element_Parser_Function_t array_element_parser_function, bool *dynamically_allocated, void **parsed_config, unsigned int *parsed_config_length );
+static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config, Libconfig_Setting_t *libconfig_setting, const char *config_array_name, size_t element_size,
+				     Array_Element_Parser_Function_t array_element_parser_function, bool *dynamically_allocated, void **parsed_config, unsigned int *parsed_config_length );
 static Errors_t _parse_font( Libconfig_Setting_t *fonts_setting, unsigned int fonts_index, const char *parsed_font );
 static Errors_t _parse_font_adapter( Libconfig_Setting_t *fonts_setting, unsigned int fonts_index, void *parsed_font );
 static Errors_t _parse_generic_settings( const Libconfig_Config_t *libconfig_config );
@@ -207,110 +210,110 @@ static Error_t _libconfig_setting_lookup_uint( Libconfig_Setting_t *setting, con
 
 /// Parser alias maps ///
 const struct Function_Alias_Map {
-        const char *name;
-        void ( *func )( const Arg * );
-        const Data_Type_t arg_type;
-        const long double range_min, range_max;
+	const char *name;
+	void ( *func )( const Arg * );
+	const Data_Type_t arg_type;
+	const long double range_min, range_max;
 } FUNCTION_ALIAS_MAP[ ] = {
-        { "focusmon", focusmon, TYPE_INT, -99, 99 },
-        { "focusstack", focusstack, TYPE_INT, -99, 99 },
-        { "incnmaster", incnmaster, TYPE_INT, -99, 99 },
-        { "killclient", killclient, TYPE_NONE },
-        { "movemouse", movemouse, TYPE_NONE },
-        { "quit", quit, TYPE_NONE },
-        { "resizemouse", resizemouse, TYPE_NONE },
-        { "setlayout-tiled", setlayout_tiled, TYPE_NONE },
-        { "setlayout-floating", setlayout_floating, TYPE_NONE },
-        { "setlayout-monocle", setlayout_monocle, TYPE_NONE },
-        { "setlayout-toggle", setlayout, TYPE_NONE },
-        { "setmfact", setmfact, TYPE_FLOAT, -0.95f, 1.95f },
-        { "spawn", spawn_simple, TYPE_STRING },
-        { "tag", tag, TYPE_INT, -1, TAGMASK },
-        { "tagmon", tagmon, TYPE_INT, -99, 99 },
-        { "togglebar", togglebar, TYPE_NONE },
-        { "togglefloating", togglefloating, TYPE_NONE },
-        { "toggletag", toggletag, TYPE_INT, -1, TAGMASK },
-        { "toggleview", toggleview, TYPE_INT, -1, TAGMASK },
-        { "view", view, TYPE_INT, -1, TAGMASK },
-        { "zoom", zoom, TYPE_NONE },
+	{ "focusmon", focusmon, TYPE_INT, -99, 99 },
+	{ "focusstack", focusstack, TYPE_INT, -99, 99 },
+	{ "incnmaster", incnmaster, TYPE_INT, -99, 99 },
+	{ "killclient", killclient, TYPE_NONE },
+	{ "movemouse", movemouse, TYPE_NONE },
+	{ "quit", quit, TYPE_NONE },
+	{ "resizemouse", resizemouse, TYPE_NONE },
+	{ "setlayout-tiled", setlayout_tiled, TYPE_NONE },
+	{ "setlayout-floating", setlayout_floating, TYPE_NONE },
+	{ "setlayout-monocle", setlayout_monocle, TYPE_NONE },
+	{ "setlayout-toggle", setlayout, TYPE_NONE },
+	{ "setmfact", setmfact, TYPE_FLOAT, -0.95f, 1.95f },
+	{ "spawn", spawn_simple, TYPE_STRING },
+	{ "tag", tag, TYPE_INT, -1, TAGMASK },
+	{ "tagmon", tagmon, TYPE_INT, -99, 99 },
+	{ "togglebar", togglebar, TYPE_NONE },
+	{ "togglefloating", togglefloating, TYPE_NONE },
+	{ "toggletag", toggletag, TYPE_INT, -1, TAGMASK },
+	{ "toggleview", toggleview, TYPE_INT, -1, TAGMASK },
+	{ "view", view, TYPE_INT, -1, TAGMASK },
+	{ "zoom", zoom, TYPE_NONE },
 };
 
 const struct Modifier_Alias_Map {
-        const char *name;
-        const unsigned int mask;
+	const char *name;
+	const unsigned int mask;
 } MODIFIER_ALIAS_MAP[ ] = {
-        { "super", Mod4Mask },
-        { "control", ControlMask },
-        { "ctrl", ControlMask },
-        { "shift", ShiftMask },
-        { "alt", Mod1Mask },
-        { "caps", LockMask },
-        { "capslock", LockMask },
-        { "mod1", Mod1Mask },
-        { "mod2", Mod2Mask },
-        { "mod3", Mod3Mask },
-        { "mod4", Mod4Mask },
-        { "mod5", Mod5Mask },
+	{ "super", Mod4Mask },
+	{ "control", ControlMask },
+	{ "ctrl", ControlMask },
+	{ "shift", ShiftMask },
+	{ "alt", Mod1Mask },
+	{ "caps", LockMask },
+	{ "capslock", LockMask },
+	{ "mod1", Mod1Mask },
+	{ "mod2", Mod2Mask },
+	{ "mod3", Mod3Mask },
+	{ "mod4", Mod4Mask },
+	{ "mod5", Mod5Mask },
 };
 
 // @formatter:off
 const struct Click_Alias_Map{
-        const char *name;
-        const int click;
+	const char *name;
+	const int click;
 } CLICK_ALIAS_MAP[ ] = {
-        { "tag", ClkTagBar },
-        { "layout", ClkLtSymbol },
-        { "status", ClkStatusText },
-        { "title", ClkWinTitle },
-        { "client", ClkClientWin },
-        { "desktop", ClkRootWin },
+	{ "tag", ClkTagBar },
+	{ "layout", ClkLtSymbol },
+	{ "status", ClkStatusText },
+	{ "title", ClkWinTitle },
+	{ "client", ClkClientWin },
+	{ "desktop", ClkRootWin },
 };
 // @formatter:on
 
 const struct Button_Alias_Map {
-        const char *name;
-        const int button;
+	const char *name;
+	const int button;
 } BUTTON_ALIAS_MAP[ ] = {
-        { "leftclick", Button1 },
-        { "left-click", Button1 },
-        { "middleclick", Button2 },
-        { "middle-click", Button2 },
-        { "rightclick", Button3 },
-        { "right-click", Button3 },
-        { "scrollup", Button4 },
-        { "scroll-up", Button4 },
-        { "scrolldown", Button5 },
-        { "scroll-down", Button5 },
+	{ "leftclick", Button1 },
+	{ "left-click", Button1 },
+	{ "middleclick", Button2 },
+	{ "middle-click", Button2 },
+	{ "rightclick", Button3 },
+	{ "right-click", Button3 },
+	{ "scrollup", Button4 },
+	{ "scroll-up", Button4 },
+	{ "scrolldown", Button5 },
+	{ "scroll-down", Button5 },
 };
 
 const struct Setting_Alias_Map {
-        const char *name;
-        void *value;
-        const Data_Type_t type;
-        const bool optional;
-        const long double range_min, range_max;
+	const char *name;
+	void *value;
+	const Data_Type_t type;
+	const bool optional;
+	const long double range_min, range_max;
 } SETTING_ALIAS_MAP[ ] = {
-        { "showbar", &showbar, TYPE_BOOLEAN, true },
-        { "topbar", &topbar, TYPE_BOOLEAN, true },
-        { "resizehints", &resizehints, TYPE_BOOLEAN, true },
-        { "lockfullscreen", &lockfullscreen, TYPE_BOOLEAN, true },
-        { "borderpx", &borderpx, TYPE_UINT, true, 0, 9999 },
-        { "snap", &snap, TYPE_UINT, true, 0, 9999 },
-        { "nmaster", &nmaster, TYPE_UINT, true, 0, 99 },
-        { "refreshrate", &refreshrate, TYPE_UINT, true, 0, 999 },
-        { "mfact", &mfact, TYPE_FLOAT, true, 0.05f, 0.95f },
+	{ "showbar", &showbar, TYPE_BOOLEAN, true },
+	{ "topbar", &topbar, TYPE_BOOLEAN, true },
+	{ "resizehints", &resizehints, TYPE_BOOLEAN, true },
+	{ "lockfullscreen", &lockfullscreen, TYPE_BOOLEAN, true },
+	{ "borderpx", &borderpx, TYPE_UINT, true, 0, 9999 },
+	{ "snap", &snap, TYPE_UINT, true, 0, 9999 },
+	{ "nmaster", &nmaster, TYPE_UINT, true, 0, 99 },
+	{ "refreshrate", &refreshrate, TYPE_UINT, true, 0, 999 },
+	{ "mfact", &mfact, TYPE_FLOAT, true, 0.05f, 0.95f },
 };
 
 const struct Theme_Alias_Map {
-        const char *path;
-        const char **value;
+	const char *path;
+	const char **value;
 } THEME_ALIAS_MAP[ ] = {
-        { "normal-foreground", &colors[ SchemeNorm ][ ColFg ] },
-        { "normal-background", &colors[ SchemeNorm ][ ColBg ] },
-        { "normal-border", &colors[ SchemeNorm ][ ColBorder ] },
-        { "selected-foreground", &colors[ SchemeSel ][ ColFg ] },
-        { "selected-background", &colors[ SchemeSel ][ ColBg ] },
-        { "selected-border", &colors[ SchemeSel ][ ColBorder ] },
+	{ "normal-foreground", &colors[ SchemeNorm ][ ColFg ] },
+	{ "normal-background", &colors[ SchemeNorm ][ ColBg ] },
+	{ "normal-border", &colors[ SchemeNorm ][ ColBorder ] },
+	{ "selected-foreground", &colors[ SchemeSel ][ ColFg ] },
+	{ "selected-background", &colors[ SchemeSel ][ ColBg ] },
+	{ "selected-border", &colors[ SchemeSel ][ ColBorder ] },
 };
 
 /// Public parser functions ///
@@ -326,13 +329,13 @@ const struct Theme_Alias_Map {
  */
 void config_cleanup( Parser_Config_t *config ) {
 
-        if ( config->config_filepath != NULL ) free( config->config_filepath );
-        if ( config->rules_dynamically_allocated == false ) free( rules );
-        if ( config->keybinds_dynamically_allocated == false ) free( keys );
-        if ( config->buttonbinds_dynamically_allocated == false ) free( buttons );
-        if ( config->fonts_dynamically_allocated == false ) free( fonts );
+	if ( config->config_filepath != NULL ) free( config->config_filepath );
+	if ( config->rules_dynamically_allocated == false ) free( rules );
+	if ( config->keybinds_dynamically_allocated == false ) free( keys );
+	if ( config->buttonbinds_dynamically_allocated == false ) free( buttons );
+	if ( config->fonts_dynamically_allocated == false ) free( fonts );
 
-        config_destroy( &config->libconfig_config );
+	config_destroy( &config->libconfig_config );
 }
 
 /**
@@ -365,58 +368,58 @@ void config_cleanup( Parser_Config_t *config ) {
  */
 Errors_t parse_config( Parser_Config_t *config ) {
 
-        Errors_t errors = { 0 };
+	Errors_t errors = { 0 };
 
-        if ( config == NULL ) {
-                log_fatal( "Unable to begin configuration parsing. Pointer to config is NULL\n" );
-                exit( EXIT_FAILURE );
-        }
+	if ( config == NULL ) {
+		log_fatal( "Unable to begin configuration parsing. Pointer to config is NULL\n" );
+		exit( EXIT_FAILURE );
+	}
 
-        _parser_load_default_config( config );
+	_parser_load_default_config( config );
 
-        bool fallback_config_loaded = false;
-        merge_errors( &errors, _parser_open_config( config, &fallback_config_loaded ) );
+	bool fallback_config_loaded = false;
+	merge_errors( &errors, _parser_open_config( config, &fallback_config_loaded ) );
 
-        // Exit the parser if we haven't acquired a configuration file.
-        // Without a configuration file, there isn't a reason to continue parsing.
-        // The program will have to rely on the hardcoded default values instead.
-        if ( config->config_filepath == NULL ) return errors;
+	// Exit the parser if we haven't acquired a configuration file.
+	// Without a configuration file, there isn't a reason to continue parsing.
+	// The program will have to rely on the hardcoded default values instead.
+	if ( config->config_filepath == NULL ) return errors;
 
-        log_info( "Path to config file: \"%s\"\n", config->config_filepath );
+	log_info( "Path to config file: \"%s\"\n", config->config_filepath );
 
-        add_error( &errors, _parser_resolve_include_directory( config ) );
+	add_error( &errors, _parser_resolve_include_directory( config ) );
 
-        config_set_options( &config->libconfig_config, CONFIG_OPTION_AUTOCONVERT | CONFIG_OPTION_SEMICOLON_SEPARATORS );
-        config_set_tab_width( &config->libconfig_config, 4 );
+	config_set_options( &config->libconfig_config, CONFIG_OPTION_AUTOCONVERT | CONFIG_OPTION_SEMICOLON_SEPARATORS );
+	config_set_tab_width( &config->libconfig_config, 4 );
 
-        merge_errors( &errors, _parse_generic_settings( &config->libconfig_config ) );
-        merge_errors( &errors, _parse_keybinds_config( &config->libconfig_config, &keys, &config->keybind_array_size, &config->keybinds_dynamically_allocated ) );
-        merge_errors( &errors, _parse_buttonbinds_config( &config->libconfig_config, &buttons, &config->buttonbind_array_size, &config->buttonbinds_dynamically_allocated ) );
-        merge_errors( &errors, _parse_rules_config( &config->libconfig_config, &rules, &config->rule_array_size, &config->rules_dynamically_allocated ) );
-        merge_errors( &errors, _parse_tags_config( &config->libconfig_config ) );
-        merge_errors( &errors, _parse_theme_config( &config->libconfig_config ) );
+	merge_errors( &errors, _parse_generic_settings( &config->libconfig_config ) );
+	merge_errors( &errors, _parse_keybinds_config( &config->libconfig_config, &keys, &config->keybind_array_size, &config->keybinds_dynamically_allocated ) );
+	merge_errors( &errors, _parse_buttonbinds_config( &config->libconfig_config, &buttons, &config->buttonbind_array_size, &config->buttonbinds_dynamically_allocated ) );
+	merge_errors( &errors, _parse_rules_config( &config->libconfig_config, &rules, &config->rule_array_size, &config->rules_dynamically_allocated ) );
+	merge_errors( &errors, _parse_tags_config( &config->libconfig_config ) );
+	merge_errors( &errors, _parse_theme_config( &config->libconfig_config ) );
 
-        // The error requirement being 0 may be a bit strict, I am not sure. May need
-        // some relaxing or possibly come up with a better way of calculating if a config
-        // passes, or is valid enough to warrant backing up.
+	// The error requirement being 0 may be a bit strict, I am not sure. May need
+	// some relaxing or possibly come up with a better way of calculating if a config
+	// passes, or is valid enough to warrant backing up.
 
-        // TODO: This logic is clumsily structured, it should be improved. It also probably should include config->rules_dynamically_allocated
-        if ( errors_failure_count( &errors ) == 0 && config->keybinds_dynamically_allocated && config->buttonbinds_dynamically_allocated && !fallback_config_loaded ) {
-                const Error_t backup_error = _parser_backup_config( &config->libconfig_config );
-                add_error( &errors, backup_error );
-        } else {
-                if ( !config->keybinds_dynamically_allocated || !config->buttonbinds_dynamically_allocated ) {
-                        log_warn( "Not saving config as backup, as hardcoded default bind values were used, not the user's\n" );
-                }
-                if ( fallback_config_loaded ) {
-                        log_warn( "Not saving config as backup, as the parsed configuration file is a system fallback configuration\n" );
-                }
-                if ( errors_failure_count( &errors ) != 0 ) {
-                        log_warn( "Not saving config as backup, as the parsed config had too many (%d) errors\n", errors_failure_count( &errors ) );
-                }
-        }
+	// TODO: This logic is clumsily structured, it should be improved. It also probably should include config->rules_dynamically_allocated
+	if ( errors_failure_count( &errors ) == 0 && config->keybinds_dynamically_allocated && config->buttonbinds_dynamically_allocated && !fallback_config_loaded ) {
+		const Error_t backup_error = _parser_backup_config( &config->libconfig_config );
+		add_error( &errors, backup_error );
+	} else {
+		if ( !config->keybinds_dynamically_allocated || !config->buttonbinds_dynamically_allocated ) {
+			log_warn( "Not saving config as backup, as hardcoded default bind values were used, not the user's\n" );
+		}
+		if ( fallback_config_loaded ) {
+			log_warn( "Not saving config as backup, as the parsed configuration file is a system fallback configuration\n" );
+		}
+		if ( errors_failure_count( &errors ) != 0 ) {
+			log_warn( "Not saving config as backup, as the parsed config had too many (%d) errors\n", errors_failure_count( &errors ) );
+		}
+	}
 
-        return errors;
+	return errors;
 }
 
 /// Public utility functions ///
@@ -432,14 +435,14 @@ Errors_t parse_config( Parser_Config_t *config ) {
  */
 void add_error( Errors_t *errors, const Error_t error ) {
 
-        if ( errors == NULL ) {
-                log_warn( "Pointer to errors NULL, cannot add error\n" );
-                return;
-        }
+	if ( errors == NULL ) {
+		log_warn( "Pointer to errors NULL, cannot add error\n" );
+		return;
+	}
 
-        if ( error < ERROR_ENUM_LENGTH ) {
-                errors->errors_count[ error ]++;
-        }
+	if ( error < ERROR_ENUM_LENGTH ) {
+		errors->errors_count[ error ]++;
+	}
 }
 
 /**
@@ -455,18 +458,18 @@ void add_error( Errors_t *errors, const Error_t error ) {
  */
 int errors_failure_count( const Errors_t *errors ) {
 
-        if ( errors == NULL ) {
-                log_warn( "Pointer to errors NULL, cannot count errors\n" );
-                return -1;
-        }
+	if ( errors == NULL ) {
+		log_warn( "Pointer to errors NULL, cannot count errors\n" );
+		return -1;
+	}
 
-        unsigned int count = 0;
+	unsigned int count = 0;
 
-        for ( int i = ERROR_NONE + 1; i < ERROR_ENUM_LENGTH; i++ ) {
-                count += errors->errors_count[ i ];
-        }
+	for ( int i = ERROR_NONE + 1; i < ERROR_ENUM_LENGTH; i++ ) {
+		count += errors->errors_count[ i ];
+	}
 
-        return count;
+	return count;
 }
 
 /**
@@ -484,16 +487,16 @@ int errors_failure_count( const Errors_t *errors ) {
  * @note Returned string is dynamically allocated and will need to be manually freed.
  */
 char *estrdup( const char *string ) {
-        if ( !string ) return NULL;
+	if ( !string ) return NULL;
 
-        char *return_string = strdup( string );
+	char *return_string = strdup( string );
 
-        if ( return_string == NULL ) {
-                log_error( "strdup failed to copy \"%s\": %s\n", string, strerror(errno) );
-                errno = 0;
-        }
+	if ( return_string == NULL ) {
+		log_error( "strdup failed to copy \"%s\": %s\n", string, strerror(errno) );
+		errno = 0;
+	}
 
-        return return_string;
+	return return_string;
 }
 
 /**
@@ -519,20 +522,20 @@ char *estrdup( const char *string ) {
  */
 void extend_string( char **source_string_pointer, const char *addition ) {
 
-        if ( *source_string_pointer == NULL ) {
-                *source_string_pointer = estrdup( addition );
-                return;
-        }
+	if ( *source_string_pointer == NULL ) {
+		*source_string_pointer = estrdup( addition );
+		return;
+	}
 
-        const size_t length_1 = strlen( *source_string_pointer );
-        const size_t length_2 = strlen( addition );
-        const size_t total_length = length_1 + length_2 + 1;
+	const size_t length_1 = strlen( *source_string_pointer );
+	const size_t length_2 = strlen( addition );
+	const size_t total_length = length_1 + length_2 + 1;
 
-        // TODO: Check for realloc errors
-        *source_string_pointer = realloc( *source_string_pointer, total_length );
+	// TODO: Check for realloc errors
+	*source_string_pointer = realloc( *source_string_pointer, total_length );
 
-        strncpy( *source_string_pointer + length_1, addition, length_2 );
-        ( *source_string_pointer )[ total_length - 1 ] = '\0';
+	strncpy( *source_string_pointer + length_1, addition, length_2 );
+	( *source_string_pointer )[ total_length - 1 ] = '\0';
 }
 
 /**
@@ -547,13 +550,13 @@ void extend_string( char **source_string_pointer, const char *addition ) {
  */
 Arg find_layout( void ( *arrange )( Monitor * ) ) {
 
-        for ( int i = 0; i < LENGTH( layouts ); i++ ) {
-                if ( layouts[ i ].arrange == arrange ) {
-                        return (Arg){ .v = &layouts[ i ] };
-                }
-        }
+	for ( int i = 0; i < LENGTH( layouts ); i++ ) {
+		if ( layouts[ i ].arrange == arrange ) {
+			return (Arg){ .v = &layouts[ i ] };
+		}
+	}
 
-        return (Arg){ .i = 0 };
+	return (Arg){ .i = 0 };
 }
 
 /**
@@ -577,25 +580,25 @@ Arg find_layout( void ( *arrange )( Monitor * ) ) {
  */
 char *get_xdg_config_home( void ) {
 
-        char *xdg_config_home = getenv( "XDG_CONFIG_HOME" );
-        char *user_home = getenv( "HOME" );
+	char *xdg_config_home = getenv( "XDG_CONFIG_HOME" );
+	char *user_home = getenv( "HOME" );
 
-        log_debug( "XDG_CONFIG_HOME: \"%s\", HOME: \"%s\"\n", xdg_config_home, user_home );
+	log_debug( "XDG_CONFIG_HOME: \"%s\", HOME: \"%s\"\n", xdg_config_home, user_home );
 
-        if ( !xdg_config_home ) {
-                const char *default_config_directory = "/.config";
+	if ( !xdg_config_home ) {
+		const char *default_config_directory = "/.config";
 
-                if ( !user_home ) {
-                        log_warn( "XDG_CONFIG_HOME and HOME are not set\n" );
-                        return NULL;
-                }
+		if ( !user_home ) {
+			log_warn( "XDG_CONFIG_HOME and HOME are not set\n" );
+			return NULL;
+		}
 
-                xdg_config_home = join_strings( user_home, default_config_directory );
-        } else {
-                xdg_config_home = estrdup( xdg_config_home );
-        }
+		xdg_config_home = join_strings( user_home, default_config_directory );
+	} else {
+		xdg_config_home = estrdup( xdg_config_home );
+	}
 
-        return xdg_config_home;
+	return xdg_config_home;
 }
 
 /**
@@ -618,25 +621,25 @@ char *get_xdg_config_home( void ) {
  */
 char *get_xdg_data_home( void ) {
 
-        char *xdg_data_home = getenv( "XDG_DATA_HOME" );
-        char *user_home = getenv( "HOME" );
+	char *xdg_data_home = getenv( "XDG_DATA_HOME" );
+	char *user_home = getenv( "HOME" );
 
-        log_debug( "XDG_DATA_HOME: \"%s\", HOME: \"%s\"\n", xdg_data_home, user_home );
+	log_debug( "XDG_DATA_HOME: \"%s\", HOME: \"%s\"\n", xdg_data_home, user_home );
 
-        if ( !xdg_data_home ) {
-                const char *default_data_directory = "/.local/share";
+	if ( !xdg_data_home ) {
+		const char *default_data_directory = "/.local/share";
 
-                if ( !user_home ) {
-                        log_warn( "XDG_DATA_HOME and HOME are not set\n" );
-                        return NULL;
-                }
+		if ( !user_home ) {
+			log_warn( "XDG_DATA_HOME and HOME are not set\n" );
+			return NULL;
+		}
 
-                xdg_data_home = join_strings( user_home, default_data_directory );
-        } else {
-                xdg_data_home = estrdup( xdg_data_home );
-        }
+		xdg_data_home = join_strings( user_home, default_data_directory );
+	} else {
+		xdg_data_home = estrdup( xdg_data_home );
+	}
 
-        return xdg_data_home;
+	return xdg_data_home;
 }
 
 /**
@@ -668,35 +671,35 @@ char *get_xdg_data_home( void ) {
  */
 char *join_strings( const char *string_1, const char *string_2 ) {
 
-        const size_t length_1 = strlen( string_1 );
-        const size_t length_2 = strlen( string_2 );
-        const size_t total_length = length_1 + length_2 + 1;
+	const size_t length_1 = strlen( string_1 );
+	const size_t length_2 = strlen( string_2 );
+	const size_t total_length = length_1 + length_2 + 1;
 
-        char *joined_string = calloc( total_length, sizeof( char ) );
+	char *joined_string = calloc( total_length, sizeof( char ) );
 
-        if ( !joined_string ) {
-                log_error( "Calloc failed trying to join \"%s\" and \"%s\": %s\n", string_1, string_2, strerror(errno) );
-                errno = 0;
-                return NULL;
-        }
+	if ( !joined_string ) {
+		log_error( "Calloc failed trying to join \"%s\" and \"%s\": %s\n", string_1, string_2, strerror(errno) );
+		errno = 0;
+		return NULL;
+	}
 
-        #ifndef __clang__
-        #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Wpragmas"
-        #pragma GCC diagnostic ignored "-Wstringop-truncation"
-        #pragma GCC diagnostic ignored "-Wstringop-overflow"
-        #endif
+	#ifndef __clang__
+	#pragma GCC diagnostic push
+	#pragma GCC diagnostic ignored "-Wpragmas"
+	#pragma GCC diagnostic ignored "-Wstringop-truncation"
+	#pragma GCC diagnostic ignored "-Wstringop-overflow"
+	#endif
 
-        strncpy( joined_string, string_1, length_1 );
-        strncpy( joined_string + length_1, string_2, length_2 );
+	strncpy( joined_string, string_1, length_1 );
+	strncpy( joined_string + length_1, string_2, length_2 );
 
-        #ifndef __clang__
-        #pragma GCC diagnostic pop
-        #endif
+	#ifndef __clang__
+	#pragma GCC diagnostic pop
+	#endif
 
-        joined_string[ total_length - 1 ] = '\0';
+	joined_string[ total_length - 1 ] = '\0';
 
-        return joined_string;
+	return joined_string;
 }
 
 /**
@@ -718,59 +721,59 @@ char *join_strings( const char *string_1, const char *string_2 ) {
  */
 int make_directory_path( const char *path ) {
 
-        char *normalized_path = NULL;
+	char *normalized_path = NULL;
 
-        if ( normalize_path( path, &normalized_path ) == -1 ) {
-                log_error( "Unable to make directory path because path normalization failed" );
-                return -1;
-        }
+	if ( normalize_path( path, &normalized_path ) == -1 ) {
+		log_error( "Unable to make directory path because path normalization failed" );
+		return -1;
+	}
 
-        const char *walk = normalized_path;
-        const size_t normalized_path_length = strlen( normalized_path );
+	const char *walk = normalized_path;
+	const size_t normalized_path_length = strlen( normalized_path );
 
-        while ( walk < normalized_path + normalized_path_length + 1 ) {
+	while ( walk < normalized_path + normalized_path_length + 1 ) {
 
-                // Get length from walk to next '/'
-                const size_t distance_to_slash = strcspn( walk, "/" );
+		// Get length from walk to next '/'
+		const size_t distance_to_slash = strcspn( walk, "/" );
 
-                // Skip path /
-                if ( distance_to_slash == 0 ) {
-                        walk++;
-                        continue;
-                }
+		// Skip path /
+		if ( distance_to_slash == 0 ) {
+			walk++;
+			continue;
+		}
 
-                // Length of current path segment
-                const size_t current_path_length = walk - normalized_path + distance_to_slash;
-                char current_path[ current_path_length + 1 ];
+		// Length of current path segment
+		const size_t current_path_length = walk - normalized_path + distance_to_slash;
+		char current_path[ current_path_length + 1 ];
 
-                struct stat stat_variable;
+		struct stat stat_variable;
 
-                // Copy path segment to stat
-                strncpy( current_path, normalized_path, current_path_length );
-                strcpy( current_path + current_path_length, "" );
+		// Copy path segment to stat
+		strncpy( current_path, normalized_path, current_path_length );
+		strcpy( current_path + current_path_length, "" );
 
-                errno = 0;
-                if ( stat( current_path, &stat_variable ) < 0 ) {
-                        if ( errno == ENOENT ) {
-                                log_debug( "Making directory %s\n", current_path );
-                                if ( mkdir( current_path, 0700 ) < 0 ) {
-                                        log_error( "Failed to make directory \"%s\": %s\n", current_path, strerror( errno ) );
-                                        free( normalized_path );
-                                        return -1;
-                                }
-                        } else {
-                                log_error( "Error stat-ing directory \"%s\": %s\n", current_path, strerror( errno ) );
-                                free( normalized_path );
-                                return -1;
-                        }
-                }
+		errno = 0;
+		if ( stat( current_path, &stat_variable ) < 0 ) {
+			if ( errno == ENOENT ) {
+				log_debug( "Making directory %s\n", current_path );
+				if ( mkdir( current_path, 0700 ) < 0 ) {
+					log_error( "Failed to make directory \"%s\": %s\n", current_path, strerror( errno ) );
+					free( normalized_path );
+					return -1;
+				}
+			} else {
+				log_error( "Error stat-ing directory \"%s\": %s\n", current_path, strerror( errno ) );
+				free( normalized_path );
+				return -1;
+			}
+		}
 
-                // Continue to next path segment
-                walk += distance_to_slash;
-        }
+		// Continue to next path segment
+		walk += distance_to_slash;
+	}
 
-        free( normalized_path );
-        return 0;
+	free( normalized_path );
+	return 0;
 }
 
 /**
@@ -784,9 +787,9 @@ int make_directory_path( const char *path ) {
  * @return TODO
  */
 void merge_errors( Errors_t *destination, const Errors_t source ) {
-        for ( int i = 0; i < ERROR_ENUM_LENGTH; i++ ) {
-                destination->errors_count[ i ] += source.errors_count[ i ];
-        }
+	for ( int i = 0; i < ERROR_ENUM_LENGTH; i++ ) {
+		destination->errors_count[ i ] += source.errors_count[ i ];
+	}
 }
 
 /**
@@ -812,40 +815,40 @@ void merge_errors( Errors_t *destination, const Errors_t source ) {
  */
 int normalize_path( const char *original_path, char **normalized_path ) {
 
-        const size_t original_length = strlen( original_path );
+	const size_t original_length = strlen( original_path );
 
-        *normalized_path = calloc( ( original_length + 1 ), sizeof( char ) );
+	*normalized_path = calloc( ( original_length + 1 ), sizeof( char ) );
 
-        if ( *normalized_path == NULL ) {
-                log_error( "Calloc failed trying to allocate %lu bytes: %s\n", ( original_length + 1 ) * sizeof( char ), strerror(errno) );
-                return -1;
-        }
+	if ( *normalized_path == NULL ) {
+		log_error( "Calloc failed trying to allocate %lu bytes: %s\n", ( original_length + 1 ) * sizeof( char ), strerror(errno) );
+		return -1;
+	}
 
-        size_t new_length = 0;
-        const char *match, *walk = original_path;
-        while ( ( match = strchr( walk, '/' ) ) ) {
+	size_t new_length = 0;
+	const char *match, *walk = original_path;
+	while ( ( match = strchr( walk, '/' ) ) ) {
 
-                // Copy everything between match and walk
-                strncpy( *normalized_path + new_length, walk, match - walk );
-                new_length += match - walk;
-                walk += match - walk;
+		// Copy everything between match and walk
+		strncpy( *normalized_path + new_length, walk, match - walk );
+		new_length += match - walk;
+		walk += match - walk;
 
-                // Skip all repeating slashes
-                while ( *walk == '/' ) walk++;
+		// Skip all repeating slashes
+		while ( *walk == '/' ) walk++;
 
-                // If not last character in path
-                if ( walk != original_path + original_length ) ( *normalized_path )[ new_length++ ] = '/';
-        }
+		// If not last character in path
+		if ( walk != original_path + original_length ) ( *normalized_path )[ new_length++ ] = '/';
+	}
 
-        ( *normalized_path )[ new_length++ ] = '\0';
+	( *normalized_path )[ new_length++ ] = '\0';
 
-        // Copy remaining path
-        strcat( *normalized_path, walk );
-        new_length += strlen( walk );
+	// Copy remaining path
+	strcat( *normalized_path, walk );
+	new_length += strlen( walk );
 
-        *normalized_path = (char *) realloc( *normalized_path, new_length * sizeof( char ) );
+	*normalized_path = (char *) realloc( *normalized_path, new_length * sizeof( char ) );
 
-        return 0;
+	return 0;
 }
 
 /**
@@ -859,12 +862,12 @@ int normalize_path( const char *original_path, char **normalized_path ) {
  */
 void setlayout_floating( const Arg *arg ) {
 
-        const Arg tmp = find_layout( NULL );
-        if ( !tmp.i ) {
-                log_warn( "setlayout_floating() failed to find floating layout in \"layouts\" array\n" );
-        } else {
-                setlayout( &tmp );
-        }
+	const Arg tmp = find_layout( NULL );
+	if ( !tmp.i ) {
+		log_warn( "setlayout_floating() failed to find floating layout in \"layouts\" array\n" );
+	} else {
+		setlayout( &tmp );
+	}
 }
 
 /**
@@ -878,12 +881,12 @@ void setlayout_floating( const Arg *arg ) {
  */
 void setlayout_monocle( const Arg *arg ) {
 
-        const Arg tmp = find_layout( monocle );
-        if ( !tmp.i ) {
-                log_warn( "setlayout_monocle() failed to find monocle layout in \"layouts\" array\n" );
-        } else {
-                setlayout( &tmp );
-        }
+	const Arg tmp = find_layout( monocle );
+	if ( !tmp.i ) {
+		log_warn( "setlayout_monocle() failed to find monocle layout in \"layouts\" array\n" );
+	} else {
+		setlayout( &tmp );
+	}
 }
 
 /**
@@ -897,12 +900,12 @@ void setlayout_monocle( const Arg *arg ) {
  */
 void setlayout_tiled( const Arg *arg ) {
 
-        const Arg tmp = find_layout( tile );
-        if ( !tmp.i ) {
-                log_warn( "setlayout_tiled() failed to find tile layout in \"layouts\" array\n" );
-        } else {
-                setlayout( &tmp );
-        }
+	const Arg tmp = find_layout( tile );
+	if ( !tmp.i ) {
+		log_warn( "setlayout_tiled() failed to find tile layout in \"layouts\" array\n" );
+	} else {
+		setlayout( &tmp );
+	}
 }
 
 /**
@@ -919,14 +922,14 @@ void setlayout_tiled( const Arg *arg ) {
  */
 void spawn_simple( const Arg *arg ) {
 
-        // Process argv to work with default spawn() behavior
-        const char *cmd = arg->v;
-        char *argv[ ] = { "/bin/sh", "-c", (char *) cmd, NULL };
-        log_debug( "Attempting to spawn \"%s\"\n", (char *) cmd );
+	// Process argv to work with default spawn() behavior
+	const char *cmd = arg->v;
+	char *argv[ ] = { "/bin/sh", "-c", (char *) cmd, NULL };
+	log_debug( "Attempting to spawn \"%s\"\n", (char *) cmd );
 
-        // Call spawn with our new processed value
-        const Arg tmp = { .v = argv };
-        spawn( &tmp );
+	// Call spawn with our new processed value
+	const Arg tmp = { .v = argv };
+	spawn( &tmp );
 }
 
 /// Parser internal functions ///
@@ -954,36 +957,36 @@ void spawn_simple( const Arg *arg ) {
  */
 static Error_t _parser_backup_config( Libconfig_Config_t *libconfig_config ) {
 
-        // Save xdg data directory to buffer (~/.local/share)
-        char *buffer = get_xdg_data_home();
+	// Save xdg data directory to buffer (~/.local/share)
+	char *buffer = get_xdg_data_home();
 
-        if ( buffer == NULL ) {
-                log_error( "Unable to get necessary directory to backup config\n" );
-                return ERROR_NOT_FOUND;
-        }
+	if ( buffer == NULL ) {
+		log_error( "Unable to get necessary directory to backup config\n" );
+		return ERROR_NOT_FOUND;
+	}
 
-        // Append buffer (already has "~/.local/share" or other xdg data directory)
-        // with the directory we want to backup the config to, create the directory
-        // if it doesn't exist, and then append with the filename we want to backup
-        // to config in.
-        extend_string( &buffer, "/dwm/" );
-        if ( buffer == NULL ) return ERROR_NULL_VALUE;
+	// Append buffer (already has "~/.local/share" or other xdg data directory)
+	// with the directory we want to backup the config to, create the directory
+	// if it doesn't exist, and then append with the filename we want to backup
+	// to config in.
+	extend_string( &buffer, "/dwm/" );
+	if ( buffer == NULL ) return ERROR_NULL_VALUE;
 
-        if ( make_directory_path( buffer ) != 0 ) return ERROR_IO;
+	if ( make_directory_path( buffer ) != 0 ) return ERROR_IO;
 
-        extend_string( &buffer, "dwm_last.conf" );
-        if ( buffer == NULL ) return ERROR_NULL_VALUE;
+	extend_string( &buffer, "dwm_last.conf" );
+	if ( buffer == NULL ) return ERROR_NULL_VALUE;
 
-        if ( config_write_file( libconfig_config, buffer ) == CONFIG_FALSE ) {
-                log_error( "Problem backing up current config to \"%s\"\n", buffer );
-                free( buffer );
-                return ERROR_IO;
-        }
+	if ( config_write_file( libconfig_config, buffer ) == CONFIG_FALSE ) {
+		log_error( "Problem backing up current config to \"%s\"\n", buffer );
+		free( buffer );
+		return ERROR_IO;
+	}
 
-        log_info( "Current config backed up to \"%s\"\n", buffer );
-        free( buffer );
+	log_info( "Current config backed up to \"%s\"\n", buffer );
+	free( buffer );
 
-        return ERROR_NONE;
+	return ERROR_NONE;
 }
 
 /**
@@ -1002,43 +1005,43 @@ static Error_t _parser_backup_config( Libconfig_Config_t *libconfig_config ) {
  */
 static Error_t _parse_bind_argument( Libconfig_Setting_t *bind_setting, const Data_Type_t argument_type, const long double range_min, const long double range_max, Arg *parsed_argument ) {
 
-        // @formatter:off
-        Error_t lookup_error = ERROR_NONE;
-        switch ( argument_type ) {
-                case TYPE_NONE:
-                        return ERROR_NONE;
+	// @formatter:off
+	Error_t lookup_error = ERROR_NONE;
+	switch ( argument_type ) {
+		case TYPE_NONE:
+			return ERROR_NONE;
 
-                case TYPE_BOOLEAN:
-                        lookup_error = _libconfig_setting_lookup_bool( bind_setting, "argument", (bool *) &parsed_argument->ui );
-                        break;
+		case TYPE_BOOLEAN:
+			lookup_error = _libconfig_setting_lookup_bool( bind_setting, "argument", (bool *) &parsed_argument->ui );
+			break;
 
-                case TYPE_INT: {
-                        lookup_error = _libconfig_setting_lookup_int( bind_setting, "argument", range_min, range_max, &parsed_argument->i );
-                        break;
-                }
+		case TYPE_INT: {
+			lookup_error = _libconfig_setting_lookup_int( bind_setting, "argument", range_min, range_max, &parsed_argument->i );
+			break;
+		}
 
-                case TYPE_UINT: {
-                        lookup_error = _libconfig_setting_lookup_uint( bind_setting, "argument", range_min, range_max, &parsed_argument->ui );
-                        break;
-                }
+		case TYPE_UINT: {
+			lookup_error = _libconfig_setting_lookup_uint( bind_setting, "argument", range_min, range_max, &parsed_argument->ui );
+			break;
+		}
 
-                case TYPE_FLOAT: {
-                        lookup_error = _libconfig_setting_lookup_float( bind_setting, "argument", range_min, range_max, &parsed_argument->f );
-                        break;
-                }
+		case TYPE_FLOAT: {
+			lookup_error = _libconfig_setting_lookup_float( bind_setting, "argument", range_min, range_max, &parsed_argument->f );
+			break;
+		}
 
-                case TYPE_STRING: {
-                        lookup_error = _libconfig_setting_lookup_string( bind_setting, "argument", (const char **) &parsed_argument->v );
-                        break;
-                }
+		case TYPE_STRING: {
+			lookup_error = _libconfig_setting_lookup_string( bind_setting, "argument", (const char **) &parsed_argument->v );
+			break;
+		}
 
-                default:
-                        log_error( "Unknown argument type during bind parsing: %d. Please reprogram to a valid type\n", argument_type );
-                        return ERROR_TYPE;
-        }
-        // @formatter:on
+		default:
+			log_error( "Unknown argument type during bind parsing: %d. Please reprogram to a valid type\n", argument_type );
+			return ERROR_TYPE;
+	}
+	// @formatter:on
 
-        return lookup_error;
+	return lookup_error;
 }
 
 /**
@@ -1056,38 +1059,38 @@ static Error_t _parse_bind_argument( Libconfig_Setting_t *bind_setting, const Da
  * @return TODO
  */
 static Errors_t _parse_bind_core( Libconfig_Setting_t *bind_setting, const unsigned int bind_index, unsigned int *parsed_modifier, void ( **parsed_function )( const Arg * ), Arg *parsed_argument,
-                                  const char *bind_array_path ) {
+				  const char *bind_array_path ) {
 
-        Errors_t returned_errors = { 0 };
+	Errors_t returned_errors = { 0 };
 
-        // TODO: It would be nice to find a clean way to allow for no modifier at all in a bind, not just an empty string
-        const Error_t modifier_error = _parse_bind_modifier( bind_setting, parsed_modifier );
-        add_error( &returned_errors, modifier_error );
+	// TODO: It would be nice to find a clean way to allow for no modifier at all in a bind, not just an empty string
+	const Error_t modifier_error = _parse_bind_modifier( bind_setting, parsed_modifier );
+	add_error( &returned_errors, modifier_error );
 
-        if ( modifier_error != ERROR_NONE ) {
-                log_error( "%s %d invalid, unable to parse bind's modifier: %s\n", bind_array_path, bind_index + 1, ERROR_ENUM_STRINGS[ modifier_error ] );
-                return returned_errors;
-        }
+	if ( modifier_error != ERROR_NONE ) {
+		log_error( "%s %d invalid, unable to parse bind's modifier: %s\n", bind_array_path, bind_index + 1, ERROR_ENUM_STRINGS[ modifier_error ] );
+		return returned_errors;
+	}
 
-        Data_Type_t argument_type = TYPE_NONE;
-        long double range_min = 0, range_max = 0;
-        const Error_t bind_error = _parse_bind_function( bind_setting, parsed_function, &argument_type, &range_min, &range_max );
-        add_error( &returned_errors, bind_error );
+	Data_Type_t argument_type = TYPE_NONE;
+	long double range_min = 0, range_max = 0;
+	const Error_t bind_error = _parse_bind_function( bind_setting, parsed_function, &argument_type, &range_min, &range_max );
+	add_error( &returned_errors, bind_error );
 
-        if ( bind_error != ERROR_NONE ) {
-                log_error( "%s %d invalid, unable to parse bind's function: %s\n", bind_array_path, bind_index + 1, ERROR_ENUM_STRINGS[ bind_error ] );
-                return returned_errors;
-        }
+	if ( bind_error != ERROR_NONE ) {
+		log_error( "%s %d invalid, unable to parse bind's function: %s\n", bind_array_path, bind_index + 1, ERROR_ENUM_STRINGS[ bind_error ] );
+		return returned_errors;
+	}
 
-        const Error_t argument_error = _parse_bind_argument( bind_setting, argument_type, range_min, range_max, parsed_argument );
-        add_error( &returned_errors, argument_error );
+	const Error_t argument_error = _parse_bind_argument( bind_setting, argument_type, range_min, range_max, parsed_argument );
+	add_error( &returned_errors, argument_error );
 
-        if ( argument_error != ERROR_NONE ) {
-                log_error( "%s %d invalid, unable to parse bind's arguments: %s\n", bind_array_path, bind_index + 1, ERROR_ENUM_STRINGS[ argument_error ] );
-                return returned_errors;
-        }
+	if ( argument_error != ERROR_NONE ) {
+		log_error( "%s %d invalid, unable to parse bind's arguments: %s\n", bind_array_path, bind_index + 1, ERROR_ENUM_STRINGS[ argument_error ] );
+		return returned_errors;
+	}
 
-        return returned_errors;
+	return returned_errors;
 }
 
 /**
@@ -1105,24 +1108,24 @@ static Errors_t _parse_bind_core( Libconfig_Setting_t *bind_setting, const unsig
  */
 
 static Error_t _parse_bind_function( Libconfig_Setting_t *bind_setting, void ( **parsed_function )( const Arg * ), Data_Type_t *parsed_argument_type, long double *parsed_range_min,
-                                     long double *parsed_range_max ) {
+				     long double *parsed_range_max ) {
 
-        const char *function_string = NULL;
-        const Error_t lookup_error = _libconfig_setting_lookup_string( bind_setting, "function", &function_string );
+	const char *function_string = NULL;
+	const Error_t lookup_error = _libconfig_setting_lookup_string( bind_setting, "function", &function_string );
 
-        if ( lookup_error != ERROR_NONE ) return lookup_error;
+	if ( lookup_error != ERROR_NONE ) return lookup_error;
 
-        for ( int i = 0; i < LENGTH( FUNCTION_ALIAS_MAP ); i++ ) {
-                if ( strcasecmp( function_string, FUNCTION_ALIAS_MAP[ i ].name ) == 0 ) {
-                        *parsed_function = FUNCTION_ALIAS_MAP[ i ].func;
-                        *parsed_argument_type = FUNCTION_ALIAS_MAP[ i ].arg_type;
-                        *parsed_range_min = FUNCTION_ALIAS_MAP[ i ].range_min;
-                        *parsed_range_max = FUNCTION_ALIAS_MAP[ i ].range_max;
-                        return ERROR_NONE;
-                }
-        }
+	for ( int i = 0; i < LENGTH( FUNCTION_ALIAS_MAP ); i++ ) {
+		if ( strcasecmp( function_string, FUNCTION_ALIAS_MAP[ i ].name ) == 0 ) {
+			*parsed_function = FUNCTION_ALIAS_MAP[ i ].func;
+			*parsed_argument_type = FUNCTION_ALIAS_MAP[ i ].arg_type;
+			*parsed_range_min = FUNCTION_ALIAS_MAP[ i ].range_min;
+			*parsed_range_max = FUNCTION_ALIAS_MAP[ i ].range_max;
+			return ERROR_NONE;
+		}
+	}
 
-        return ERROR_NOT_FOUND;
+	return ERROR_NOT_FOUND;
 }
 
 /**
@@ -1139,47 +1142,47 @@ static Error_t _parse_bind_function( Libconfig_Setting_t *bind_setting, void ( *
  */
 static Error_t _parse_bind_modifier( Libconfig_Setting_t *bind_setting, unsigned int *parsed_modifier ) {
 
-        const char *modifier_string = NULL;
-        const Error_t lookup_error = _libconfig_setting_lookup_string( bind_setting, "modifier", &modifier_string );
+	const char *modifier_string = NULL;
+	const Error_t lookup_error = _libconfig_setting_lookup_string( bind_setting, "modifier", &modifier_string );
 
-        if ( lookup_error != ERROR_NONE ) return lookup_error;
+	if ( lookup_error != ERROR_NONE ) return lookup_error;
 
-        char *buffer = estrdup( modifier_string );
+	char *buffer = estrdup( modifier_string );
 
-        if ( !buffer ) return ERROR_ALLOCATION;
+	if ( !buffer ) return ERROR_ALLOCATION;
 
-        char *modifier_token = strtok( buffer, "+" );
-        while ( modifier_token != NULL ) {
+	char *modifier_token = strtok( buffer, "+" );
+	while ( modifier_token != NULL ) {
 
-                while ( *modifier_token == ' ' || *modifier_token == '\t' ) modifier_token++;
+		while ( *modifier_token == ' ' || *modifier_token == '\t' ) modifier_token++;
 
-                char *end = modifier_token + strlen( modifier_token ) - 1;
-                while ( end > modifier_token && ( *end == ' ' || *end == '\t' ) ) {
-                        *end = '\0';
-                        end--;
-                }
+		char *end = modifier_token + strlen( modifier_token ) - 1;
+		while ( end > modifier_token && ( *end == ' ' || *end == '\t' ) ) {
+			*end = '\0';
+			end--;
+		}
 
-                bool found = false;
-                for ( int i = 0; i < LENGTH( MODIFIER_ALIAS_MAP ); i++ ) {
-                        if ( strcasecmp( modifier_token, MODIFIER_ALIAS_MAP[ i ].name ) == 0 ) {
-                                *parsed_modifier |= MODIFIER_ALIAS_MAP[ i ].mask;
-                                found = true;
-                                break;
-                        }
-                }
+		bool found = false;
+		for ( int i = 0; i < LENGTH( MODIFIER_ALIAS_MAP ); i++ ) {
+			if ( strcasecmp( modifier_token, MODIFIER_ALIAS_MAP[ i ].name ) == 0 ) {
+				*parsed_modifier |= MODIFIER_ALIAS_MAP[ i ].mask;
+				found = true;
+				break;
+			}
+		}
 
-                if ( !found ) {
-                        log_error( "Invalid modifier: \"%s\"\n", modifier_token );
-                        free( buffer );
-                        return ERROR_NOT_FOUND;
-                }
+		if ( !found ) {
+			log_error( "Invalid modifier: \"%s\"\n", modifier_token );
+			free( buffer );
+			return ERROR_NOT_FOUND;
+		}
 
-                modifier_token = strtok( NULL, "+" );
-        }
+		modifier_token = strtok( NULL, "+" );
+	}
 
-        free( buffer );
+	free( buffer );
 
-        return ERROR_NONE;
+	return ERROR_NONE;
 }
 
 /**
@@ -1195,36 +1198,36 @@ static Error_t _parse_bind_modifier( Libconfig_Setting_t *bind_setting, unsigned
  */
 static Errors_t _parse_buttonbind( Libconfig_Setting_t *buttonbind_setting, const unsigned int buttonbind_index, Button *parsed_buttonbind ) {
 
-        Errors_t returned_errors = { 0 };
+	Errors_t returned_errors = { 0 };
 
-        merge_errors( &returned_errors, _parse_bind_core( buttonbind_setting, buttonbind_index, &parsed_buttonbind->mask, &parsed_buttonbind->func, &parsed_buttonbind->arg, "Buttonbind" ) );
+	merge_errors( &returned_errors, _parse_bind_core( buttonbind_setting, buttonbind_index, &parsed_buttonbind->mask, &parsed_buttonbind->func, &parsed_buttonbind->arg, "Buttonbind" ) );
 
-        const Error_t button_error = _parse_buttonbind_button( buttonbind_setting, &parsed_buttonbind->button );
-        add_error( &returned_errors, button_error );
+	const Error_t button_error = _parse_buttonbind_button( buttonbind_setting, &parsed_buttonbind->button );
+	add_error( &returned_errors, button_error );
 
-        if ( button_error != ERROR_NONE ) {
-                log_error( "Buttonbind %d invalid, unable to parse bind's button: %s\n", buttonbind_index + 1, ERROR_ENUM_STRINGS[ button_error ] );
-                return returned_errors;
-        }
+	if ( button_error != ERROR_NONE ) {
+		log_error( "Buttonbind %d invalid, unable to parse bind's button: %s\n", buttonbind_index + 1, ERROR_ENUM_STRINGS[ button_error ] );
+		return returned_errors;
+	}
 
-        const Error_t click_error = _parse_buttonbind_click( buttonbind_setting, &parsed_buttonbind->click );
-        add_error( &returned_errors, click_error );
+	const Error_t click_error = _parse_buttonbind_click( buttonbind_setting, &parsed_buttonbind->click );
+	add_error( &returned_errors, click_error );
 
-        if ( click_error != ERROR_NONE ) {
-                log_error( "Buttonbind %d invalid, unable to parse bind's click: %s\n", buttonbind_index + 1, ERROR_ENUM_STRINGS[ click_error ] );
-        }
+	if ( click_error != ERROR_NONE ) {
+		log_error( "Buttonbind %d invalid, unable to parse bind's click: %s\n", buttonbind_index + 1, ERROR_ENUM_STRINGS[ click_error ] );
+	}
 
-        // Ensure button is zeroed and doesn't accidentally have any
-        // data left over from parsing that could cause unusual behavior
-        if ( errors_failure_count( &returned_errors ) != 0 ) {
-                parsed_buttonbind->click = 0;
-                parsed_buttonbind->mask = 0;
-                parsed_buttonbind->button = 0;
-                parsed_buttonbind->func = NULL;
-                parsed_buttonbind->arg.i = 0;
-        }
+	// Ensure button is zeroed and doesn't accidentally have any
+	// data left over from parsing that could cause unusual behavior
+	if ( errors_failure_count( &returned_errors ) != 0 ) {
+		parsed_buttonbind->click = 0;
+		parsed_buttonbind->mask = 0;
+		parsed_buttonbind->button = 0;
+		parsed_buttonbind->func = NULL;
+		parsed_buttonbind->arg.i = 0;
+	}
 
-        return returned_errors;
+	return returned_errors;
 }
 
 /**
@@ -1239,7 +1242,7 @@ static Errors_t _parse_buttonbind( Libconfig_Setting_t *buttonbind_setting, cons
  * @return TODO
  */
 static Errors_t _parse_buttonbind_adapter( Libconfig_Setting_t *buttonbind_setting, const unsigned int buttonbind_index, void *parsed_keybind ) {
-        return _parse_buttonbind( buttonbind_setting, buttonbind_index, (Button *) parsed_keybind );
+	return _parse_buttonbind( buttonbind_setting, buttonbind_index, (Button *) parsed_keybind );
 }
 
 /**
@@ -1256,30 +1259,30 @@ static Errors_t _parse_buttonbind_adapter( Libconfig_Setting_t *buttonbind_setti
  */
 static Error_t _parse_buttonbind_button( Libconfig_Setting_t *buttonbind_setting, unsigned int *parsed_button ) {
 
-        const char *button_string = NULL;
-        const Error_t lookup_error = _libconfig_setting_lookup_string( buttonbind_setting, "button", &button_string );
+	const char *button_string = NULL;
+	const Error_t lookup_error = _libconfig_setting_lookup_string( buttonbind_setting, "button", &button_string );
 
-        if ( lookup_error != ERROR_NONE ) return lookup_error;
+	if ( lookup_error != ERROR_NONE ) return lookup_error;
 
-        for ( int i = 0; i < LENGTH( BUTTON_ALIAS_MAP ); i++ ) {
-                if ( strcasecmp( button_string, BUTTON_ALIAS_MAP[ i ].name ) == 0 ) {
-                        *parsed_button = BUTTON_ALIAS_MAP[ i ].button;
-                        return ERROR_NONE;
-                }
-        }
+	for ( int i = 0; i < LENGTH( BUTTON_ALIAS_MAP ); i++ ) {
+		if ( strcasecmp( button_string, BUTTON_ALIAS_MAP[ i ].name ) == 0 ) {
+			*parsed_button = BUTTON_ALIAS_MAP[ i ].button;
+			return ERROR_NONE;
+		}
+	}
 
-        errno = 0;
-        char *end_pointer = NULL;
-        const unsigned long parsed_value = strtoul( button_string, &end_pointer, 10 );
+	errno = 0;
+	char *end_pointer = NULL;
+	const unsigned long parsed_value = strtoul( button_string, &end_pointer, 10 );
 
-        if ( errno != 0 || end_pointer == button_string || *end_pointer != '\0' ) return ERROR_NOT_FOUND;
+	if ( errno != 0 || end_pointer == button_string || *end_pointer != '\0' ) return ERROR_NOT_FOUND;
 
-        // X11 button mask is only 8 bits
-        if ( parsed_value < 1 || parsed_value > 255 ) return ERROR_RANGE;
+	// X11 button mask is only 8 bits
+	if ( parsed_value < 1 || parsed_value > 255 ) return ERROR_RANGE;
 
-        *parsed_button = (unsigned int) parsed_value;
+	*parsed_button = (unsigned int) parsed_value;
 
-        return ERROR_NONE;
+	return ERROR_NONE;
 }
 
 /**
@@ -1294,19 +1297,19 @@ static Error_t _parse_buttonbind_button( Libconfig_Setting_t *buttonbind_setting
  */
 static Error_t _parse_buttonbind_click( Libconfig_Setting_t *buttonbind_setting, unsigned int *parsed_click ) {
 
-        const char *click_string = NULL;
-        const Error_t lookup_error = _libconfig_setting_lookup_string( buttonbind_setting, "click", &click_string );
+	const char *click_string = NULL;
+	const Error_t lookup_error = _libconfig_setting_lookup_string( buttonbind_setting, "click", &click_string );
 
-        if ( lookup_error != ERROR_NONE ) return lookup_error;
+	if ( lookup_error != ERROR_NONE ) return lookup_error;
 
-        for ( int i = 0; i < LENGTH( CLICK_ALIAS_MAP ); i++ ) {
-                if ( strcasecmp( click_string, CLICK_ALIAS_MAP[ i ].name ) == 0 ) {
-                        *parsed_click = CLICK_ALIAS_MAP[ i ].click;
-                        return ERROR_NONE;
-                }
-        }
+	for ( int i = 0; i < LENGTH( CLICK_ALIAS_MAP ); i++ ) {
+		if ( strcasecmp( click_string, CLICK_ALIAS_MAP[ i ].name ) == 0 ) {
+			*parsed_click = CLICK_ALIAS_MAP[ i ].click;
+			return ERROR_NONE;
+		}
+	}
 
-        return ERROR_NOT_FOUND;
+	return ERROR_NOT_FOUND;
 }
 
 /**
@@ -1328,8 +1331,8 @@ static Error_t _parse_buttonbind_click( Libconfig_Setting_t *buttonbind_setting,
  * @note TODO Maybe mention dynamic allocation in _parse_binds_config()?
  */
 static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_config, Button **buttonbind_config, unsigned int *buttonbinds_count, bool *buttonbinds_dynamically_allocated ) {
-        return _parse_config_array( libconfig_config, NULL, "buttonbinds", sizeof( Button ), _parse_buttonbind_adapter, buttonbinds_dynamically_allocated, (void **) buttonbind_config,
-                                    buttonbinds_count );
+	return _parse_config_array( libconfig_config, NULL, "buttonbinds", sizeof( Button ), _parse_buttonbind_adapter, buttonbinds_dynamically_allocated, (void **) buttonbind_config,
+				    buttonbinds_count );
 }
 
 /**
@@ -1340,7 +1343,7 @@ static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_c
  * @param libconfig_config TODO
  * @param libconfig_setting TODO
  * @param config_array_name TODO
- * @param element_struct_size TODO
+ * @param element_size TODO
  * @param array_element_parser_function TODO
  * @param dynamically_allocated TODO
  * @param parsed_config TODO
@@ -1352,83 +1355,86 @@ static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *libconfig_c
  * elements fail to be parsed. For example, if the keybinds all (or many) fail, it could soft-lock the
  * user in the program. Not sure best way to do that, or if it is even the best idea to add.
  */
-static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config, Libconfig_Setting_t *libconfig_setting, const char *config_array_name, const size_t element_struct_size,
-                                     const Array_Element_Parser_Function_t array_element_parser_function, bool *dynamically_allocated, void **parsed_config, unsigned int *parsed_config_length ) {
+static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config, Libconfig_Setting_t *libconfig_setting, const char *config_array_name, const size_t element_size,
+				     const Array_Element_Parser_Function_t array_element_parser_function, bool *dynamically_allocated, void **parsed_config, unsigned int *parsed_config_length ) {
 
-        Errors_t returned_errors = { 0 };
+	Errors_t returned_errors = { 0 };
 
-        if ( libconfig_config == NULL && libconfig_setting == NULL ) {
-                log_error( "libconfig_config and libconfig_setting were both NULL. Cannot parse without a context, please fix programming error\n" );
-                add_error( &returned_errors, ERROR_NULL_VALUE );
-                return returned_errors;
-        } else if ( libconfig_config != NULL && libconfig_setting != NULL ) {
-                log_error( "libconfig_config and libconfig_setting were both given. It is unable to tell which context was intended to be searched, please fix programming error\n" );
-                add_error( &returned_errors, ERROR_NULL_VALUE );
-                return returned_errors;
-        }
+	if ( libconfig_config == NULL && libconfig_setting == NULL ) {
+		log_error( "libconfig_config and libconfig_setting were both NULL. Cannot parse without a context, please fix programming error\n" );
+		add_error( &returned_errors, ERROR_NULL_VALUE );
+		return returned_errors;
+	}
 
-        const Libconfig_Setting_t *parent_setting = NULL;
+	if ( libconfig_config != NULL && libconfig_setting != NULL ) {
+		log_error( "libconfig_config and libconfig_setting were both given. It is unable to tell which context was intended to be searched, please fix programming error\n" );
+		add_error( &returned_errors, ERROR_NULL_VALUE );
+		return returned_errors;
+	}
 
-        if ( libconfig_config != NULL ) {
-                parent_setting = config_lookup( libconfig_config, config_array_name );
-        } else if ( libconfig_setting != NULL ) {
-                parent_setting = config_setting_lookup( libconfig_setting, config_array_name );
-        }
+	const Libconfig_Setting_t *parent_setting = NULL;
 
-        if ( parent_setting == NULL ) {
-                log_error( "Problem reading config value \"%s\": Not found. Default %s will be loaded\n", config_array_name, config_array_name );
-                add_error( &returned_errors, ERROR_NOT_FOUND );
-                return returned_errors;
-        }
+	if ( libconfig_config != NULL ) {
+		parent_setting = config_lookup( libconfig_config, config_array_name );
+	} else {
+		parent_setting = config_setting_lookup( libconfig_setting, config_array_name );
+	}
 
-        *parsed_config_length = config_setting_length( parent_setting );
-        if ( *parsed_config_length == 0 ) {
-                log_warn( "No %s listed. Default %s will be used\n", config_array_name, config_array_name );
-                add_error( &returned_errors, ERROR_NOT_FOUND );
-                return returned_errors;
-        }
+	if ( parent_setting == NULL ) {
+		log_error( "Problem reading config value \"%s\": Not found. Default %s will be loaded\n", config_array_name, config_array_name );
+		add_error( &returned_errors, ERROR_NOT_FOUND );
+		return returned_errors;
+	}
 
-        log_debug( "%u %s detected\n", *parsed_config_length, config_array_name );
+	*parsed_config_length = config_setting_length( parent_setting );
+	if ( *parsed_config_length == 0 ) {
+		log_warn( "No %s listed. Default %s will be used\n", config_array_name, config_array_name );
+		add_error( &returned_errors, ERROR_NOT_FOUND );
+		return returned_errors;
+	}
 
-        // dynamically_allocated is also used to determine if we
-        // should dynamically allocate the array or if it is already
-        // allocated some other way, usually on the stack, as well
-        // as report that it has been dynamically allocated here.
-        if ( dynamically_allocated != NULL && parsed_config != NULL ) {
-                log_debug( "Dynamically allocating %s\n", config_array_name );
-                *parsed_config = calloc( *parsed_config_length, element_struct_size );
-                if ( *parsed_config == NULL ) {
-                        add_error( &returned_errors, ERROR_ALLOCATION );
-                        return returned_errors;
-                } else {
-                        *dynamically_allocated = true;
-                }
-        }
+	log_debug( "%u %s detected\n", *parsed_config_length, config_array_name );
 
-        for ( unsigned int i = 0; i < *parsed_config_length; i++ ) {
+	// dynamically_allocated is also used to determine if we
+	// should dynamically allocate the array or if it is already
+	// allocated some other way, usually on the stack, as well
+	// as report that it has been dynamically allocated here.
+	if ( dynamically_allocated != NULL && parsed_config != NULL ) {
+		log_debug( "Dynamically allocating %s\n", config_array_name );
+		*parsed_config = calloc( *parsed_config_length, element_size );
 
-                Libconfig_Setting_t *child_setting = config_setting_get_elem( parent_setting, i );
+		if ( *parsed_config == NULL ) {
+			add_error( &returned_errors, ERROR_ALLOCATION );
+			return returned_errors;
+		}
 
-                if ( child_setting == NULL ) {
-                        log_warn( "\"%s\" element number %u returned NULL\n", config_array_name, i + 1 );
-                        add_error( &returned_errors, ERROR_NULL_VALUE );
-                        continue;
-                }
+		*dynamically_allocated = true;
+	}
 
-                // Yes, parsed_config can be NULL, that is intended. It is used by things like
-                // theme or tag parsing that rely on global values.
-                void *element = parsed_config ? (char *) ( *parsed_config ) + ( i * element_struct_size ) : NULL;
+	for ( unsigned int i = 0; i < *parsed_config_length; i++ ) {
 
-                const Errors_t parsing_error = array_element_parser_function( child_setting, i, element );
+		Libconfig_Setting_t *child_setting = config_setting_get_elem( parent_setting, i );
 
-                if ( errors_failure_count( &parsing_error ) ) {
-                        log_warn( "\"%s\" element number %d failed to be parsed. It had %d errors\n", config_array_name, i + 1, errors_failure_count( &parsing_error ) );
-                        merge_errors( &returned_errors, parsing_error );
-                        continue;
-                }
-        }
+		if ( child_setting == NULL ) {
+			log_warn( "\"%s\" element number %u returned NULL\n", config_array_name, i + 1 );
+			add_error( &returned_errors, ERROR_NULL_VALUE );
+			continue;
+		}
 
-        return returned_errors;
+		// Yes, parsed_config can be NULL, that is intended. It is used by things like
+		// theme or tag parsing that rely on global values.
+		void *element = parsed_config ? (char *) ( *parsed_config ) + ( i * element_size ) : NULL;
+
+		const Errors_t parsing_error = array_element_parser_function( child_setting, i, element );
+
+		if ( errors_failure_count( &parsing_error ) ) {
+			log_warn( "\"%s\" element number %d failed to be parsed. It had %d errors\n", config_array_name, i + 1, errors_failure_count( &parsing_error ) );
+			merge_errors( &returned_errors, parsing_error );
+			continue;
+		}
+	}
+
+	return returned_errors;
 }
 
 /**
@@ -1444,17 +1450,17 @@ static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config,
  */
 static Errors_t _parse_font( Libconfig_Setting_t *fonts_setting, const unsigned int fonts_index, const char *parsed_font ) {
 
-        Errors_t returned_errors = { 0 };
+	Errors_t returned_errors = { 0 };
 
-        // TODO: Is there a better way that will give a better error return?
-        parsed_font = config_setting_get_string( fonts_setting );
+	// TODO: Is there a better way that will give a better error return?
+	parsed_font = config_setting_get_string( fonts_setting );
 
-        if ( parsed_font == NULL ) {
-                log_error( "Problem reading font element %d: Value doesn't exist or isn't a string\n", fonts_index + 1 );
-                add_error( &returned_errors, ERROR_NULL_VALUE );
-        }
+	if ( parsed_font == NULL ) {
+		log_error( "Problem reading font element %d: Value doesn't exist or isn't a string\n", fonts_index + 1 );
+		add_error( &returned_errors, ERROR_NULL_VALUE );
+	}
 
-        return returned_errors;
+	return returned_errors;
 }
 
 /**
@@ -1469,7 +1475,7 @@ static Errors_t _parse_font( Libconfig_Setting_t *fonts_setting, const unsigned 
  * @return TODO
  */
 static Errors_t _parse_font_adapter( Libconfig_Setting_t *fonts_setting, const unsigned int fonts_index, void *parsed_font ) {
-        return _parse_font( fonts_setting, fonts_index, (const char *) parsed_font );
+	return _parse_font( fonts_setting, fonts_index, (const char *) parsed_font );
 }
 
 /**
@@ -1483,50 +1489,50 @@ static Errors_t _parse_font_adapter( Libconfig_Setting_t *fonts_setting, const u
  */
 static Errors_t _parse_generic_settings( const Libconfig_Config_t *libconfig_config ) {
 
-        Errors_t returned_errors = { 0 };
-        Error_t returned_error = { 0 };
+	Errors_t returned_errors = { 0 };
+	Error_t returned_error = { 0 };
 
-        log_debug( "Generic settings available: %lu\n", LENGTH( SETTING_ALIAS_MAP ) );
+	log_debug( "Generic settings available: %lu\n", LENGTH( SETTING_ALIAS_MAP ) );
 
-        for ( int i = 0; i < LENGTH( SETTING_ALIAS_MAP ); ++i ) {
-                switch ( SETTING_ALIAS_MAP[ i ].type ) {
-                        case TYPE_BOOLEAN:
-                                returned_error = _libconfig_lookup_bool( libconfig_config, SETTING_ALIAS_MAP[ i ].name, SETTING_ALIAS_MAP[ i ].value );
-                                break;
+	for ( int i = 0; i < LENGTH( SETTING_ALIAS_MAP ); ++i ) {
+		switch ( SETTING_ALIAS_MAP[ i ].type ) {
+			case TYPE_BOOLEAN:
+				returned_error = _libconfig_lookup_bool( libconfig_config, SETTING_ALIAS_MAP[ i ].name, SETTING_ALIAS_MAP[ i ].value );
+				break;
 
-                        case TYPE_INT:
-                                returned_error = _libconfig_lookup_int( libconfig_config, SETTING_ALIAS_MAP[ i ].name, (int) SETTING_ALIAS_MAP[ i ].range_min, (int) SETTING_ALIAS_MAP[ i ].range_max,
-                                                                        SETTING_ALIAS_MAP[ i ].value );
-                                break;
+			case TYPE_INT:
+				returned_error = _libconfig_lookup_int( libconfig_config, SETTING_ALIAS_MAP[ i ].name, (int) SETTING_ALIAS_MAP[ i ].range_min, (int) SETTING_ALIAS_MAP[ i ].range_max,
+									SETTING_ALIAS_MAP[ i ].value );
+				break;
 
-                        case TYPE_UINT:
-                                returned_error = _libconfig_lookup_uint( libconfig_config, SETTING_ALIAS_MAP[ i ].name, (unsigned int) SETTING_ALIAS_MAP[ i ].range_min,
-                                                                         (unsigned int) SETTING_ALIAS_MAP[ i ].range_max, SETTING_ALIAS_MAP[ i ].value );
-                                break;
+			case TYPE_UINT:
+				returned_error = _libconfig_lookup_uint( libconfig_config, SETTING_ALIAS_MAP[ i ].name, (unsigned int) SETTING_ALIAS_MAP[ i ].range_min,
+									 (unsigned int) SETTING_ALIAS_MAP[ i ].range_max, SETTING_ALIAS_MAP[ i ].value );
+				break;
 
-                        case TYPE_FLOAT:
-                                returned_error = _libconfig_lookup_float( libconfig_config, SETTING_ALIAS_MAP[ i ].name, (float) SETTING_ALIAS_MAP[ i ].range_min,
-                                                                          (float) SETTING_ALIAS_MAP[ i ].range_max, SETTING_ALIAS_MAP[ i ].value );
-                                break;
+			case TYPE_FLOAT:
+				returned_error = _libconfig_lookup_float( libconfig_config, SETTING_ALIAS_MAP[ i ].name, (float) SETTING_ALIAS_MAP[ i ].range_min,
+									  (float) SETTING_ALIAS_MAP[ i ].range_max, SETTING_ALIAS_MAP[ i ].value );
+				break;
 
-                        case TYPE_STRING:
-                                returned_error = _libconfig_lookup_string( libconfig_config, SETTING_ALIAS_MAP[ i ].name, SETTING_ALIAS_MAP[ i ].value );
-                                break;
+			case TYPE_STRING:
+				returned_error = _libconfig_lookup_string( libconfig_config, SETTING_ALIAS_MAP[ i ].name, SETTING_ALIAS_MAP[ i ].value );
+				break;
 
-                        default:
-                                returned_error = ERROR_TYPE;
-                                log_error( "Setting \"%s\" is programmed with an invalid type: \"%s\"\n", SETTING_ALIAS_MAP[ i ].name, DATA_TYPE_ENUM_STRINGS[ SETTING_ALIAS_MAP[ i ].type ] );
-                                break;
-                }
+			default:
+				returned_error = ERROR_TYPE;
+				log_error( "Setting \"%s\" is programmed with an invalid type: \"%s\"\n", SETTING_ALIAS_MAP[ i ].name, DATA_TYPE_ENUM_STRINGS[ SETTING_ALIAS_MAP[ i ].type ] );
+				break;
+		}
 
-                add_error( &returned_errors, returned_error );
+		add_error( &returned_errors, returned_error );
 
-                if ( returned_error != ERROR_NONE && !SETTING_ALIAS_MAP[ i ].optional ) {
-                        log_error( "Issue while parsing \"%s\": %s\n", SETTING_ALIAS_MAP[ i ].name, ERROR_ENUM_STRINGS[ returned_error ] );
-                }
-        }
+		if ( returned_error != ERROR_NONE && !SETTING_ALIAS_MAP[ i ].optional ) {
+			log_error( "Issue while parsing \"%s\": %s\n", SETTING_ALIAS_MAP[ i ].name, ERROR_ENUM_STRINGS[ returned_error ] );
+		}
+	}
 
-        return returned_errors;
+	return returned_errors;
 }
 
 /**
@@ -1542,27 +1548,27 @@ static Errors_t _parse_generic_settings( const Libconfig_Config_t *libconfig_con
  */
 static Errors_t _parse_keybind( Libconfig_Setting_t *keybind_setting, const unsigned int keybind_index, Key *parsed_keybind ) {
 
-        Errors_t returned_errors = { 0 };
+	Errors_t returned_errors = { 0 };
 
-        merge_errors( &returned_errors, _parse_bind_core( keybind_setting, keybind_index, &parsed_keybind->mod, &parsed_keybind->func, &parsed_keybind->arg, "Keybind" ) );
+	merge_errors( &returned_errors, _parse_bind_core( keybind_setting, keybind_index, &parsed_keybind->mod, &parsed_keybind->func, &parsed_keybind->arg, "Keybind" ) );
 
-        const Error_t keysym_error = _parse_keybind_keysym( keybind_setting, &parsed_keybind->keysym );
-        add_error( &returned_errors, keysym_error );
+	const Error_t keysym_error = _parse_keybind_keysym( keybind_setting, &parsed_keybind->keysym );
+	add_error( &returned_errors, keysym_error );
 
-        if ( keysym_error != ERROR_NONE ) {
-                log_error( "Keybind %d invalid, unable to parse bind's key: %s\n", keybind_index + 1, ERROR_ENUM_STRINGS[ keysym_error ] );
-        }
+	if ( keysym_error != ERROR_NONE ) {
+		log_error( "Keybind %d invalid, unable to parse bind's key: %s\n", keybind_index + 1, ERROR_ENUM_STRINGS[ keysym_error ] );
+	}
 
-        // Ensure key is zeroed and doesn't accidentally have any
-        // data left over from parsing that could cause unusual behavior
-        if ( errors_failure_count( &returned_errors ) != 0 ) {
-                parsed_keybind->mod = 0;
-                parsed_keybind->keysym = NoSymbol;
-                parsed_keybind->func = NULL;
-                parsed_keybind->arg.i = 0;
-        }
+	// Ensure key is zeroed and doesn't accidentally have any
+	// data left over from parsing that could cause unusual behavior
+	if ( errors_failure_count( &returned_errors ) != 0 ) {
+		parsed_keybind->mod = 0;
+		parsed_keybind->keysym = NoSymbol;
+		parsed_keybind->func = NULL;
+		parsed_keybind->arg.i = 0;
+	}
 
-        return returned_errors;
+	return returned_errors;
 }
 
 /**
@@ -1577,7 +1583,7 @@ static Errors_t _parse_keybind( Libconfig_Setting_t *keybind_setting, const unsi
  * @return TODO
  */
 static Errors_t _parse_keybind_adapter( Libconfig_Setting_t *keybind_setting, const unsigned int keybind_index, void *parsed_keybind ) {
-        return _parse_keybind( keybind_setting, keybind_index, (Key *) parsed_keybind );
+	return _parse_keybind( keybind_setting, keybind_index, (Key *) parsed_keybind );
 }
 
 /**
@@ -1598,20 +1604,20 @@ static Errors_t _parse_keybind_adapter( Libconfig_Setting_t *keybind_setting, co
  */
 static Error_t _parse_keybind_keysym( Libconfig_Setting_t *keybind_setting, KeySym *parsed_keysym ) {
 
-        const char *keybind_string = NULL;
-        const Error_t lookup_error = _libconfig_setting_lookup_string( keybind_setting, "key", &keybind_string );
+	const char *keybind_string = NULL;
+	const Error_t lookup_error = _libconfig_setting_lookup_string( keybind_setting, "key", &keybind_string );
 
-        if ( lookup_error != ERROR_NONE ) return lookup_error;
+	if ( lookup_error != ERROR_NONE ) return lookup_error;
 
-        *parsed_keysym = XStringToKeysym( keybind_string );
+	*parsed_keysym = XStringToKeysym( keybind_string );
 
-        if ( *parsed_keysym == NoSymbol ) return ERROR_NOT_FOUND;
+	if ( *parsed_keysym == NoSymbol ) return ERROR_NOT_FOUND;
 
-        // The upper case return of XConvertCase(), which we don't use.
-        KeySym unused = 0;
-        XConvertCase( *parsed_keysym, parsed_keysym, &unused );
+	// The upper case return of XConvertCase(), which we don't use.
+	KeySym unused = 0;
+	XConvertCase( *parsed_keysym, parsed_keysym, &unused );
 
-        return ERROR_NONE;
+	return ERROR_NONE;
 }
 
 /**
@@ -1633,7 +1639,7 @@ static Error_t _parse_keybind_keysym( Libconfig_Setting_t *keybind_setting, KeyS
  * @note TODO Maybe mention dynamic allocation in _parse_binds_config()?
  */
 static Errors_t _parse_keybinds_config( const Libconfig_Config_t *libconfig_config, Key **keybind_config, unsigned int *keybinds_count, bool *keybinds_dynamically_allocated ) {
-        return _parse_config_array( libconfig_config, NULL, "keybinds", sizeof( Key ), _parse_keybind_adapter, keybinds_dynamically_allocated, (void **) keybind_config, keybinds_count );
+	return _parse_config_array( libconfig_config, NULL, "keybinds", sizeof( Key ), _parse_keybind_adapter, keybinds_dynamically_allocated, (void **) keybind_config, keybinds_count );
 }
 
 /**
@@ -1654,24 +1660,24 @@ static Errors_t _parse_keybinds_config( const Libconfig_Config_t *libconfig_conf
  */
 static void _parser_load_default_config( Parser_Config_t *config ) {
 
-        if ( config == NULL ) {
-                log_fatal( "Unable to begin configuration parsing. Pointer to config is NULL\n" );
-                exit( EXIT_FAILURE );
-        }
+	if ( config == NULL ) {
+		log_fatal( "Unable to begin configuration parsing. Pointer to config is NULL\n" );
+		exit( EXIT_FAILURE );
+	}
 
-        config->rules_dynamically_allocated = false;
-        config->rule_array_size = LENGTH( default_rules );
+	config->rules_dynamically_allocated = false;
+	config->rule_array_size = LENGTH( default_rules );
 
-        config->keybinds_dynamically_allocated = false;
-        config->keybind_array_size = LENGTH( default_keys );
+	config->keybinds_dynamically_allocated = false;
+	config->keybind_array_size = LENGTH( default_keys );
 
-        config->buttonbinds_dynamically_allocated = false;
-        config->buttonbind_array_size = LENGTH( default_buttons );
+	config->buttonbinds_dynamically_allocated = false;
+	config->buttonbind_array_size = LENGTH( default_buttons );
 
-        config->fonts_dynamically_allocated = false;
-        config->fonts_array_size = LENGTH( default_fonts );
+	config->fonts_dynamically_allocated = false;
+	config->fonts_array_size = LENGTH( default_fonts );
 
-        config_init( &config->libconfig_config );
+	config_init( &config->libconfig_config );
 }
 
 /**
@@ -1700,120 +1706,120 @@ static void _parser_load_default_config( Parser_Config_t *config ) {
  */
 static Errors_t _parser_open_config( Parser_Config_t *config, bool *fallback_config_loaded ) {
 
-        Errors_t returned_errors = { 0 };
-        int i, config_filepaths_length = 0;
+	Errors_t returned_errors = { 0 };
+	int i, config_filepaths_length = 0;
 
-        // Yes this uses a "magic number", but I didn't see a way that was less
-        // cumbersome than just hardcoding this value. 5 is just the 1 CLI custom
-        // filepath + 4 fallback config locations created a few lines later.
-        char *config_filepaths[ 5 ];
+	// Yes this uses a "magic number", but I didn't see a way that was less
+	// cumbersome than just hardcoding this value. 5 is just the 1 CLI custom
+	// filepath + 4 fallback config locations created a few lines later.
+	char *config_filepaths[ 5 ];
 
-        // Check if a custom user config was passed through the CLI.
-        // If a path was given, copy it to the first index of the filepaths array.
-        if ( config->config_filepath != NULL ) {
-                config_filepaths[ config_filepaths_length ] = estrdup( config->config_filepath );
-                if ( config_filepaths[ config_filepaths_length ] == NULL ) add_error( &returned_errors, ERROR_NULL_VALUE );
-                config_filepaths_length++;
-                free( config->config_filepath );
-                config->config_filepath = NULL;
-        }
+	// Check if a custom user config was passed through the CLI.
+	// If a path was given, copy it to the first index of the filepaths array.
+	if ( config->config_filepath != NULL ) {
+		config_filepaths[ config_filepaths_length ] = estrdup( config->config_filepath );
+		if ( config_filepaths[ config_filepaths_length ] == NULL ) add_error( &returned_errors, ERROR_NULL_VALUE );
+		config_filepaths_length++;
+		free( config->config_filepath );
+		config->config_filepath = NULL;
+	}
 
-        // $XDG_CONFIG_HOME/.config/dwm.conf or $HOME/.config/dwm.conf
-        char *config_top_directory = get_xdg_config_home();
-        if ( config_top_directory == NULL ) {
-                log_warn( "Unable to acquire top level configuration directory\n" );
-                add_error( &returned_errors, ERROR_NULL_VALUE );
-        } else {
-                extend_string( &config_top_directory, "/dwm.conf" );
-                config_filepaths[ config_filepaths_length++ ] = config_top_directory;
-        }
+	// $XDG_CONFIG_HOME/.config/dwm.conf or $HOME/.config/dwm.conf
+	char *config_top_directory = get_xdg_config_home();
+	if ( config_top_directory == NULL ) {
+		log_warn( "Unable to acquire top level configuration directory\n" );
+		add_error( &returned_errors, ERROR_NULL_VALUE );
+	} else {
+		extend_string( &config_top_directory, "/dwm.conf" );
+		config_filepaths[ config_filepaths_length++ ] = config_top_directory;
+	}
 
-        // $XDG_CONFIG_HOME/.config/dwm/dwm.conf or $HOME/.config/dwm/dwm.conf
-        char *config_sub_directory = get_xdg_config_home();
-        if ( config_sub_directory == NULL ) {
-                log_warn( "Unable to acquire dwm configuration directory\n" );
-                add_error( &returned_errors, ERROR_NULL_VALUE );
-        } else {
-                extend_string( &config_sub_directory, "/dwm/dwm.conf" );
-                config_filepaths[ config_filepaths_length++ ] = config_sub_directory;
-        }
+	// $XDG_CONFIG_HOME/.config/dwm/dwm.conf or $HOME/.config/dwm/dwm.conf
+	char *config_sub_directory = get_xdg_config_home();
+	if ( config_sub_directory == NULL ) {
+		log_warn( "Unable to acquire dwm configuration directory\n" );
+		add_error( &returned_errors, ERROR_NULL_VALUE );
+	} else {
+		extend_string( &config_sub_directory, "/dwm/dwm.conf" );
+		config_filepaths[ config_filepaths_length++ ] = config_sub_directory;
+	}
 
-        // $XDG_DATA_HOME/.local/share/dwm/dwm_last.conf or $HOME/.local/share/dwm/dwm_last.conf
-        char *config_backup = get_xdg_data_home();
-        if ( config_backup == NULL ) {
-                log_warn( "Unable to acquire dwm configuration backup directory\n" );
-                add_error( &returned_errors, ERROR_NULL_VALUE );
-        } else {
-                extend_string( &config_backup, "/dwm/dwm_last.conf" );
-                config_filepaths[ config_filepaths_length++ ] = config_backup;
-        }
+	// $XDG_DATA_HOME/.local/share/dwm/dwm_last.conf or $HOME/.local/share/dwm/dwm_last.conf
+	char *config_backup = get_xdg_data_home();
+	if ( config_backup == NULL ) {
+		log_warn( "Unable to acquire dwm configuration backup directory\n" );
+		add_error( &returned_errors, ERROR_NULL_VALUE );
+	} else {
+		extend_string( &config_backup, "/dwm/dwm_last.conf" );
+		config_filepaths[ config_filepaths_length++ ] = config_backup;
+	}
 
-        // /etc/dwm/dwm.conf
-        char *config_fallback = estrdup( "/etc/dwm/dwm.conf" );
-        if ( config_fallback == NULL ) {
-                log_warn( "Unable to acquire dwm system configuration fallback directory\n" );
-                add_error( &returned_errors, ERROR_ALLOCATION );
-        } else {
-                config_filepaths[ config_filepaths_length++ ] = config_fallback;
-        }
+	// /etc/dwm/dwm.conf
+	char *config_fallback = estrdup( "/etc/dwm/dwm.conf" );
+	if ( config_fallback == NULL ) {
+		log_warn( "Unable to acquire dwm system configuration fallback directory\n" );
+		add_error( &returned_errors, ERROR_ALLOCATION );
+	} else {
+		config_filepaths[ config_filepaths_length++ ] = config_fallback;
+	}
 
-        FILE *tmp_file = NULL;
-        for ( i = 0; i < config_filepaths_length; i++ ) {
-                log_debug( "Attempting to open config file \"%s\"\n", config_filepaths[ i ] );
+	FILE *tmp_file = NULL;
+	for ( i = 0; i < config_filepaths_length; i++ ) {
+		log_debug( "Attempting to open config file \"%s\"\n", config_filepaths[ i ] );
 
-                if ( config_filepaths[ i ] == NULL ) {
-                        log_warn( "config_filepaths[%d] was NULL, unable to lookup intended config. Likely a memory allocation error\n", i );
-                        add_error( &returned_errors, ERROR_NULL_VALUE );
-                        continue;
-                }
+		if ( config_filepaths[ i ] == NULL ) {
+			log_warn( "config_filepaths[%d] was NULL, unable to lookup intended config. Likely a memory allocation error\n", i );
+			add_error( &returned_errors, ERROR_NULL_VALUE );
+			continue;
+		}
 
-                tmp_file = fopen( config_filepaths[ i ], "r" );
+		tmp_file = fopen( config_filepaths[ i ], "r" );
 
-                if ( tmp_file == NULL ) {
-                        log_warn( "Unable to open config file \"%s\"\n", config_filepaths[ i ] );
-                        add_error( &returned_errors, ERROR_NOT_FOUND );
-                        continue;
-                }
+		if ( tmp_file == NULL ) {
+			log_warn( "Unable to open config file \"%s\"\n", config_filepaths[ i ] );
+			add_error( &returned_errors, ERROR_NOT_FOUND );
+			continue;
+		}
 
-                if ( config_read( &config->libconfig_config, tmp_file ) == CONFIG_FALSE ) {
-                        log_warn( "Problem parsing config file \"%s\", line %d: %s\n", config_filepaths[ i ], config_error_line( &config->libconfig_config ),
-                                  config_error_text( &config->libconfig_config ) );
-                        add_error( &returned_errors, ERROR_NULL_VALUE );
-                        fclose( tmp_file );
-                        continue;
-                }
+		if ( config_read( &config->libconfig_config, tmp_file ) == CONFIG_FALSE ) {
+			log_warn( "Problem parsing config file \"%s\", line %d: %s\n", config_filepaths[ i ], config_error_line( &config->libconfig_config ),
+				  config_error_text( &config->libconfig_config ) );
+			add_error( &returned_errors, ERROR_NULL_VALUE );
+			fclose( tmp_file );
+			continue;
+		}
 
-                // Save found config filepath
-                config->config_filepath = estrdup( config_filepaths[ i ] );
-                if ( config->config_filepath == NULL ) add_error( &returned_errors, ERROR_NULL_VALUE );
+		// Save found config filepath
+		config->config_filepath = estrdup( config_filepaths[ i ] );
+		if ( config->config_filepath == NULL ) add_error( &returned_errors, ERROR_NULL_VALUE );
 
-                // Check if it's a user's custom configuration
-                if ( strcmp( config_filepaths[ i ], config_backup ) == 0 || strcmp( config_filepaths[ i ], config_fallback ) == 0 ) {
-                        *fallback_config_loaded = true;
-                }
+		// Check if it's a user's custom configuration
+		if ( strcmp( config_filepaths[ i ], config_backup ) == 0 || strcmp( config_filepaths[ i ], config_fallback ) == 0 ) {
+			*fallback_config_loaded = true;
+		}
 
-                for ( i = 0; i < config_filepaths_length; i++ ) {
-                        if ( config_filepaths[ i ] != NULL ) {
-                                free( config_filepaths[ i ] );
-                        }
-                }
+		for ( i = 0; i < config_filepaths_length; i++ ) {
+			if ( config_filepaths[ i ] != NULL ) {
+				free( config_filepaths[ i ] );
+			}
+		}
 
-                fclose( tmp_file );
+		fclose( tmp_file );
 
-                return returned_errors;
-        }
+		return returned_errors;
+	}
 
-        log_error( "Unable to load any configs. Hardcoded default config values will be used. Exiting parsing\n" );
+	log_error( "Unable to load any configs. Hardcoded default config values will be used. Exiting parsing\n" );
 
-        for ( i = 0; i < config_filepaths_length; i++ ) {
-                if ( config_filepaths[ i ] != NULL ) {
-                        free( config_filepaths[ i ] );
-                }
-        }
+	for ( i = 0; i < config_filepaths_length; i++ ) {
+		if ( config_filepaths[ i ] != NULL ) {
+			free( config_filepaths[ i ] );
+		}
+	}
 
-        config_destroy( &config->libconfig_config );
+	config_destroy( &config->libconfig_config );
 
-        return returned_errors;
+	return returned_errors;
 }
 
 /**
@@ -1827,26 +1833,26 @@ static Errors_t _parser_open_config( Parser_Config_t *config, bool *fallback_con
  */
 static Error_t _parser_resolve_include_directory( Parser_Config_t *config ) {
 
-        char *config_include_directory = realpath( config->config_filepath, NULL );
+	char *config_include_directory = realpath( config->config_filepath, NULL );
 
-        if ( config_include_directory == NULL ) {
-                log_warn( "Failed to allocate memory for the configuration file's include path\n" );
-                return ERROR_ALLOCATION;
-        }
+	if ( config_include_directory == NULL ) {
+		log_warn( "Failed to allocate memory for the configuration file's include path\n" );
+		return ERROR_ALLOCATION;
+	}
 
-        config_include_directory = dirname( config_include_directory );
+	config_include_directory = dirname( config_include_directory );
 
-        if ( config_include_directory[ 0 ] == '.' ) {
-                log_warn( "Unable to resolve configuration file's include directory\n" );
-                free( config_include_directory );
-                return ERROR_NOT_FOUND;
-        }
+	if ( config_include_directory[ 0 ] == '.' ) {
+		log_warn( "Unable to resolve configuration file's include directory\n" );
+		free( config_include_directory );
+		return ERROR_NOT_FOUND;
+	}
 
-        config_set_include_dir( &config->libconfig_config, config_include_directory );
+	config_set_include_dir( &config->libconfig_config, config_include_directory );
 
-        free( config_include_directory );
+	free( config_include_directory );
 
-        return ERROR_NONE;
+	return ERROR_NONE;
 }
 
 /**
@@ -1862,33 +1868,33 @@ static Error_t _parser_resolve_include_directory( Parser_Config_t *config ) {
  */
 static Errors_t _parse_rule( Libconfig_Setting_t *rule_libconfig_setting, const int rule_index, Rule *parsed_rule ) {
 
-        Errors_t returned_errors = { 0 };
+	Errors_t returned_errors = { 0 };
 
-        add_error( &returned_errors, _parse_rule_string( rule_libconfig_setting, "class", rule_index, &parsed_rule->class ) );
-        add_error( &returned_errors, _parse_rule_string( rule_libconfig_setting, "instance", rule_index, &parsed_rule->instance ) );
-        add_error( &returned_errors, _parse_rule_string( rule_libconfig_setting, "title", rule_index, &parsed_rule->title ) );
-        add_error( &returned_errors, _libconfig_setting_lookup_uint( rule_libconfig_setting, "tag-mask", 0, TAGMASK, &parsed_rule->tags ) );
-        add_error( &returned_errors, _libconfig_setting_lookup_int( rule_libconfig_setting, "monitor", -1, 99, &parsed_rule->monitor ) );
+	add_error( &returned_errors, _parse_rule_string( rule_libconfig_setting, "class", rule_index, &parsed_rule->class ) );
+	add_error( &returned_errors, _parse_rule_string( rule_libconfig_setting, "instance", rule_index, &parsed_rule->instance ) );
+	add_error( &returned_errors, _parse_rule_string( rule_libconfig_setting, "title", rule_index, &parsed_rule->title ) );
+	add_error( &returned_errors, _libconfig_setting_lookup_uint( rule_libconfig_setting, "tag-mask", 0, TAGMASK, &parsed_rule->tags ) );
+	add_error( &returned_errors, _libconfig_setting_lookup_int( rule_libconfig_setting, "monitor", -1, 99, &parsed_rule->monitor ) );
 
-        // Note: This logically should be a boolean value, but I didn't want to
-        // deviate from the coded type, so I kept it an int and range check it.
-        add_error( &returned_errors, _libconfig_setting_lookup_int( rule_libconfig_setting, "floating", 0, 1, &parsed_rule->isfloating ) );
+	// Note: This logically should be a boolean value, but I didn't want to
+	// deviate from the coded type, so I kept it an int and range check it.
+	add_error( &returned_errors, _libconfig_setting_lookup_int( rule_libconfig_setting, "floating", 0, 1, &parsed_rule->isfloating ) );
 
-        // Ensure rule is zeroed and doesn't accidentally have any
-        // data left over from parsing that could cause unusual behavior
-        if ( errors_failure_count( &returned_errors ) != 0 ) {
-                parsed_rule->class = NULL;
-                parsed_rule->instance = NULL;
-                parsed_rule->title = NULL;
-                parsed_rule->tags = 0;
-                parsed_rule->isfloating = 0;
-                parsed_rule->monitor = 0;
-        }
+	// Ensure rule is zeroed and doesn't accidentally have any
+	// data left over from parsing that could cause unusual behavior
+	if ( errors_failure_count( &returned_errors ) != 0 ) {
+		parsed_rule->class = NULL;
+		parsed_rule->instance = NULL;
+		parsed_rule->title = NULL;
+		parsed_rule->tags = 0;
+		parsed_rule->isfloating = 0;
+		parsed_rule->monitor = 0;
+	}
 
-        log_debug( "Rule %d: class: \"%s\", instance: \"%s\", title: \"%s\", tag-mask: %d, monitor: %d, floating: %d\n", rule_index, parsed_rule->class, parsed_rule->instance, parsed_rule->title,
-                   parsed_rule->tags, parsed_rule->monitor, parsed_rule->isfloating );
+	log_debug( "Rule %d: class: \"%s\", instance: \"%s\", title: \"%s\", tag-mask: %d, monitor: %d, floating: %d\n", rule_index, parsed_rule->class, parsed_rule->instance, parsed_rule->title,
+		   parsed_rule->tags, parsed_rule->monitor, parsed_rule->isfloating );
 
-        return returned_errors;
+	return returned_errors;
 }
 
 /**
@@ -1903,7 +1909,7 @@ static Errors_t _parse_rule( Libconfig_Setting_t *rule_libconfig_setting, const 
  * @return TODO
  */
 static Errors_t _parse_rule_adapter( Libconfig_Setting_t *rule_setting, const unsigned int rule_index, void *parsed_rule ) {
-        return _parse_rule( rule_setting, rule_index, (Rule *) parsed_rule );
+	return _parse_rule( rule_setting, rule_index, (Rule *) parsed_rule );
 }
 
 /**
@@ -1920,16 +1926,16 @@ static Errors_t _parse_rule_adapter( Libconfig_Setting_t *rule_setting, const un
  */
 static Error_t _parse_rule_string( Libconfig_Setting_t *rule_libconfig_setting, const char *path, const int rule_index, const char **parsed_value ) {
 
-        const Error_t error = _libconfig_setting_lookup_string( rule_libconfig_setting, path, parsed_value );
+	const Error_t error = _libconfig_setting_lookup_string( rule_libconfig_setting, path, parsed_value );
 
-        if ( *parsed_value == NULL ) {
-                log_error( "Problem parsing \"%s\" value of rule %d: %s\n", path, rule_index + 1, ERROR_ENUM_STRINGS[ error ] );
-                return error;
-        }
+	if ( *parsed_value == NULL ) {
+		log_error( "Problem parsing \"%s\" value of rule %d: %s\n", path, rule_index + 1, ERROR_ENUM_STRINGS[ error ] );
+		return error;
+	}
 
-        if ( strcasecmp( *parsed_value, "NULL" ) == 0 ) *parsed_value = NULL;
+	if ( strcasecmp( *parsed_value, "NULL" ) == 0 ) *parsed_value = NULL;
 
-        return ERROR_NONE;
+	return ERROR_NONE;
 }
 
 /**
@@ -1947,7 +1953,7 @@ static Error_t _parse_rule_string( Libconfig_Setting_t *rule_libconfig_setting, 
  * @return TODO
  */
 static Errors_t _parse_rules_config( const Libconfig_Config_t *libconfig_config, Rule **rules_config, unsigned int *rules_count, bool *rules_dynamically_allocated ) {
-        return _parse_config_array( libconfig_config, NULL, "rules", sizeof( Rule ), _parse_rule_adapter, rules_dynamically_allocated, (void **) rules_config, rules_count );
+	return _parse_config_array( libconfig_config, NULL, "rules", sizeof( Rule ), _parse_rule_adapter, rules_dynamically_allocated, (void **) rules_config, rules_count );
 }
 
 /**
@@ -1962,26 +1968,26 @@ static Errors_t _parse_rules_config( const Libconfig_Config_t *libconfig_config,
  */
 static Errors_t _parse_tag( Libconfig_Setting_t *tags_setting, const unsigned int tags_index ) {
 
-        Errors_t returned_errors = { 0 };
+	Errors_t returned_errors = { 0 };
 
-        if ( tags_index >= LENGTH( tags ) ) {
-                add_error( &returned_errors, ERROR_RANGE );
-                return returned_errors;
-        }
+	if ( tags_index >= LENGTH( tags ) ) {
+		add_error( &returned_errors, ERROR_RANGE );
+		return returned_errors;
+	}
 
-        const char *original_tag_name = tags[ tags_index ];
+	const char *original_tag_name = tags[ tags_index ];
 
-        // TODO: Is there a better way that will give a better error return?
-        tags[ tags_index ] = config_setting_get_string( tags_setting );
+	// TODO: Is there a better way that will give a better error return?
+	tags[ tags_index ] = config_setting_get_string( tags_setting );
 
-        // TODO: Ensure it fits into a 32 bit unsigned int like NumTags does
-        if ( tags[ tags_index ] == NULL ) {
-                log_error( "Problem reading tag element %d: Value doesn't exist or isn't a string\n", tags_index + 1 );
-                add_error( &returned_errors, ERROR_NULL_VALUE );
-                tags[ tags_index ] = original_tag_name;
-        }
+	// TODO: Ensure it fits into a 32 bit unsigned int like NumTags does
+	if ( tags[ tags_index ] == NULL ) {
+		log_error( "Problem reading tag element %d: Value doesn't exist or isn't a string\n", tags_index + 1 );
+		add_error( &returned_errors, ERROR_NULL_VALUE );
+		tags[ tags_index ] = original_tag_name;
+	}
 
-        return returned_errors;
+	return returned_errors;
 }
 
 /**
@@ -1996,7 +2002,7 @@ static Errors_t _parse_tag( Libconfig_Setting_t *tags_setting, const unsigned in
  * @return TODO
  */
 static Errors_t _parse_tags_adapter( Libconfig_Setting_t *tags_setting, const unsigned int tags_index, void *unused ) {
-        return _parse_tag( tags_setting, tags_index );
+	return _parse_tag( tags_setting, tags_index );
 }
 
 /**
@@ -2009,16 +2015,16 @@ static Errors_t _parse_tags_adapter( Libconfig_Setting_t *tags_setting, const un
  * @return TODO
  */
 static Errors_t _parse_tags_config( const Libconfig_Config_t *libconfig_config ) {
-        unsigned int tags_count = 0;
-        const Errors_t returned_errors = _parse_config_array( libconfig_config, NULL, "tags", 0, _parse_tags_adapter, NULL, NULL, &tags_count );
+	unsigned int tags_count = 0;
+	const Errors_t returned_errors = _parse_config_array( libconfig_config, NULL, "tags", 0, _parse_tags_adapter, NULL, NULL, &tags_count );
 
-        if ( tags_count > LENGTH( tags ) ) {
-                log_warn( "More than %lu tag names detected (%d were detected) while parsing config, only the first %lu will be used\n", LENGTH( tags ), tags_count, LENGTH( tags ) );
-        } else if ( tags_count < LENGTH( tags ) ) {
-                log_warn( "Less than %lu tag names detected while parsing config, filler tags will be used for the remainder\n", LENGTH( tags ) );
-        }
+	if ( tags_count > LENGTH( tags ) ) {
+		log_warn( "More than %lu tag names detected (%d were detected) while parsing config, only the first %lu will be used\n", LENGTH( tags ), tags_count, LENGTH( tags ) );
+	} else if ( tags_count < LENGTH( tags ) ) {
+		log_warn( "Less than %lu tag names detected while parsing config, default tags will be used for the remainder\n", LENGTH( tags ) );
+	}
 
-        return returned_errors;
+	return returned_errors;
 }
 
 /**
@@ -2033,29 +2039,29 @@ static Errors_t _parse_tags_config( const Libconfig_Config_t *libconfig_config )
  */
 static Errors_t _parse_theme( Libconfig_Setting_t *theme_libconfig_setting, const unsigned int theme_index ) {
 
-        Errors_t returned_errors = { 0 };
+	Errors_t returned_errors = { 0 };
 
-        // dwm does not support more than 1 theme
-        if ( theme_index > 0 ) {
-                log_warn( "%d themes detected. dwm can only use the first theme in list \"themes\"\n", theme_index + 1 );
-                add_error( &returned_errors, ERROR_RANGE );
-                return returned_errors;
-        }
+	// dwm does not support more than 1 theme
+	if ( theme_index > 0 ) {
+		log_warn( "%d themes detected. dwm can only use the first theme in list \"themes\"\n", theme_index + 1 );
+		add_error( &returned_errors, ERROR_RANGE );
+		return returned_errors;
+	}
 
-        const Errors_t font_errors = _parse_config_array( NULL, theme_libconfig_setting, "fonts", sizeof( char * ), _parse_font_adapter, &dwm_config.fonts_dynamically_allocated, (void **) fonts,
-                                                          &dwm_config.fonts_array_size );
+	const Errors_t font_errors = _parse_config_array( NULL, theme_libconfig_setting, "fonts", sizeof( char * ), _parse_font_adapter, &dwm_config.fonts_dynamically_allocated, (void **) fonts,
+							  &dwm_config.fonts_array_size );
 
-        merge_errors( &returned_errors, font_errors );
+	merge_errors( &returned_errors, font_errors );
 
-        for ( int i = 0; i < LENGTH( THEME_ALIAS_MAP ); i++ ) {
-                const Error_t error = _libconfig_setting_lookup_string( theme_libconfig_setting, THEME_ALIAS_MAP[ i ].path, THEME_ALIAS_MAP[ i ].value );
-                add_error( &returned_errors, error );
-                if ( error != ERROR_NONE ) {
-                        log_error( "Failed to parse theme %d's element \"%s\": %s\n", theme_index, THEME_ALIAS_MAP[ i ].path, ERROR_ENUM_STRINGS[ error ] );
-                }
-        }
+	for ( int i = 0; i < LENGTH( THEME_ALIAS_MAP ); i++ ) {
+		const Error_t error = _libconfig_setting_lookup_string( theme_libconfig_setting, THEME_ALIAS_MAP[ i ].path, THEME_ALIAS_MAP[ i ].value );
+		add_error( &returned_errors, error );
+		if ( error != ERROR_NONE ) {
+			log_error( "Failed to parse theme %d's element \"%s\": %s\n", theme_index, THEME_ALIAS_MAP[ i ].path, ERROR_ENUM_STRINGS[ error ] );
+		}
+	}
 
-        return returned_errors;
+	return returned_errors;
 }
 
 /**
@@ -2070,7 +2076,7 @@ static Errors_t _parse_theme( Libconfig_Setting_t *theme_libconfig_setting, cons
  * @return TODO
  */
 static Errors_t _parse_theme_adapter( Libconfig_Setting_t *theme_setting, const unsigned int theme_index, void *unused ) {
-        return _parse_theme( theme_setting, theme_index );
+	return _parse_theme( theme_setting, theme_index );
 }
 
 /**
@@ -2085,8 +2091,8 @@ static Errors_t _parse_theme_adapter( Libconfig_Setting_t *theme_setting, const 
  * @note dwm only supports a single theme, so only the first theme in the list is parsed.
  */
 static Errors_t _parse_theme_config( const Libconfig_Config_t *libconfig_config ) {
-        unsigned int unused = 0;
-        return _parse_config_array( libconfig_config, NULL, "themes", 0, _parse_theme_adapter, NULL, NULL, &unused );
+	unsigned int unused = 0;
+	return _parse_config_array( libconfig_config, NULL, "themes", 0, _parse_theme_adapter, NULL, NULL, &unused );
 }
 
 /// Parser internal utility functions ///
@@ -2104,16 +2110,16 @@ static Errors_t _parse_theme_config( const Libconfig_Config_t *libconfig_config 
  */
 static Error_t _libconfig_lookup_bool( const Libconfig_Config_t *config, const char *path, bool *parsed_value ) {
 
-        if ( !config || !path || !parsed_value ) return ERROR_NULL_VALUE;
+	if ( !config || !path || !parsed_value ) return ERROR_NULL_VALUE;
 
-        config_setting_t *setting = config_lookup( config, path );
+	config_setting_t *setting = config_lookup( config, path );
 
-        if ( !setting ) return ERROR_NOT_FOUND;
-        if ( config_setting_type( setting ) != CONFIG_TYPE_BOOL ) return ERROR_TYPE;
+	if ( !setting ) return ERROR_NOT_FOUND;
+	if ( config_setting_type( setting ) != CONFIG_TYPE_BOOL ) return ERROR_TYPE;
 
-        *parsed_value = config_setting_get_bool( setting );
+	*parsed_value = config_setting_get_bool( setting );
 
-        return ERROR_NONE;
+	return ERROR_NONE;
 }
 
 /**
@@ -2131,20 +2137,20 @@ static Error_t _libconfig_lookup_bool( const Libconfig_Config_t *config, const c
  */
 static Error_t _libconfig_lookup_float( const Libconfig_Config_t *config, const char *path, const float range_min, const float range_max, float *parsed_value ) {
 
-        if ( !config || !path || !parsed_value ) return ERROR_NULL_VALUE;
+	if ( !config || !path || !parsed_value ) return ERROR_NULL_VALUE;
 
-        config_setting_t *setting = config_lookup( config, path );
+	config_setting_t *setting = config_lookup( config, path );
 
-        if ( !setting ) return ERROR_NOT_FOUND;
-        if ( config_setting_type( setting ) != CONFIG_TYPE_FLOAT ) return ERROR_TYPE;
+	if ( !setting ) return ERROR_NOT_FOUND;
+	if ( config_setting_type( setting ) != CONFIG_TYPE_FLOAT ) return ERROR_TYPE;
 
-        const float tmp = config_setting_get_float( setting );
+	const float tmp = config_setting_get_float( setting );
 
-        if ( tmp < range_min || tmp > range_max ) return ERROR_RANGE;
+	if ( tmp < range_min || tmp > range_max ) return ERROR_RANGE;
 
-        *parsed_value = tmp;
+	*parsed_value = tmp;
 
-        return ERROR_NONE;
+	return ERROR_NONE;
 }
 
 /**
@@ -2162,20 +2168,20 @@ static Error_t _libconfig_lookup_float( const Libconfig_Config_t *config, const 
  */
 static Error_t _libconfig_lookup_int( const Libconfig_Config_t *config, const char *path, const int range_min, const int range_max, int *parsed_value ) {
 
-        if ( !config || !path || !parsed_value ) return ERROR_NULL_VALUE;
+	if ( !config || !path || !parsed_value ) return ERROR_NULL_VALUE;
 
-        config_setting_t *setting = config_lookup( config, path );
+	config_setting_t *setting = config_lookup( config, path );
 
-        if ( !setting ) return ERROR_NOT_FOUND;
-        if ( config_setting_type( setting ) != CONFIG_TYPE_INT ) return ERROR_TYPE;
+	if ( !setting ) return ERROR_NOT_FOUND;
+	if ( config_setting_type( setting ) != CONFIG_TYPE_INT ) return ERROR_TYPE;
 
-        const int tmp = config_setting_get_int( setting );
+	const int tmp = config_setting_get_int( setting );
 
-        if ( tmp < range_min || tmp > range_max ) return ERROR_RANGE;
+	if ( tmp < range_min || tmp > range_max ) return ERROR_RANGE;
 
-        *parsed_value = tmp;
+	*parsed_value = tmp;
 
-        return ERROR_NONE;
+	return ERROR_NONE;
 }
 
 /**
@@ -2191,16 +2197,16 @@ static Error_t _libconfig_lookup_int( const Libconfig_Config_t *config, const ch
  */
 static Error_t _libconfig_lookup_string( const Libconfig_Config_t *config, const char *path, const char **parsed_value ) {
 
-        if ( !config || !path || !parsed_value ) return ERROR_NULL_VALUE;
+	if ( !config || !path || !parsed_value ) return ERROR_NULL_VALUE;
 
-        config_setting_t *setting = config_lookup( config, path );
+	config_setting_t *setting = config_lookup( config, path );
 
-        if ( !setting ) return ERROR_NOT_FOUND;
-        if ( config_setting_type( setting ) != CONFIG_TYPE_STRING ) return ERROR_TYPE;
+	if ( !setting ) return ERROR_NOT_FOUND;
+	if ( config_setting_type( setting ) != CONFIG_TYPE_STRING ) return ERROR_TYPE;
 
-        *parsed_value = config_setting_get_string( setting );
+	*parsed_value = config_setting_get_string( setting );
 
-        return ERROR_NONE;
+	return ERROR_NONE;
 }
 
 /**
@@ -2218,24 +2224,24 @@ static Error_t _libconfig_lookup_string( const Libconfig_Config_t *config, const
  */
 static Error_t _libconfig_lookup_uint( const Libconfig_Config_t *config, const char *path, const unsigned int range_min, const unsigned int range_max, unsigned int *parsed_value ) {
 
-        if ( !config || !path || !parsed_value ) return ERROR_NULL_VALUE;
+	if ( !config || !path || !parsed_value ) return ERROR_NULL_VALUE;
 
-        config_setting_t *setting = config_lookup( config, path );
+	config_setting_t *setting = config_lookup( config, path );
 
-        if ( !setting ) return ERROR_NOT_FOUND;
-        if ( config_setting_type( setting ) != CONFIG_TYPE_INT ) return ERROR_TYPE;
+	if ( !setting ) return ERROR_NOT_FOUND;
+	if ( config_setting_type( setting ) != CONFIG_TYPE_INT ) return ERROR_TYPE;
 
-        const int tmp_int = config_setting_get_int( setting );
+	const int tmp_int = config_setting_get_int( setting );
 
-        if ( tmp_int < 0 ) return ERROR_RANGE;
+	if ( tmp_int < 0 ) return ERROR_RANGE;
 
-        const unsigned int tmp_uint = (unsigned int) tmp_int;
+	const unsigned int tmp_uint = (unsigned int) tmp_int;
 
-        if ( tmp_uint < range_min || tmp_uint > range_max ) return ERROR_RANGE;
+	if ( tmp_uint < range_min || tmp_uint > range_max ) return ERROR_RANGE;
 
-        *parsed_value = tmp_uint;
+	*parsed_value = tmp_uint;
 
-        return ERROR_NONE;
+	return ERROR_NONE;
 }
 
 /**
@@ -2251,16 +2257,16 @@ static Error_t _libconfig_lookup_uint( const Libconfig_Config_t *config, const c
  */
 static Error_t _libconfig_setting_lookup_bool( Libconfig_Setting_t *setting, const char *path, bool *parsed_value ) {
 
-        if ( !setting || !path || !parsed_value ) return ERROR_NULL_VALUE;
+	if ( !setting || !path || !parsed_value ) return ERROR_NULL_VALUE;
 
-        config_setting_t *child_setting = config_setting_lookup( setting, path );
+	config_setting_t *child_setting = config_setting_lookup( setting, path );
 
-        if ( !child_setting ) return ERROR_NOT_FOUND;
-        if ( config_setting_type( child_setting ) != CONFIG_TYPE_BOOL ) return ERROR_TYPE;
+	if ( !child_setting ) return ERROR_NOT_FOUND;
+	if ( config_setting_type( child_setting ) != CONFIG_TYPE_BOOL ) return ERROR_TYPE;
 
-        *parsed_value = config_setting_get_bool( child_setting );
+	*parsed_value = config_setting_get_bool( child_setting );
 
-        return ERROR_NONE;
+	return ERROR_NONE;
 }
 
 /**
@@ -2278,20 +2284,20 @@ static Error_t _libconfig_setting_lookup_bool( Libconfig_Setting_t *setting, con
  */
 static Error_t _libconfig_setting_lookup_float( Libconfig_Setting_t *setting, const char *path, const float range_min, const float range_max, float *parsed_value ) {
 
-        if ( !setting || !path || !parsed_value ) return ERROR_NULL_VALUE;
+	if ( !setting || !path || !parsed_value ) return ERROR_NULL_VALUE;
 
-        config_setting_t *child_setting = config_setting_lookup( setting, path );
+	config_setting_t *child_setting = config_setting_lookup( setting, path );
 
-        if ( !child_setting ) return ERROR_NOT_FOUND;
-        if ( config_setting_type( child_setting ) != CONFIG_TYPE_FLOAT ) return ERROR_TYPE;
+	if ( !child_setting ) return ERROR_NOT_FOUND;
+	if ( config_setting_type( child_setting ) != CONFIG_TYPE_FLOAT ) return ERROR_TYPE;
 
-        const float tmp = config_setting_get_float( child_setting );
+	const float tmp = config_setting_get_float( child_setting );
 
-        if ( tmp < range_min || tmp > range_max ) return ERROR_RANGE;
+	if ( tmp < range_min || tmp > range_max ) return ERROR_RANGE;
 
-        *parsed_value = tmp;
+	*parsed_value = tmp;
 
-        return ERROR_NONE;
+	return ERROR_NONE;
 }
 
 /**
@@ -2309,20 +2315,20 @@ static Error_t _libconfig_setting_lookup_float( Libconfig_Setting_t *setting, co
  */
 static Error_t _libconfig_setting_lookup_int( Libconfig_Setting_t *setting, const char *path, const int range_min, const int range_max, int *parsed_value ) {
 
-        if ( !setting || !path || !parsed_value ) return ERROR_NULL_VALUE;
+	if ( !setting || !path || !parsed_value ) return ERROR_NULL_VALUE;
 
-        config_setting_t *child_setting = config_setting_lookup( setting, path );
+	config_setting_t *child_setting = config_setting_lookup( setting, path );
 
-        if ( !child_setting ) return ERROR_NOT_FOUND;
-        if ( config_setting_type( child_setting ) != CONFIG_TYPE_INT ) return ERROR_TYPE;
+	if ( !child_setting ) return ERROR_NOT_FOUND;
+	if ( config_setting_type( child_setting ) != CONFIG_TYPE_INT ) return ERROR_TYPE;
 
-        const int tmp = config_setting_get_int( child_setting );
+	const int tmp = config_setting_get_int( child_setting );
 
-        if ( tmp < range_min || tmp > range_max ) return ERROR_RANGE;
+	if ( tmp < range_min || tmp > range_max ) return ERROR_RANGE;
 
-        *parsed_value = tmp;
+	*parsed_value = tmp;
 
-        return ERROR_NONE;
+	return ERROR_NONE;
 }
 
 /**
@@ -2338,16 +2344,16 @@ static Error_t _libconfig_setting_lookup_int( Libconfig_Setting_t *setting, cons
  */
 static Error_t _libconfig_setting_lookup_string( Libconfig_Setting_t *setting, const char *path, const char **parsed_value ) {
 
-        if ( !setting || !path || !parsed_value ) return ERROR_NULL_VALUE;
+	if ( !setting || !path || !parsed_value ) return ERROR_NULL_VALUE;
 
-        config_setting_t *child_setting = config_setting_lookup( setting, path );
+	config_setting_t *child_setting = config_setting_lookup( setting, path );
 
-        if ( !child_setting ) return ERROR_NOT_FOUND;
-        if ( config_setting_type( child_setting ) != CONFIG_TYPE_STRING ) return ERROR_TYPE;
+	if ( !child_setting ) return ERROR_NOT_FOUND;
+	if ( config_setting_type( child_setting ) != CONFIG_TYPE_STRING ) return ERROR_TYPE;
 
-        *parsed_value = config_setting_get_string( child_setting );
+	*parsed_value = config_setting_get_string( child_setting );
 
-        return ERROR_NONE;
+	return ERROR_NONE;
 }
 
 /**
@@ -2365,22 +2371,22 @@ static Error_t _libconfig_setting_lookup_string( Libconfig_Setting_t *setting, c
  */
 static Error_t _libconfig_setting_lookup_uint( Libconfig_Setting_t *setting, const char *path, const unsigned int range_min, const unsigned int range_max, unsigned int *parsed_value ) {
 
-        if ( !setting || !path || !parsed_value ) return ERROR_NULL_VALUE;
+	if ( !setting || !path || !parsed_value ) return ERROR_NULL_VALUE;
 
-        config_setting_t *child_setting = config_setting_lookup( setting, path );
+	config_setting_t *child_setting = config_setting_lookup( setting, path );
 
-        if ( !child_setting ) return ERROR_NOT_FOUND;
-        if ( config_setting_type( child_setting ) != CONFIG_TYPE_INT ) return ERROR_TYPE;
+	if ( !child_setting ) return ERROR_NOT_FOUND;
+	if ( config_setting_type( child_setting ) != CONFIG_TYPE_INT ) return ERROR_TYPE;
 
-        const int tmp_int = config_setting_get_int( child_setting );
+	const int tmp_int = config_setting_get_int( child_setting );
 
-        if ( tmp_int < 0 ) return ERROR_RANGE;
+	if ( tmp_int < 0 ) return ERROR_RANGE;
 
-        const unsigned int tmp_uint = (unsigned int) tmp_int;
+	const unsigned int tmp_uint = (unsigned int) tmp_int;
 
-        if ( tmp_uint < range_min || tmp_uint > range_max ) return ERROR_RANGE;
+	if ( tmp_uint < range_min || tmp_uint > range_max ) return ERROR_RANGE;
 
-        *parsed_value = tmp_uint;
+	*parsed_value = tmp_uint;
 
-        return ERROR_NONE;
+	return ERROR_NONE;
 }
