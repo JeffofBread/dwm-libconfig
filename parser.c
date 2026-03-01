@@ -54,7 +54,7 @@
 // of this patch, and this works good enough for the patch's needs.
 
 //#define log_trace( ... ) _log( "TRACE", __VA_ARGS__ ) // Unused, but you are welcome to enable and use it.
-#define log_debug( ... ) _log( "DEBUG", __VA_ARGS__ )
+#define log_debug( ... ) //_log( "DEBUG", __VA_ARGS__ )
 #define log_info( ... ) _log( "INFO", __VA_ARGS__ )
 #define log_warn( ... ) _log( "WARN", __VA_ARGS__ )
 #define log_error( ... ) _log( "ERROR", __VA_ARGS__ )
@@ -1372,6 +1372,18 @@ static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config,
 		return returned_errors;
 	}
 
+	if ( config_array_name == NULL ) {
+		log_error( "config_array_name was NULL, unable to parse without a name to search\n" );
+		add_error( &returned_errors, ERROR_NULL_VALUE );
+		return returned_errors;
+	}
+
+	if ( parsed_config_length == NULL ) {
+		log_error( "parsed_config_length was NULL, unable to parse without somewhere to store parsed array's length\n" );
+		add_error( &returned_errors, ERROR_NULL_VALUE );
+		return returned_errors;
+	}
+
 	const Libconfig_Setting_t *parent_setting = NULL;
 
 	if ( libconfig_config != NULL ) {
@@ -1401,13 +1413,15 @@ static Errors_t _parse_config_array( const Libconfig_Config_t *libconfig_config,
 	// as report that it has been dynamically allocated here.
 	if ( dynamically_allocated != NULL && parsed_config != NULL ) {
 		log_debug( "Dynamically allocating %s\n", config_array_name );
-		*parsed_config = calloc( *parsed_config_length, element_size );
 
-		if ( *parsed_config == NULL ) {
+		void *calloced_memory = calloc( *parsed_config_length, element_size );
+
+		if ( calloced_memory == NULL ) {
 			add_error( &returned_errors, ERROR_ALLOCATION );
 			return returned_errors;
 		}
 
+		*parsed_config = calloced_memory;
 		*dynamically_allocated = true;
 	}
 
