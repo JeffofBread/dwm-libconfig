@@ -10,7 +10,6 @@ GIT_HASH=$(git rev-parse --short HEAD || echo "unknown")
 FILES=(
         "config.def.h"
         "config.mk"
-        "dwm.1"
         "dwm.c"
         "dwm.conf"
         "Makefile"
