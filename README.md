@@ -54,27 +54,26 @@ making parsing impossible, dwm will fall back to the default values defined in `
 
 Now about the configuration file itself. The example configuration provided with this repository (`dwm.conf`) contains most of the
 documentation you should need. I recommend starting with this file and tweaking to fit your needs. All elements in the file must
-follow the [libconfig](https://hyperrealm.github.io/libconfig/) file syntax, read up on it here: 
+follow the libconfig file syntax, read up on it here: 
 
  - https://hyperrealm.github.io/libconfig/libconfig_manual.html#Configuration-Files
 
-If there are major syntax errors, [libconfig](https://hyperrealm.github.io/libconfig/) will not be able to parse the file correctly, and parsing will fail, with dwm
+If there are major syntax errors, libconfig will not be able to parse the file correctly, and parsing will fail, with dwm
 falling back on the default configuration values specified in `config.h`. Minor syntax errors however, like an incorrect field in
 a bind or a single setting, will not cause parsing to fail. In the case of a bind, that bind will simply be skipped, or in the case
 of a setting, the default value from `config.h` will be used instead. 
 
 ## Performance Impact
 
-There is definitely a performance impact, but it is quite minimal. In my testing, even in extremely resource limited VM or emulated
-systems, the time to parse a configuration is negligible. The longest time I found in my testing was around 400ms, with the rest of the
-setup of dwm (mainly `setup()` and `scan()`) taking roughly 1s. During runtime, there are also some small performance losses, mainly
-surrounding access time on elements in the key and button bind arrays. In dwm-libconfig, they are not defined at compile time, vs in
-traditional dwm where they are. Combined with the loss of compiler optimizations, this can lead to higher input latency on dwm key and
-button bind actions. Though, again, this is generally extremely minimal. In the worst case scenarios I found that it can add around
-20-25ms of delay when accessing elements on opposite sides of the array in low resource VM or emulated environments.
-
-With all that said, real world performance losses are generally imperceptible. I have a relatively modern laptop and desktop PC, and both
-see less than .75ms to parse a complex configuration, and key / button bind latency of less than .2ms at worst.
+For those with performance concerns, the performance impact is very minimal. In my testing, even in extremely resource limited VM or emulated
+systems, the time to initialize the parser and parse a configuration is negligible. The longest time I found in my testing was around 400ms, 
+with the rest of the setup of dwm's initialization phase (mainly `setup()` and `scan()`) taking roughly 1s. Real world performance however is 
+much, much faster, and more favorable to the parser. On both my laptop and my desktop, parsing process takes on average around 0.5ms. That 
+accounts for <5% of `setup()`'s total runtime, with `setup()` averaging around 10-14ms. If we also include `scan()`, parsing takes <2.5% of
+dwm's initialization phase. During runtime, there are also some small performance losses, mainly surrounding access time on elements in the 
+`keys` and `buttons` bind arrays. However, even with the loss of their static, compile time nature, the performance impact is minor. Compared 
+to base dwm, we are looking at sub millisecond differences in access times. The additional memory overhead of the parser is also minimal.
+Using smem, the PSS on average (on my system) is 1,450 KB, about 200 KB higher than default dwm, which averages around 1,250 KB.
 
 ## TODOs
 There are still a few things I want to adjust before releasing this as a proper patch:
