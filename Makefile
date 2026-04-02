@@ -32,6 +32,7 @@ dist: clean
 	rm -rf dwm-${VERSION}
 
 install: all
+	cp -f dwm.conf ${DESTDIR}/etc/
 	mkdir -p ${DESTDIR}${PREFIX}/bin
 	cp -f dwm ${DESTDIR}${PREFIX}/bin
 	chmod 755 ${DESTDIR}${PREFIX}/bin/dwm
@@ -42,6 +43,5 @@ install: all
 uninstall:
 	rm -f ${DESTDIR}${PREFIX}/bin/dwm\
 		${DESTDIR}${MANPREFIX}/man1/dwm.1\
-		/etc/dwm
 
 .PHONY: all clean dist install uninstall

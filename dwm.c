@@ -293,7 +293,7 @@ applyrules(Client *c)
 	class    = ch.res_class ? ch.res_class : broken;
 	instance = ch.res_name  ? ch.res_name  : broken;
 
-	for (i = 0; i < dwm_config.rule_array_size; i++) {
+	for (i = 0; i < rules_count; i++) {
 		r = &rules[i];
 		if ((!r->title || strstr(c->name, r->title))
 		&& (!r->class || strstr(class, r->class))
@@ -453,7 +453,7 @@ buttonpress(XEvent *e)
 		XAllowEvents(dpy, ReplayPointer, CurrentTime);
 		click = ClkClientWin;
 	}
-	for (i = 0; i < dwm_config.buttonbind_array_size; i++)
+	for (i = 0; i < buttons_count; i++)
 		if (click == buttons[i].click && buttons[i].func && buttons[i].button == ev->button
 		&& CLEANMASK(buttons[i].mask) == CLEANMASK(ev->state))
 			buttons[i].func(click == ClkTagBar && buttons[i].arg.i == 0 ? &arg : &buttons[i].arg);
@@ -491,7 +491,7 @@ cleanup(void)
 	for (i = 0; i < LENGTH(colors); i++)
 		drw_scm_free(drw, scheme[i], 3);
 	free(scheme);
-	config_cleanup( &dwm_config );
+	config_cleanup();
 	XDestroyWindow(dpy, wmcheckwin);
 	drw_free(drw);
 	XSync(dpy, False);
@@ -943,7 +943,7 @@ grabbuttons(Client *c, int focused)
 		if (!focused)
 			XGrabButton(dpy, AnyButton, AnyModifier, c->win, False,
 				BUTTONMASK, GrabModeSync, GrabModeSync, None, None);
-		for (i = 0; i < dwm_config.buttonbind_array_size; i++)
+		for (i = 0; i < buttons_count; i++)
 			if (buttons[i].click == ClkClientWin)
 				for (j = 0; j < LENGTH(modifiers); j++)
 					XGrabButton(dpy, buttons[i].button,
@@ -969,7 +969,7 @@ grabkeys(void)
 		if (!syms)
 			return;
 		for (k = start; k <= end; k++)
-			for (i = 0; i < dwm_config.keybind_array_size; i++)
+			for (i = 0; i < keys_count; i++)
 				/* skip modifier codes, we do that ourselves */
 				if (keys[i].keysym == syms[(k - start) * skip])
 					for (j = 0; j < LENGTH(modifiers); j++)
@@ -1009,7 +1009,7 @@ keypress(XEvent *e)
 
 	ev = &e->xkey;
 	keysym = XKeycodeToKeysym(dpy, (KeyCode)ev->keycode, 0);
-	for (i = 0; i < dwm_config.keybind_array_size; i++)
+	for (i = 0; i < keys_count; i++)
 		if (keysym == keys[i].keysym
 		&& CLEANMASK(keys[i].mod) == CLEANMASK(ev->state)
 		&& keys[i].func)
@@ -1561,8 +1561,8 @@ setup(void)
 	sh = DisplayHeight(dpy, screen);
 	root = RootWindow(dpy, screen);
 	drw = drw_create(dpy, screen, root, sw, sh);
-	parse_config( &dwm_config );
-	if (!drw_fontset_create(drw, fonts, dwm_config.fonts_array_size))
+	parse_config();
+	if (!drw_fontset_create(drw, fonts, fonts_count))
 		die("no fonts could be loaded.");
 	lrpad = drw->fonts->h;
 	bh = drw->fonts->h + 2;
@@ -2149,7 +2149,7 @@ main(int argc, char *argv[])
 	if (argc == 2 && !strcmp("-v", argv[1]))
 		die("dwm-"VERSION);
 	else if (argc == 3 && !strcmp("-c", argv[1]))
-	        dwm_config.config_filepath = strdup(argv[2]);
+	        config_filepath = strdup(argv[2]);
 	else if (argc != 1)
 		die("usage: dwm [-v] [-c PATH]");
 	if (!setlocale(LC_CTYPE, "") || !XSupportsLocale())
