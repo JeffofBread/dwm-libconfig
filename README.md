@@ -15,7 +15,7 @@ modularity or verbosity. That being said, I did design it to be quite robust, ex
 just about anything you would like to the configuration relative ease, or slim down what already exists. If you would like to reach out,
 please do, I am more than happy to help. See [Reaching Out](#reaching-out) for contact info.
 
-## Requirements
+## Dependencies
 The patch is based on dwm 6.8, so it is recommended to start there. You will need all the base dwm dependencies plus 
 [libconfig](https://hyperrealm.github.io/libconfig/). You can find it in most distributions repositories without issue.
 
@@ -46,7 +46,7 @@ If those three paths fail or lead to invalid configurations, dwm will try and us
 managed or edited directly by the user, and will not be backed up at the end of parsing. 
 
 4. `$XDG_DATA_HOME/.local/share/dwm/dwm_last.conf` or `$HOME/.local/share/dwm/dwm_last.conf` if `$XDG_CONFIG_HOME` isn't defined
-5. `/etc/dwm/dwm.conf`
+5. `/etc/dwm.conf`
 
 The first of these two is a backup of the last successfully parsed user configuration. The second is a system-wide default configuration
 installed alongside dwm during `make install`. In the event all configuration files fail to be found or contain major syntax errors
