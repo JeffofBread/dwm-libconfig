@@ -2,9 +2,9 @@
  * @file parser.c
  * @brief Runtime configuration parser using [libconfig](https://github.com/hyperrealm/libconfig).
  *
- * This file replaces the need to edit @ref config.h or @ref config.def.h and recompile to make changes to
- * dwm's configuration by parsing a configuration file (see example @ref dwm.conf) at runtime. That configuration
- * file contains all the configuration values traditionally found in @ref config.h or @ref config.def.h, and can
+ * This file replaces the need to edit config.h or config.def.h and recompile to make changes to
+ * dwm's configuration by parsing a configuration file (see example dwm.conf) at runtime. That configuration
+ * file contains all the configuration values traditionally found in config.h or config.def.h, and can
  * be edited at any time without the need to change dwm's source code, allowing you to install dwm once and
  * configure it any time you wish without the source code. For more information, please see the patch's GitHub
  * page: https://github.com/JeffofBread/dwm-libconfig.
@@ -20,8 +20,8 @@
  * @see https://github.com/yshui/picom
  * @see https://github.com/mihirlad55/dwm-ipc
  *
- * @warning This file must be included after the definition of the structs
- * @ref Arg, @ref Button, @ref Key, and @ref Rule.
+ * @warning This file must be included after the definition of the structs Arg, Button, Key,
+ * and Rule, as well as after the inclusion of config.h.
  *
  * @note I (JeffOfBread) did not write all the code present in this file. Though I have made minor changes,
  * it's still not fair to say I wrote the code. I have listed them above as authors, and all code I used from
@@ -30,7 +30,9 @@
  * @todo Finish documentation. Make sure function arguments are noted for being dynamically allocated in that function or its sub functions.
  * @todo Overhaul printing / logging to match the new error handling.
  * @todo It may be worth going back to having a header, this file is very heavy.
- * @todo Many logs should be warns, not errors.
+ * @todo Try and reduce the number of unique string literals throughout the program. Tons are used for logging, inflating binary size by 8kb.
+ * @todo The libconfig lookup functions share a lot of code. May be worth looking at merging them.
+ * @todo Improve lookup logic for array parsing to allow specific searches to be either arrays OR lists.
  */
 
 #include <errno.h>
@@ -47,25 +49,39 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 
-// Preprocessor string manipulation used in the logging macros
-#define _TOSTRING( X ) #X
-#define TOSTRING( X ) _TOSTRING( X )
+/**
+ * @brief Log a categorized message.
+ *
+ * Logging is more or less intended to be enabled/disabled by uncommenting/commenting
+ * individual logging level's macro bodies. I would prefer a proper logging system, but that
+ * seems out the scope of this patch, and this works good enough for the patch's needs.
+ *
+ * @param[in] STREAM Filestream to print to.
+ * @param[in] LEVEL Log level string literal.
+ */
+#define _LOG( STREAM, LEVEL, ... )\
+	do{\
+		fprintf( STREAM, LEVEL " [%s::%s]: ", _parser_filepath, __func__ );\
+		fprintf( STREAM, "" __VA_ARGS__ );\
+	} while ( false )
 
-// Comment or uncomment as necessary to customize the level of logging.
-// I would prefer a proper logging system, but that seems out the scope
-// of this patch, and this works good enough for the patch's needs.
-#define LOG_DEBUG( ... ) //_LOG( "DEBUG", __VA_ARGS__ )
-#define LOG_INFO( ... ) _LOG( "INFO ", __VA_ARGS__ )
-#define LOG_WARN( ... ) _LOG( "WARN ", __VA_ARGS__ )
-#define LOG_ERROR( ... ) _LOG( "ERROR", __VA_ARGS__ )
+/** @brief Log a trace message. */
+#define LOG_TRACE( ... ) //_LOG( stdout, "TRACE", __VA_ARGS__ )
 
-// Unused, but you are welcome to enable and use these.
-//#define LOG_TRACE( ... ) _LOG( "TRACE", __VA_ARGS__ )
-//#define LOG_FATAL( ... ) _LOG( "FATAL", __VA_ARGS__ )
+/** @brief Log a debug message. */
+#define LOG_DEBUG( ... ) //_LOG( stdout, "DEBUG", __VA_ARGS__ )
 
-#define _LOG( LEVEL, ... )\
-	fprintf( stdout, LEVEL " [" __FILE__ "::%s::" TOSTRING(__LINE__) "]: ", __func__ );\
-	fprintf( stdout, "" __VA_ARGS__ )
+/** @brief Log an informational message. */
+#define LOG_INFO( ... )  _LOG( stdout, "INFO ", __VA_ARGS__ )
+
+/** @brief Log a warning message. */
+#define LOG_WARN( ... )  _LOG( stdout, "WARN ", __VA_ARGS__ )
+
+/** @brief Log an error message. */
+#define LOG_ERROR( ... ) _LOG( stdout, "ERROR", __VA_ARGS__ )
+
+/** @brief Log a fatal issue message. */
+#define LOG_FATAL( ... ) //_LOG( stdout, "FATAL", __VA_ARGS__ )
 
 // Macros to simplify a commonly used code structure to check and
 // deal with NULL function argument values like pointers or strings.
@@ -88,88 +104,97 @@
 		return;\
 	}
 
-// Macro to easily set status text before first bar draw
+/**
+ * @brief Macro to easily set status text before first bar draw.
+ * @param[in] ... Format and variables to be printed to the status text.
+ */
 #define SET_STATUS_TEXT( ... )\
-	snprintf( stext, sizeof( stext ), "" __VA_ARGS__ );\
-	XStoreName(dpy, root, stext);\
-	XSync(dpy, False);
+	do{\
+		snprintf( stext, sizeof( stext ), "" __VA_ARGS__ );\
+		XStoreName(dpy, root, stext);\
+		XSync(dpy, False);\
+	} while ( false )
 
-// Enum used to keep track of what kind of data
-// is to be stored in an Arg struct. This is
-// needed to properly parse the correct type
-// of data for whatever variable the data will
-// be stored in.
-typedef enum Data_Type {
-	TYPE_NONE = 0,
-	TYPE_BOOLEAN,
-	TYPE_INT,
-	TYPE_UINT,
-	TYPE_FLOAT,
-	TYPE_STRING,
+/** Enum used to keep track of what kind of data is to be stored in an Arg struct */
+typedef enum {
+	TYPE_NONE = 0, ///< No data stored/required.
+	TYPE_BOOLEAN,  ///< Boolean data.
+	TYPE_INT,      ///< Integer data.
+	TYPE_UINT,     ///< Unsigned Integer data.
+	TYPE_FLOAT,    ///< Float data.
+	TYPE_STRING,   ///< String data.
 } Data_Type_t;
 
-// String name pairs to the Data_Type enum
-const char *DATA_TYPE_ENUM_STRINGS[ ] = { "None", "Boolean", "Int", "Unsigned Int", "Float", "String" };
-
-// Enum to categorize the types of errors
-// that can occur during parsing.
-typedef enum Error {
-	ERROR_NONE = 0,
-	ERROR_NOT_FOUND,
-	ERROR_TYPE,
-	ERROR_RANGE,
-	ERROR_NULL_VALUE,
-	ERROR_ALLOCATION,
-	ERROR_IO,
-	ERROR_ENUM_LENGTH // Always must be last
+/** Enum to categorize the types of errors that can occur during parsing. */
+typedef enum {
+	ERROR_NONE = 0,   ///< No issue.
+	ERROR_NOT_FOUND,  ///< Value was unable to be acquired.
+	ERROR_TYPE,       ///< Value was not of required type.
+	ERROR_RANGE,      ///< Value evaluated out of required range.
+	ERROR_NULL_VALUE, ///< Value evaluated NULL.
+	ERROR_ALLOCATION, ///< Failed to dynamically allocating memory.
+	ERROR_IO,         ///< Failure processing input/output.
+	ERROR_ENUM_LENGTH ///< Count of possible enum values. Always must be last.
 } Error_t;
 
-// String name pairs to the Error_t enum
-const char *ERROR_ENUM_STRINGS[ ] = { "None", "Not found", "Invalid type", "Out of range", "Null value", "Failed to allocate memory", "I/O exception" };
-
-// I would rather replace this with a more thorough
-// error/exception handling system, but like the
-// logging system, it just seems a bit outside
-// the scope of the patch.
-typedef struct Errors {
-	unsigned int errors_count[ ERROR_ENUM_LENGTH ];
+/** Struct containing a count of accumulated @ref Error_t. */
+typedef struct {
+	unsigned int errors_count[ ERROR_ENUM_LENGTH ]; ///< Array of error counts for every enum of @ref Error_t.
 } Errors_t;
 
-// Alias libconfig structs for better name
-// separation from the parser's configuration struct
-typedef config_t Libconfig_Config_t;
-typedef config_setting_t Libconfig_Setting_t;
+/** Typedef used to abstract config array parsing functions. Allows for more generic parsing of multiple types. */
+typedef Errors_t ( *Array_Element_Parser_Function_t )( config_setting_t *element_setting, unsigned int element_index, void *parsed_element );
 
-// Typedef used to abstract config array parsing functions.
-// Allows for more generic parsing of multiple types.
-typedef Errors_t ( *Array_Element_Parser_Function_t )( Libconfig_Setting_t *element_setting, unsigned int element_index, void *parsed_element );
+////////////////////////////
+///// Global Variables /////
+////////////////////////////
 
-/// Global Variables ///
-char *config_filepath = NULL;
+char *config_filepath = NULL; ///< Path to the currently loaded configuration's file.
 
-Key *keys = default_keys;
-Button *buttons = default_buttons;
-Rule *rules = default_rules;
-const char **fonts = default_fonts;
+Key *keys = default_keys;           ///< Array of current keybinds.
+Button *buttons = default_buttons;  ///< Array of current buttons.
+Rule *rules = default_rules;        ///< Array of current rules.
+const char **fonts = default_fonts; ///< Array of current fonts.
 
-unsigned int keys_count = LENGTH( default_keys );
-unsigned int buttons_count = LENGTH( default_buttons );
-unsigned int rules_count = LENGTH( default_buttons );
-unsigned int fonts_count = LENGTH( default_fonts );
+unsigned int keys_count = LENGTH( default_keys );       ///< Number of elements in @ref keys.
+unsigned int buttons_count = LENGTH( default_buttons ); ///< Number of elements in @ref buttons.
+unsigned int rules_count = LENGTH( default_buttons );   ///< Number of elements in @ref rules.
+unsigned int fonts_count = LENGTH( default_fonts );     ///< Number of elements in @ref fonts_count.
 
-/// Static Global Variables ///
-static Libconfig_Config_t libconfig_config = { 0 };
+/** @brief String name pairs to @ref Error_t. */
+const char *ERROR_ENUM_STRINGS[ ] = { "None", "Not found", "Invalid type", "Out of range", "Null value", "Failed to allocate memory", "I/O exception" };
 
-static bool keys_malloced = false;
-static bool buttons_malloced = false;
-static bool rules_malloced = false;
-static bool fonts_malloced = false;
+///////////////////////////////////
+///// Static Global Variables /////
+///////////////////////////////////
 
-/// Public parser functions ///
+/**
+ * @brief Parser filepath string.
+ *
+ * This variable is to save on binary size. By instead referencing
+ * this string when logging, we don't add hundreds of repeat string
+ * literals to the binary, saving roughly 4kb on the final binary.
+ */
+static const char *_parser_filepath = __FILE__;
+
+static config_t libconfig_config = { 0 }; ///< Master libconfig configuration context used for parsing.
+
+static bool keys_malloced = false;    ///< Boolean tracking whether @ref keys has been dynamically allocated.
+static bool buttons_malloced = false; ///< Boolean tracking whether @ref buttons has been dynamically allocated.
+static bool rules_malloced = false;   ///< Boolean tracking whether @ref rules has been dynamically allocated.
+static bool fonts_malloced = false;   ///< Boolean tracking whether @ref fonts has been dynamically allocated.
+
+///////////////////////////////////
+///// Public parser functions /////
+///////////////////////////////////
+
 void config_cleanup( void );
 Errors_t parse_config( void );
 
-/// Public utility functions ///
+////////////////////////////////////
+///// Public utility functions /////
+////////////////////////////////////
+
 void add_error( Errors_t *errors, Error_t error );
 int errors_failure_count( const Errors_t *errors );
 char *estrdup( const char *string );
@@ -179,60 +204,72 @@ char *get_xdg_config_home( void );
 char *get_xdg_data_home( void );
 char *join_strings( const char *string_1, const char *string_2 );
 int make_directory_path( const char *path );
-void merge_errors( Errors_t *destination, Errors_t source );
+void copy_errors( Errors_t *destination, Errors_t source );
 int normalize_path( const char *original_path, char **normalized_path );
 void setlayout_floating( const Arg *arg );
 void setlayout_monocle( const Arg *arg );
 void setlayout_tiled( const Arg *arg );
 void spawn_simple( const Arg *arg );
 
-/// Parser internal functions ///
-static Error_t _parser_backup_config( Libconfig_Config_t *config );
-static Error_t _parse_bind_argument( Libconfig_Setting_t *bind_setting, Data_Type_t argument_type, long double range_min, long double range_max, Arg *parsed_argument );
-static Errors_t _parse_bind_core( Libconfig_Setting_t *bind_setting, unsigned int bind_index, unsigned int *parsed_modifier, void ( **parsed_function )( const Arg * ), Arg *parsed_argument );
-static Error_t _parse_bind_function( Libconfig_Setting_t *bind_setting, void ( **parsed_function )( const Arg * ), Data_Type_t *parsed_argument_type, long double *parsed_range_min,
-				     long double *parsed_range_max );
-static Error_t _parse_bind_modifier( Libconfig_Setting_t *bind_setting, unsigned int *parsed_modifier );
-static Errors_t _parse_buttonbind( Libconfig_Setting_t *buttonbind_setting, unsigned int buttonbind_index, Button *parsed_buttonbind );
-static Errors_t _parse_buttonbind_adapter( Libconfig_Setting_t *buttonbind_setting, unsigned int buttonbind_index, void *parsed_buttonbind );
-static Error_t _parse_buttonbind_button( Libconfig_Setting_t *buttonbind_setting, unsigned int *parsed_button );
-static Error_t _parse_buttonbind_click( Libconfig_Setting_t *buttonbind_setting, unsigned int *parsed_click );
-static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *config, Button **buttonbind_config, unsigned int *count, bool *malloced );
-static Errors_t _parse_config_array( const Libconfig_Config_t *config, Libconfig_Setting_t *setting, const char *config_array_name, size_t element_size,
-				     Array_Element_Parser_Function_t array_element_parser_function, bool *dynamically_allocated, void **parsed_config, unsigned int *parsed_config_length );
-static Errors_t _parse_font( Libconfig_Setting_t *fonts_setting, unsigned int fonts_index, const char *parsed_font );
-static Errors_t _parse_font_adapter( Libconfig_Setting_t *fonts_setting, unsigned int fonts_index, void *parsed_font );
-static Errors_t _parse_generic_settings( const Libconfig_Config_t *config );
-static Errors_t _parse_keybind( Libconfig_Setting_t *keybind_setting, unsigned int keybind_index, Key *parsed_keybind );
-static Errors_t _parse_keybind_adapter( Libconfig_Setting_t *keybind_setting, unsigned int keybind_index, void *parsed_keybind );
-static Error_t _parse_keybind_keysym( Libconfig_Setting_t *keybind_setting, KeySym *parsed_keysym );
-static Errors_t _parse_keybinds_config( const Libconfig_Config_t *config, Key **keybind_config, unsigned int *keybinds_count, bool *keybinds_dynamically_allocated );
-static Errors_t _parser_open_config_file( Libconfig_Config_t *config, const char *custom_config_filepath, char **found_config_filepath,bool *fallback_config_loaded );
-static Error_t _parser_resolve_include_directory( Libconfig_Config_t *config, const char *parsed_config_filepath );
-static Errors_t _parse_rule( Libconfig_Setting_t *rule_setting, unsigned int rule_index, Rule *parsed_rule );
-static Errors_t _parse_rule_adapter( Libconfig_Setting_t *rule_setting, unsigned int rule_index, void *parsed_rule );
-static Errors_t _parse_rules_config( const Libconfig_Config_t *config, Rule **rules_config, unsigned int *rules_count, bool *rules_dynamically_allocated );
-static Errors_t _parse_tag( Libconfig_Setting_t *tags_setting, unsigned int tags_index );
-static Errors_t _parse_tags_adapter( Libconfig_Setting_t *tags_setting, unsigned int tags_index, void *unused );
-static Errors_t _parse_tags_config( const Libconfig_Config_t *config );
-static Errors_t _parse_theme( Libconfig_Setting_t *theme_setting, unsigned int theme_index );
-static Errors_t _parse_theme_adapter( Libconfig_Setting_t *theme_setting, unsigned int theme_index, void *unused );
-static Errors_t _parse_theme_config( const Libconfig_Config_t *config );
+/////////////////////////////////////
+///// Parser internal functions /////
+/////////////////////////////////////
 
-/// Parser internal utility functions ///
-static Error_t _libconfig_get_setting_name( const Libconfig_Setting_t *setting, const char **found_name );
-static Error_t _libconfig_lookup_bool( const Libconfig_Config_t *config, const char *path, bool *parsed_value );
-static Error_t _libconfig_lookup_float( const Libconfig_Config_t *config, const char *path, float range_min, float range_max, float *parsed_value );
-static Error_t _libconfig_lookup_int( const Libconfig_Config_t *config, const char *path, int range_min, int range_max, int *parsed_value );
-static Error_t _libconfig_lookup_string( const Libconfig_Config_t *config, const char *path, const char **parsed_value );
-static Error_t _libconfig_lookup_uint( const Libconfig_Config_t *config, const char *path, unsigned int range_min, unsigned int range_max, unsigned int *parsed_value );
-static Error_t _libconfig_setting_lookup_bool( Libconfig_Setting_t *parent_setting, const char *path, bool *parsed_value );
-static Error_t _libconfig_setting_lookup_float( Libconfig_Setting_t *parent_setting, const char *path, float range_min, float range_max, float *parsed_value );
-static Error_t _libconfig_setting_lookup_int( Libconfig_Setting_t *parent_setting, const char *path, int range_min, int range_max, int *parsed_value );
-static Error_t _libconfig_setting_lookup_string( Libconfig_Setting_t *parent_setting, const char *path, const char **parsed_value );
-static Error_t _libconfig_setting_lookup_uint( Libconfig_Setting_t *parent_setting, const char *path, unsigned int range_min, unsigned int range_max, unsigned int *parsed_value );
+static Error_t _parser_backup_config( config_t *config );
+static Error_t _parse_bind_argument( config_setting_t *bind_setting, Data_Type_t argument_type, long double range_min, long double range_max, Arg *parsed_argument );
+static Errors_t _parse_bind_core( config_setting_t *bind_setting, unsigned int bind_index, unsigned int *parsed_modifier, void ( **parsed_function )( const Arg * ), Arg *parsed_argument );
+static Error_t _parse_bind_function( config_setting_t *bind_setting, void ( **parsed_function )( const Arg * ), Data_Type_t *parsed_argument_type, long double *parsed_range_min,
+                                     long double *parsed_range_max );
+static Error_t _parse_bind_modifier( config_setting_t *bind_setting, unsigned int *parsed_modifier );
+static Errors_t _parse_buttonbind( config_setting_t *buttonbind_setting, unsigned int buttonbind_index, Button *parsed_buttonbind );
+static Errors_t _parse_buttonbind_adapter( config_setting_t *buttonbind_setting, unsigned int buttonbind_index, void *parsed_buttonbind );
+static Error_t _parse_buttonbind_button( config_setting_t *buttonbind_setting, unsigned int *parsed_button );
+static Error_t _parse_buttonbind_click( config_setting_t *buttonbind_setting, unsigned int *parsed_click );
+static Errors_t _parse_buttonbinds_config( const config_t *config, Button **array, unsigned int *count, bool *malloced );
+static Errors_t _parse_font( config_setting_t *fonts_setting, unsigned int fonts_index, const char **parsed_font );
+static Errors_t _parse_font_adapter( config_setting_t *fonts_setting, unsigned int fonts_index, void *parsed_font );
+static Errors_t _parse_generic_settings( const config_t *config );
+static Errors_t _parse_keybind( config_setting_t *keybind_setting, unsigned int keybind_index, Key *parsed_keybind );
+static Errors_t _parse_keybind_adapter( config_setting_t *keybind_setting, unsigned int keybind_index, void *parsed_keybind );
+static Error_t _parse_keybind_keysym( config_setting_t *keybind_setting, KeySym *parsed_keysym );
+static Errors_t _parse_keybinds_config( const config_t *config, Key **array, unsigned int *count, bool *malloced );
+static Errors_t _parser_open_config_file( config_t *config, const char *custom_config_filepath, char **found_config_filepath,bool *fallback_config_loaded );
+static Errors_t _parse_rule( config_setting_t *rule_setting, unsigned int rule_index, Rule *parsed_rule );
+static Errors_t _parse_rule_adapter( config_setting_t *rule_setting, unsigned int rule_index, void *parsed_rule );
+static Errors_t _parse_rules_config( const config_t *config, Rule **array, unsigned int *count, bool *malloced );
+static Errors_t _parse_setting_array( const config_setting_t *setting, size_t element_size, Array_Element_Parser_Function_t array_element_parser_function, bool *malloced, void **parsed_config,
+                                      unsigned int *parsed_config_length );
+static Errors_t _parse_tag( config_setting_t *tags_setting, unsigned int tags_index );
+static Errors_t _parse_tags_adapter( config_setting_t *tags_setting, unsigned int tags_index, void *unused );
+static Errors_t _parse_tags_config( const config_t *config );
+static Errors_t _parse_theme( config_setting_t *theme_setting, unsigned int theme_index );
+static Errors_t _parse_theme_adapter( config_setting_t *theme_setting, unsigned int theme_index, void *unused );
+static Errors_t _parse_theme_config( const config_t *config );
 
-/// Parser alias maps ///
+/////////////////////////////////////////////
+///// Parser internal utility functions /////
+/////////////////////////////////////////////
+
+static Error_t _libconfig_get_setting_name( const config_setting_t *setting, const char **found_name );
+static Error_t _libconfig_lookup_array( const config_t *config, const char *path, config_setting_t **parsed_value );
+static Error_t _libconfig_lookup_bool( const config_t *config, const char *path, bool *parsed_value );
+static Error_t _libconfig_lookup_float( const config_t *config, const char *path, float range_min, float range_max, float *parsed_value );
+static Error_t _libconfig_lookup_int( const config_t *config, const char *path, int range_min, int range_max, int *parsed_value );
+static Error_t _libconfig_lookup_list( const config_t *config, const char *path, config_setting_t **parsed_value );
+static Error_t _libconfig_lookup_string( const config_t *config, const char *path, const char **parsed_value );
+static Error_t _libconfig_lookup_uint( const config_t *config, const char *path, unsigned int range_min, unsigned int range_max, unsigned int *parsed_value );
+static Error_t _libconfig_setting_lookup_array( config_setting_t *setting, const char *path, config_setting_t **parsed_value );
+static Error_t _libconfig_setting_lookup_bool( config_setting_t *parent_setting, const char *path, bool *parsed_value );
+static Error_t _libconfig_setting_lookup_float( config_setting_t *parent_setting, const char *path, float range_min, float range_max, float *parsed_value );
+static Error_t _libconfig_setting_lookup_int( config_setting_t *parent_setting, const char *path, int range_min, int range_max, int *parsed_value );
+static Error_t _libconfig_setting_lookup_list( config_setting_t *setting, const char *path, config_setting_t **parsed_value );
+static Error_t _libconfig_setting_lookup_string( config_setting_t *parent_setting, const char *path, const char **parsed_value );
+static Error_t _libconfig_setting_lookup_uint( config_setting_t *parent_setting, const char *path, unsigned int range_min, unsigned int range_max, unsigned int *parsed_value );
+
+/////////////////////////////
+///// Parser alias maps /////
+/////////////////////////////
+
 const struct Function_Alias_Map {
 	const char *alias;
 	void ( *function )( const Arg * );
@@ -340,7 +377,9 @@ const struct Theme_Alias_Map {
 	{ "selected-border", &colors[ SchemeSel ][ ColBorder ] },
 };
 
-/// Public parser functions ///
+///////////////////////////////////
+///// Public parser functions /////
+///////////////////////////////////
 
 /**
  * @brief Frees dynamically allocated parser data.
@@ -377,52 +416,49 @@ void config_cleanup( void ) {
  * @return TODO
  *
  * @todo Polish the status texts a little. I like the idea but could be refined.
- *
- * @authors JeffOfBread <jeffofbreadcoding@gmail.com>
- *
- * @see https://github.com/JeffofBread/dwm-libconfig
+ * @todo Backup config file logic is clumsily structured, it should be improved. It also probably should include rules_malloced
  */
 Errors_t parse_config( void ) {
 
-	Errors_t errors = { 0 };
+	Errors_t returned_errors = { 0 };
 
 	config_init( &libconfig_config );
 
 	bool fallback_config_loaded = false;
-	merge_errors( &errors, _parser_open_config_file( &libconfig_config, config_filepath, &config_filepath, &fallback_config_loaded ) );
+	const char *custom_config_filepath = config_filepath;
+	config_filepath = NULL;
+	copy_errors( &returned_errors, _parser_open_config_file( &libconfig_config, custom_config_filepath, &config_filepath, &fallback_config_loaded ) );
 
 	// Exit the parser if we haven't acquired a configuration file.
 	// Without a configuration file, there isn't a reason to continue parsing.
 	// The program will have to rely on the hardcoded default values instead.
 	if ( config_filepath == NULL ) {
 		LOG_ERROR( "Unable to load any configs. Hardcoded default config values will be used. Exiting parsing\n" );
-		SET_STATUS_TEXT( "Parser failed to load config file" );
+		SET_STATUS_TEXT( "Failed to load config file" );
 		config_destroy( &libconfig_config );
-		return errors;
+		return returned_errors;
 	}
 
 	LOG_INFO( "Path to config file: \"%s\"\n", config_filepath );
 
-	add_error( &errors, _parser_resolve_include_directory( &libconfig_config, config_filepath ) );
-
 	config_set_options( &libconfig_config, CONFIG_OPTION_AUTOCONVERT | CONFIG_OPTION_SEMICOLON_SEPARATORS );
 	config_set_tab_width( &libconfig_config, 4 );
 
-	merge_errors( &errors, _parse_generic_settings( &libconfig_config ) );
-	merge_errors( &errors, _parse_keybinds_config( &libconfig_config, &keys, &keys_count, &keys_malloced ) );
-	merge_errors( &errors, _parse_buttonbinds_config( &libconfig_config, &buttons, &buttons_count, &buttons_malloced ) );
-	merge_errors( &errors, _parse_rules_config( &libconfig_config, &rules, &rules_count, &rules_malloced ) );
-	merge_errors( &errors, _parse_tags_config( &libconfig_config ) );
-	merge_errors( &errors, _parse_theme_config( &libconfig_config ) );
+	Errors_t parsing_errors = { 0 };
+
+	copy_errors( &parsing_errors, _parse_generic_settings( &libconfig_config ) );
+	copy_errors( &parsing_errors, _parse_keybinds_config( &libconfig_config, &keys, &keys_count, &keys_malloced ) );
+	copy_errors( &parsing_errors, _parse_buttonbinds_config( &libconfig_config, &buttons, &buttons_count, &buttons_malloced ) );
+	copy_errors( &parsing_errors, _parse_rules_config( &libconfig_config, &rules, &rules_count, &rules_malloced ) );
+	copy_errors( &parsing_errors, _parse_tags_config( &libconfig_config ) );
+	copy_errors( &parsing_errors, _parse_theme_config( &libconfig_config ) );
 
 	// The error requirement being 0 may be a bit strict, I am not sure. May need
 	// some relaxing or possibly come up with a better way of calculating if a config
 	// passes, or is valid enough to warrant backing up.
-
-	// TODO: This logic is clumsily structured, it should be improved. It also probably should include rules_malloced
-	if ( errors_failure_count( &errors ) == 0 && keys_malloced && buttons_malloced && !fallback_config_loaded ) {
+	if ( errors_failure_count( &parsing_errors ) == 0 && keys_malloced && buttons_malloced && !fallback_config_loaded ) {
 		const Error_t backup_error = _parser_backup_config( &libconfig_config );
-		add_error( &errors, backup_error );
+		add_error( &parsing_errors, backup_error );
 	} else {
 		if ( keys_malloced == false || buttons_malloced == false ) {
 			LOG_WARN( "Not saving config as backup, as hardcoded default bind values were used, not the user's\n" );
@@ -430,17 +466,22 @@ Errors_t parse_config( void ) {
 		if ( fallback_config_loaded == true ) {
 			LOG_WARN( "Not saving config as backup, as the parsed configuration file is a system fallback configuration\n" );
 		}
-		if ( errors_failure_count( &errors ) != 0 ) {
-			LOG_WARN( "Not saving config as backup, as the parsed config had too many (%d) errors\n", errors_failure_count( &errors ) );
+		if ( errors_failure_count( &parsing_errors ) != 0 ) {
+			LOG_WARN( "Not saving config as backup, as the parsed config had too many (%d) errors\n", errors_failure_count( &parsing_errors ) );
 		}
 	}
 
-	SET_STATUS_TEXT( "Parser Errors: %u", errors_failure_count( &errors ) );
+	copy_errors( &returned_errors, parsing_errors );
+	LOG_DEBUG( "Parsing errors: %d, Total errors: %d\n", errors_failure_count( &parsing_errors ), errors_failure_count( &returned_errors ) );
 
-	return errors;
+	SET_STATUS_TEXT( "%s | Errors: %u", config_filepath, errors_failure_count( &returned_errors ) );
+
+	return returned_errors;
 }
 
-/// Public utility functions ///
+////////////////////////////////////
+///// Public utility functions /////
+////////////////////////////////////
 
 /**
  * @brief Adds an error to an @ref Errors_t struct.
@@ -513,17 +554,21 @@ char *estrdup( const char *string ) {
 /**
  * @brief Extend one string with another.
  *
- * TODO
+ * This function reallocates and extends the string pointed to by @p source_string with the string @p addition.
+ * If either the pointer to @p source_string or @p addition are NULL, the function will log an error and return.
+ * If the string at @p source_string is NULL, @p addition will be copied into it's place using dynamic allocation.
+ * If all succeeds, then the string pointed to by @p source_string will be dynamically reallocated to contain both
+ * the source string and @p addition, and will need to be freed manually.
  *
- * @param[in,out] source_string Pointer to where the extended string will be stored. Must be NULL or heap allocated.
- * @param[in] addition Additional string to be appended to the string pointed to by @p source_string_pointer.
+ * @param[in,out] source_string Pointer to the string to be extended with @p addition. Must point to a NULL or heap allocated string.
+ * @param[in] addition Additional string to be appended to the string pointed to by @p source_string.
  *
- * @warning @p source_string_pointer must be NULL or heap allocated. If it points to a string
+ * @warning String at @p source_string must be NULL or heap allocated. If it points to a string
  * literal, realloc() will crash the program. See @ref join_strings() if you wish to append a string literal.
  *
- * @note @p source_string_pointer is or will be dynamically allocated and must be manually freed.
+ * @note 1. @p source_string is or will be dynamically allocated and must be manually freed.
  *
- * @note This function is derived from [picom's](https://github.com/yshui/picom/) mstrextend().
+ * @note 2. This function is derived from [picom's](https://github.com/yshui/picom/) mstrextend().
  * Credit more or less goes to [Yuxuan Shui](yshuiv7@gmail.com), I just made some minor adjustments.
  *
  * @author Yuxuan Shui - <yshuiv7@gmail.com>
@@ -533,7 +578,8 @@ char *estrdup( const char *string ) {
  */
 void extend_string( char **source_string, const char *addition ) {
 
-	RETURN_IF_NULL( source_string, "Pointer to source string is NULL\n" );
+	RETURN_IF_NULL( source_string, "Pointer to source string is NULL, can't extend string\n" );
+	RETURN_IF_NULL( addition, "String to extend source string with is NULL, can't extend string\n" );
 
 	if ( *source_string == NULL ) {
 		*source_string = estrdup( addition );
@@ -541,21 +587,21 @@ void extend_string( char **source_string, const char *addition ) {
 		return;
 	}
 
-	const size_t length_1 = strlen( *source_string );
-	const size_t length_2 = strlen( addition );
-	const size_t total_length = length_1 + length_2 + 1;
+	const size_t source_length = strlen( *source_string );
+	const size_t addition_length = strlen( addition );
+	const size_t total_length = source_length + addition_length + 1; // +1 for NULL termination
 
 	errno = 0;
 	*source_string = realloc( *source_string, total_length * sizeof( char ) );
 
 	RETURN_IF_NULL( *source_string, "realloc() failed to reallocate *source_string to %lu bytes: %s\n", total_length * sizeof( char ), strerror(errno) );
 
-	strncpy( *source_string + length_1, addition, length_2 );
+	strncpy( *source_string + source_length, addition, addition_length );
 	( *source_string )[ total_length - 1 ] = '\0';
 }
 
 /**
- * @brief Find and return layout in @ref layouts that uses a specific arrange function.
+ * @brief Find and return layout in layouts that uses a specific arrange function.
  *
  * TODO
  *
@@ -582,10 +628,10 @@ const Layout *get_layout( void ( *arrange )( Monitor * ) ) {
  * @return Pointer of a dynamically allocated string containing the complete path to the user's XDG
  * configuration directory, or NULL if no directory was able to be found.
  *
- * @note If the function is successful, the returned string will have been dynamically allocated
+ * @note 1. If the function is successful, the returned string will have been dynamically allocated
  * and will need to be manually freed.
  *
- * @note This function is derived from [picom's](https://github.com/yshui/picom/) xdg_config_home().
+ * @note 2. This function is derived from [picom's](https://github.com/yshui/picom/) xdg_config_home().
  * Credit more or less goes to [Yuxuan Shui](yshuiv7@gmail.com), I just made some minor adjustments.
  *
  * @author Yuxuan Shui - <yshuiv7@gmail.com>
@@ -621,9 +667,9 @@ char *get_xdg_config_home( void ) {
  * @return Pointer of a dynamically allocated string containing the complete path to the user's XDG
  * data directory, or NULL if no directory was able to be found.
  *
- * @note TODO mention dynamic allocation with join_strings() and estrdup()
+ * @note 1. TODO mention dynamic allocation with join_strings() and estrdup()
  *
- * @note This function is derived from [picom's](https://github.com/yshui/picom/) xdg_config_home().
+ * @note 2. This function is derived from [picom's](https://github.com/yshui/picom/) xdg_config_home().
  * Credit more or less goes to [Yuxuan Shui](yshuiv7@gmail.com), I just made some minor adjustments.
  *
  * @author Yuxuan Shui - <yshuiv7@gmail.com>
@@ -662,12 +708,12 @@ char *get_xdg_data_home( void ) {
  * @return Pointer of a dynamically allocated string containing the now joined strings,
  * or NULL on failure.
  *
- * @note Returned string is dynamically allocated and will need to be manually freed.
+ * @note 1. Returned string is dynamically allocated and will need to be manually freed.
  *
- * @note This function is derived from [picom's](https://github.com/yshui/picom/) mstrjoin().
+ * @note 2. This function is derived from [picom's](https://github.com/yshui/picom/) mstrjoin().
  * Credit more or less goes to [Yuxuan Shui](yshuiv7@gmail.com), I just made some minor adjustments.
  *
- * @note gcc warns about legitimate truncation worries in strncpy() in @ref join_strings().
+ * @note 3. gcc warns about legitimate truncation worries in strncpy().
  * `strncpy( joined_string, string_1, length_1 )` intentionally truncates the null byte
  * from @p string_1, however. `strncpy( joined_string + length_1, string_2, length_2 )`
  * uses bounds depending on the source argument, but `joined_string` is allocated with
@@ -788,16 +834,19 @@ int make_directory_path( const char *path ) {
 }
 
 /**
- * @brief TODO
+ * @brief Copy errors from @p source to @p destination.
  *
- * TODO
+ * This function copies the errors in @p source to the @ref Errors_t
+ * struct pointed to by @p destination. It does not alter the errors
+ * in @p source. If the pointer to @p destination is NULL, an error
+ * will be logged and the function will return.
  *
- * @param[out] destination TODO
- * @param[in] source TODO
+ * @param[out] destination Pointer to where to copy errors to.
+ * @param[in] source Errors to copy.
  */
-void merge_errors( Errors_t *destination, const Errors_t source ) {
+void copy_errors( Errors_t *destination, const Errors_t source ) {
 
-	RETURN_IF_NULL( destination, "destination is NULL, no where to merge errors\n" );
+	RETURN_IF_NULL( destination, "destination is NULL, no where to copy errors\n" );
 
 	for ( int i = 0; i < ERROR_ENUM_LENGTH; i++ ) {
 		destination->errors_count[ i ] += source.errors_count[ i ];
@@ -815,9 +864,9 @@ void merge_errors( Errors_t *destination, const Errors_t source ) {
  *
  * @return 0 on success, -1 on failure.
  *
- * @note @p normalized_path can be dynamically allocated and will need to be manually freed.
+ * @note 1. @p normalized_path can be dynamically allocated and will need to be manually freed.
  *
- * @note This function is derived from [dwm-ipc's](https://github.com/mihirlad55/dwm-ipc) normalizepath().
+ * @note 2. This function is derived from [dwm-ipc's](https://github.com/mihirlad55/dwm-ipc) normalizepath().
  * Credit more or less goes to [Mihir Lad](mihirlad55@gmail.com), I just made some minor adjustments.
  *
  * @author Mihir Lad - <mihirlad55@gmail.com>
@@ -870,9 +919,9 @@ int normalize_path( const char *original_path, char **normalized_path ) {
 /**
  * @brief Set current layout to floating.
  *
- * This is a wrapper for the @ref setlayout() function. It sets the
+ * This is a wrapper for the setlayout() function. It sets the
  * currently focused monitor's layout to the floating layout found
- * in the @ref layouts array.
+ * in the layouts array.
  *
  * @param arg Unused.
  */
@@ -891,9 +940,9 @@ void setlayout_floating( const Arg *arg ) {
 /**
  * @brief Set current layout to monocle.
  *
- * This is a wrapper for the @ref setlayout() function. It sets the
+ * This is a wrapper for the setlayout() function. It sets the
  * currently focused monitor's layout to the monocle layout found in
- * the @ref layouts array.
+ * the layouts array.
  *
  * @param arg Unused.
  */
@@ -912,9 +961,9 @@ void setlayout_monocle( const Arg *arg ) {
 /**
  * @brief Set current layout to tile.
  *
- * This is a wrapper for the @ref setlayout() function. It sets the
+ * This is a wrapper for the setlayout() function. It sets the
  * currently focused monitor's layout to the tile layout found in the
- * @ref layouts array.
+ * layouts array.
  *
  * @param arg Unused.
  */
@@ -931,14 +980,14 @@ void setlayout_tiled( const Arg *arg ) {
 }
 
 /**
- * @brief Wrapper around @ref spawn() for simpler program spawning.
+ * @brief Wrapper around spawn() for simpler program spawning.
  *
  * This wrapper is to simplify the parsers interaction with the
- * @ref spawn() function. It takes in the program name and arguments
- * as a string from @p arg, prepares them with the necessary shell
- * executable and flag, and then passes it all to @ref spawn().
+ * spawn() function. It takes in the program name and arguments
+ * as a string from Arg, prepares them with the necessary shell
+ * executable and flag, and then passes it all to spawn().
  *
- * @param[in] arg Pointer to the @ref Arg struct containing a null
+ * @param[in] arg Pointer to the Arg struct containing a null
  * terminated string containing the name and arguments of the program
  * to spawn.
  */
@@ -955,13 +1004,15 @@ void spawn_simple( const Arg *arg ) {
 	spawn( &tmp );
 }
 
-/// Parser internal functions ///
+/////////////////////////////////////
+///// Parser internal functions /////
+/////////////////////////////////////
 
 /**
  * @brief Backs up a libconfig configuration to disk.
  *
- * This function backs up the given libconfig @ref Libconfig_Config_t
- * @p config following the XDG specification. If the function
+ * This function backs up the given libconfig config_t,
+ * @p config, following the XDG specification. If the function
  * @ref get_xdg_data_home() fails to find the XDG data directory
  * (which is likely), we will default to using "~/.local/share/"
  * instead. Meaning that, in the latter case, the filepath to
@@ -982,7 +1033,7 @@ void spawn_simple( const Arg *arg ) {
  * to allocate necessary memory to construct the complete backup filepath.
  * @return ERROR_IO if libconfig failed to write @p config to a file.
  */
-static Error_t _parser_backup_config( Libconfig_Config_t *config ) {
+static Error_t _parser_backup_config( config_t *config ) {
 
 	RETURN_VALUE_IF_NULL( config, ERROR_NULL_VALUE, "Pointer to configuration is NULL, unable to backup config\n" );
 
@@ -1024,7 +1075,7 @@ static Error_t _parser_backup_config( Libconfig_Config_t *config ) {
  * @param[in] argument_type Enum describing the type of data stored in @p parsed_argument.
  * @param[in] range_min Minimum value @p parsed_argument can have. Only applies to numerical types.
  * @param[in] range_max Maximum value @p parsed_argument can have. Only applies to numerical types.
- * @param[out] parsed_argument Pointer to an @ref Arg struct where the parsed value of type @p argument_type
+ * @param[out] parsed_argument Pointer to an Arg struct where the parsed value of type @p argument_type
  * in range @p range_min to @p range_max will be stored.
  *
  * @return Any error returned from any of the _libconfig_setting_lookup_TYPE() functions.
@@ -1032,7 +1083,7 @@ static Error_t _parser_backup_config( Libconfig_Config_t *config ) {
  * @return ERROR_NULL_VALUE if a NULL argument is provided.
  * @return ERROR_TYPE if @p argument_type does not match any case in the switch statement.
  */
-static Error_t _parse_bind_argument( Libconfig_Setting_t *bind_setting, const Data_Type_t argument_type, const long double range_min, const long double range_max, Arg *parsed_argument ) {
+static Error_t _parse_bind_argument( config_setting_t *bind_setting, const Data_Type_t argument_type, const long double range_min, const long double range_max, Arg *parsed_argument ) {
 
 	RETURN_VALUE_IF_NULL( bind_setting, ERROR_NULL_VALUE, "Pointer to configuration setting is NULL, unable to parse the bind's argument\n" );
 	RETURN_VALUE_IF_NULL( parsed_argument, ERROR_NULL_VALUE, "Pointer to where to store the parsed argument is NULL, unable to parse the bind's argument\n" );
@@ -1070,7 +1121,7 @@ static Error_t _parse_bind_argument( Libconfig_Setting_t *bind_setting, const Da
 		}
 
 		default: {
-			LOG_ERROR( "Unknown argument type during bind parsing: %d. Please reprogram to a valid type\n", argument_type );
+			LOG_WARN( "Unknown argument type during bind parsing: %d. Please reprogram to a valid type\n", argument_type );
 			return ERROR_TYPE;
 		}
 	}
@@ -1091,7 +1142,7 @@ static Error_t _parse_bind_argument( Libconfig_Setting_t *bind_setting, const Da
  *
  * @return TODO
  */
-static Errors_t _parse_bind_core( Libconfig_Setting_t *bind_setting, const unsigned int bind_index, unsigned int *parsed_modifier, void ( **parsed_function )( const Arg * ), Arg *parsed_argument ) {
+static Errors_t _parse_bind_core( config_setting_t *bind_setting, const unsigned int bind_index, unsigned int *parsed_modifier, void ( **parsed_function )( const Arg * ), Arg *parsed_argument ) {
 
 	Errors_t returned_errors = { 0 };
 
@@ -1112,7 +1163,7 @@ static Errors_t _parse_bind_core( Libconfig_Setting_t *bind_setting, const unsig
 	add_error( &returned_errors, modifier_error );
 
 	if ( modifier_error != ERROR_NONE ) {
-		LOG_ERROR( "\"%s\" index %d invalid, unable to parse the bind's modifier: %s\n", setting_name, bind_index + 1, ERROR_ENUM_STRINGS[ modifier_error ] );
+		LOG_WARN( "\"%s\" index %d invalid, unable to parse the bind's modifier: %s\n", setting_name, bind_index + 1, ERROR_ENUM_STRINGS[ modifier_error ] );
 		return returned_errors;
 	}
 
@@ -1122,7 +1173,7 @@ static Errors_t _parse_bind_core( Libconfig_Setting_t *bind_setting, const unsig
 	add_error( &returned_errors, bind_error );
 
 	if ( bind_error != ERROR_NONE ) {
-		LOG_ERROR( "\"%s\" index %d invalid, unable to parse the bind's function: %s\n", setting_name, bind_index + 1, ERROR_ENUM_STRINGS[ bind_error ] );
+		LOG_WARN( "\"%s\" index %d invalid, unable to parse the bind's function: %s\n", setting_name, bind_index + 1, ERROR_ENUM_STRINGS[ bind_error ] );
 		return returned_errors;
 	}
 
@@ -1130,7 +1181,7 @@ static Errors_t _parse_bind_core( Libconfig_Setting_t *bind_setting, const unsig
 	add_error( &returned_errors, argument_error );
 
 	if ( argument_error != ERROR_NONE ) {
-		LOG_ERROR( "\"%s\" index %d invalid, unable to parse the bind's arguments: %s\n", setting_name, bind_index + 1, ERROR_ENUM_STRINGS[ argument_error ] );
+		LOG_WARN( "\"%s\" index %d invalid, unable to parse the bind's arguments: %s\n", setting_name, bind_index + 1, ERROR_ENUM_STRINGS[ argument_error ] );
 		return returned_errors;
 	}
 
@@ -1144,9 +1195,9 @@ static Errors_t _parse_bind_core( Libconfig_Setting_t *bind_setting, const unsig
  *
  * @param[in] bind_setting TODO
  * @param[out] parsed_function TODO
- * @param[out] parsed_argument_type Pointer to where to store the data type of the @ref Arg that can be passed to @p parsed_function.
- * @param[out] parsed_range_min Pointer to where to store the minimum value of the @ref Arg that can be passed to @p parsed_function.
- * @param[out] parsed_range_max Pointer to where to store the maximum value of the @ref Arg that can be passed to @p parsed_function.
+ * @param[out] parsed_argument_type Pointer to where to store the data type of the Arg that can be passed to @p parsed_function.
+ * @param[out] parsed_range_min Pointer to where to store the minimum value of the Arg that can be passed to @p parsed_function.
+ * @param[out] parsed_range_max Pointer to where to store the maximum value of the Arg that can be passed to @p parsed_function.
  *
  * @return Any error returned from @ref _libconfig_setting_lookup_string().
  * @return ERROR_NONE on success.
@@ -1154,8 +1205,8 @@ static Errors_t _parse_bind_core( Libconfig_Setting_t *bind_setting, const unsig
  * @return ERROR_NOT_FOUND if parsed intermediate function string does not
  * match any alias found in @ref FUNCTION_ALIAS_MAP.
  */
-static Error_t _parse_bind_function( Libconfig_Setting_t *bind_setting, void ( **parsed_function )( const Arg * ), Data_Type_t *parsed_argument_type, long double *parsed_range_min,
-				     long double *parsed_range_max ) {
+static Error_t _parse_bind_function( config_setting_t *bind_setting, void ( **parsed_function )( const Arg * ), Data_Type_t *parsed_argument_type, long double *parsed_range_min,
+                                     long double *parsed_range_max ) {
 
 	RETURN_VALUE_IF_NULL( bind_setting, ERROR_NULL_VALUE, "Pointer to configuration setting is NULL, unable to parse the bind's function\n" );
 	RETURN_VALUE_IF_NULL( parsed_function, ERROR_NULL_VALUE, "Pointer to where to store the parsed function pointer is NULL, unable to parse the bind's function\n" );
@@ -1198,7 +1249,7 @@ static Error_t _parse_bind_function( Libconfig_Setting_t *bind_setting, void ( *
  *
  * @see https://gitlab.freedesktop.org/xorg/proto/xorgproto/-/blob/master/include/X11/X.h
  */
-static Error_t _parse_bind_modifier( Libconfig_Setting_t *bind_setting, unsigned int *parsed_modifier ) {
+static Error_t _parse_bind_modifier( config_setting_t *bind_setting, unsigned int *parsed_modifier ) {
 
 	RETURN_VALUE_IF_NULL( bind_setting, ERROR_NULL_VALUE, "Pointer to configuration setting is NULL, unable to parse the bind's modifier\n" );
 	RETURN_VALUE_IF_NULL( parsed_modifier, ERROR_NULL_VALUE, "Pointer to where to store the parsed modifier is NULL, unable to parse the bind's modifier\n" );
@@ -1233,7 +1284,7 @@ static Error_t _parse_bind_modifier( Libconfig_Setting_t *bind_setting, unsigned
 		}
 
 		if ( found == false ) {
-			LOG_ERROR( "Invalid modifier: \"%s\"\n", modifier_token );
+			LOG_WARN( "Invalid modifier: \"%s\"\n", modifier_token );
 			free( buffer );
 			return ERROR_NOT_FOUND;
 		}
@@ -1257,20 +1308,20 @@ static Error_t _parse_bind_modifier( Libconfig_Setting_t *bind_setting, unsigned
  *
  * @return TODO
  */
-static Errors_t _parse_buttonbind( Libconfig_Setting_t *buttonbind_setting, const unsigned int buttonbind_index, Button *parsed_buttonbind ) {
+static Errors_t _parse_buttonbind( config_setting_t *buttonbind_setting, const unsigned int buttonbind_index, Button *parsed_buttonbind ) {
 
 	Errors_t returned_errors = { 0 };
 
 	RETURN_ERRORS_IF_NULL( buttonbind_setting, returned_errors, "Pointer to configuration setting is NULL, unable to parse buttonbind (index %u)\n", buttonbind_index );
 	RETURN_ERRORS_IF_NULL( parsed_buttonbind, returned_errors, "Pointer to where to store the parsed buttonbind is NULL, unable to parse buttonbind (index %u)\n", buttonbind_index );
 
-	merge_errors( &returned_errors, _parse_bind_core( buttonbind_setting, buttonbind_index, &parsed_buttonbind->mask, &parsed_buttonbind->func, &parsed_buttonbind->arg ) );
+	copy_errors( &returned_errors, _parse_bind_core( buttonbind_setting, buttonbind_index, &parsed_buttonbind->mask, &parsed_buttonbind->func, &parsed_buttonbind->arg ) );
 
 	const Error_t button_error = _parse_buttonbind_button( buttonbind_setting, &parsed_buttonbind->button );
 	add_error( &returned_errors, button_error );
 
 	if ( button_error != ERROR_NONE ) {
-		LOG_ERROR( "Buttonbind %d invalid, unable to parse the bind's button: %s\n", buttonbind_index + 1, ERROR_ENUM_STRINGS[ button_error ] );
+		LOG_WARN( "Buttonbind %d invalid, unable to parse the bind's button: %s\n", buttonbind_index + 1, ERROR_ENUM_STRINGS[ button_error ] );
 		return returned_errors;
 	}
 
@@ -1278,7 +1329,7 @@ static Errors_t _parse_buttonbind( Libconfig_Setting_t *buttonbind_setting, cons
 	add_error( &returned_errors, click_error );
 
 	if ( click_error != ERROR_NONE ) {
-		LOG_ERROR( "Buttonbind %d invalid, unable to parse the bind's click: %s\n", buttonbind_index + 1, ERROR_ENUM_STRINGS[ click_error ] );
+		LOG_WARN( "Buttonbind %d invalid, unable to parse the bind's click: %s\n", buttonbind_index + 1, ERROR_ENUM_STRINGS[ click_error ] );
 	}
 
 	// Ensure button is zeroed and doesn't accidentally have any
@@ -1301,7 +1352,7 @@ static Errors_t _parse_buttonbind( Libconfig_Setting_t *buttonbind_setting, cons
  *
  * @see @ref _parse_buttonbind()
  */
-static Errors_t _parse_buttonbind_adapter( Libconfig_Setting_t *buttonbind_setting, const unsigned int buttonbind_index, void *parsed_buttonbind ) {
+static Errors_t _parse_buttonbind_adapter( config_setting_t *buttonbind_setting, const unsigned int buttonbind_index, void *parsed_buttonbind ) {
 	return _parse_buttonbind( buttonbind_setting, buttonbind_index, (Button *) parsed_buttonbind );
 }
 
@@ -1322,7 +1373,7 @@ static Errors_t _parse_buttonbind_adapter( Libconfig_Setting_t *buttonbind_setti
  *
  * @see https://gitlab.freedesktop.org/xorg/proto/xorgproto/-/blob/master/include/X11/X.h
  */
-static Error_t _parse_buttonbind_button( Libconfig_Setting_t *buttonbind_setting, unsigned int *parsed_button ) {
+static Error_t _parse_buttonbind_button( config_setting_t *buttonbind_setting, unsigned int *parsed_button ) {
 
 	RETURN_VALUE_IF_NULL( buttonbind_setting, ERROR_NULL_VALUE, "Pointer to configuration setting is NULL, unable to parse buttonbind button\n" );
 	RETURN_VALUE_IF_NULL( parsed_button, ERROR_NULL_VALUE, "Pointer to where to store the parsed button is NULL, unable to parse buttonbind button\n" );
@@ -1367,7 +1418,7 @@ static Error_t _parse_buttonbind_button( Libconfig_Setting_t *buttonbind_setting
  * @return ERROR_NOT_FOUND if parsed intermediate click string does not
  * match any alias found in @ref CLICK_ALIAS_MAP.
  */
-static Error_t _parse_buttonbind_click( Libconfig_Setting_t *buttonbind_setting, unsigned int *parsed_click ) {
+static Error_t _parse_buttonbind_click( config_setting_t *buttonbind_setting, unsigned int *parsed_click ) {
 
 	RETURN_VALUE_IF_NULL( buttonbind_setting, ERROR_NULL_VALUE, "Pointer to configuration setting is NULL, unable to parse buttonbind click\n" );
 	RETURN_VALUE_IF_NULL( parsed_click, ERROR_NULL_VALUE, "Pointer to where to store the parsed click is NULL, unable to parse buttonbind click\n" );
@@ -1388,133 +1439,39 @@ static Error_t _parse_buttonbind_click( Libconfig_Setting_t *buttonbind_setting,
 }
 
 /**
- * @brief Parse a list of buttonbinds from a libconfig configuration into a list of @ref Button structs.
+ * @brief Parse a list of buttonbinds from a libconfig configuration into a list of Button structs.
  *
  * TODO
  *
- * @param[in] config Pointer to the libconfig configuration containing the buttonbinds to
- * be parsed into @p buttonbind_config.
- * @param[out] buttonbind_config Pointer to where to dynamically allocate and store all the parsed buttonbinds.
- * @param[out] count Pointer to where to store the number of buttonbinds to be parsed.
- * This value does not take into account any failures during parsing the buttonbinds.
- * @param[out] malloced Boolean to track if @p buttonbind_config has been dynamically
- * allocated yet or not, analogous to if the default buttonbinds are being used or not. Value is set
- * to `false` after allocation.
+ * @param[in] config Pointer to the libconfig configuration containing the buttonbinds to be parsed into @p array.
+ * @param[out] array Pointer to where to dynamically allocate and store all the parsed buttonbinds.
+ * @param[out] count Pointer to where to store the number of buttonbinds to be parsed. This value does not take into
+ * account any failures during parsing the buttonbinds.
+ * @param[out] malloced Boolean to track if @p array has been dynamically allocated yet or not, analogous to if the
+ * default buttonbinds are being used or not. Value is set to `false` after allocation.
  *
  * @return TODO
  *
  * @note TODO Maybe mention dynamic allocation in _parse_binds_config()?
  */
-static Errors_t _parse_buttonbinds_config( const Libconfig_Config_t *config, Button **buttonbind_config, unsigned int *count, bool *malloced ) {
-	return _parse_config_array( config, NULL, "buttonbinds", sizeof( Button ), _parse_buttonbind_adapter, malloced, (void **) buttonbind_config, count );
-}
-
-/**
- * @brief TODO
- *
- * TODO
- *
- * @param[in] config TODO
- * @param[in] setting TODO
- * @param[in] config_array_name TODO
- * @param[in] element_size TODO
- * @param[in] array_element_parser_function TODO
- * @param[in,out] dynamically_allocated TODO
- * @param[in,out] parsed_config TODO
- * @param[out] parsed_config_length TODO
- *
- * @return TODO
- *
- * @todo It may be worth trying to add some kind of safeguard to fall back on default config if enough
- * elements fail to be parsed. For example, if the keybinds all (or many) fail, it could soft-lock the
- * user in the program. Not sure best way to do that, or if it is even the best idea to add.
- *
- * @todo I don't like the config and setting logic. It may be worth revisiting and rewriting, like with a union containing pointers to both types.
- */
-static Errors_t _parse_config_array( const Libconfig_Config_t *config, Libconfig_Setting_t *setting, const char *config_array_name, const size_t element_size,
-				     const Array_Element_Parser_Function_t array_element_parser_function, bool *dynamically_allocated, void **parsed_config, unsigned int *parsed_config_length ) {
+static Errors_t _parse_buttonbinds_config( const config_t *config, Button **array, unsigned int *count, bool *malloced ) {
 
 	Errors_t returned_errors = { 0 };
+	const char *lookup_path = "buttonbinds";
 
-	// dynamically_allocated and parsed_config are not null checked intentionally.
-	// They can be left to null to control behavior in this function.
-	RETURN_ERRORS_IF_NULL( config_array_name, returned_errors, "Array name to search was NULL, unable to parse array\n" );
-	RETURN_ERRORS_IF_NULL( parsed_config_length, returned_errors, "Pointer to where to store parsed array length was NULL, unable to parse array\n" );
+	RETURN_ERRORS_IF_NULL( config, returned_errors, "Pointer to configuration is NULL, unable to parse %s\n", lookup_path );
 
-	if ( ( config == NULL ) == ( setting == NULL ) ) {
-		LOG_ERROR( "Exactly one config or setting must be provided, unable to parse array\n" );
-		add_error( &returned_errors, ERROR_NULL_VALUE );
+	config_setting_t *array_setting = NULL;
+	const Error_t lookup_error = _libconfig_lookup_list( config, lookup_path, &array_setting );
+	add_error( &returned_errors, lookup_error );
+
+	if ( lookup_error != ERROR_NONE ) {
+		LOG_ERROR( "Lookup of \"%s\" failed: %s\n", lookup_path, ERROR_ENUM_STRINGS[ lookup_error ] );
 		return returned_errors;
 	}
 
-	const Libconfig_Setting_t *parent_setting = NULL;
-
-	if ( config != NULL ) {
-		parent_setting = config_lookup( config, config_array_name );
-	} else {
-		parent_setting = config_setting_lookup( setting, config_array_name );
-	}
-
-	if ( parent_setting == NULL ) {
-		LOG_ERROR( "Problem reading config value \"%s\": Not found. Default values will be used instead\n", config_array_name );
-		add_error( &returned_errors, ERROR_NOT_FOUND );
-		return returned_errors;
-	}
-
-	*parsed_config_length = config_setting_length( parent_setting );
-	if ( *parsed_config_length == 0 ) {
-		LOG_WARN( "No %s listed. Default values will be used\n", config_array_name );
-		add_error( &returned_errors, ERROR_NOT_FOUND );
-		return returned_errors;
-	}
-
-	LOG_DEBUG( "%u elements detected in \"%s\"\n", *parsed_config_length, config_array_name );
-
-	// dynamically_allocated is also used to determine if we
-	// should dynamically allocate the array or if it is already
-	// allocated some other way, usually on the stack, as well
-	// as report that it has been dynamically allocated here.
-	if ( dynamically_allocated != NULL && parsed_config != NULL ) {
-
-		if ( element_size == 0 ) {
-			LOG_ERROR( "Cannot allocate memory correctly if element size to allocate is 0\n" );
-			add_error( &returned_errors, ERROR_RANGE );
-			return returned_errors;
-		}
-
-		LOG_DEBUG( "Dynamically allocating %lu bytes of memory for \"%s\"\n", *parsed_config_length * element_size, config_array_name );
-
-		errno = 0;
-		void *calloced_memory = calloc( *parsed_config_length, element_size );
-
-		if ( calloced_memory == NULL ) {
-			LOG_ERROR( "Failed to allocate %lu bytes for \"%s\": %s\n", *parsed_config_length * element_size, config_array_name, strerror(errno) );
-			add_error( &returned_errors, ERROR_ALLOCATION );
-			return returned_errors;
-		}
-
-		*parsed_config = calloced_memory;
-		*dynamically_allocated = true;
-	}
-
-	for ( unsigned int i = 0; i < *parsed_config_length; i++ ) {
-
-		Libconfig_Setting_t *child_setting = config_setting_get_elem( parent_setting, i );
-
-		RETURN_ERRORS_IF_NULL( child_setting, returned_errors, "element index %u in \"%s\" returned NULL\n", i, config_array_name );
-
-		// Yes, parsed_config can be NULL, that is intended. It is used by things like
-		// theme or tag parsing that rely on global values.
-		void *element = parsed_config ? (char *) ( *parsed_config ) + ( i * element_size ) : NULL;
-
-		const Errors_t parsing_error = array_element_parser_function( child_setting, i, element );
-
-		if ( errors_failure_count( &parsing_error ) ) {
-			LOG_WARN( "\"%s\" element number %d failed to be parsed. It had %d errors\n", config_array_name, i + 1, errors_failure_count( &parsing_error ) );
-			merge_errors( &returned_errors, parsing_error );
-			continue;
-		}
-	}
+	const Errors_t array_errors = _parse_setting_array( array_setting, sizeof( Button ), _parse_buttonbind_adapter, malloced, (void **) array, count );
+	copy_errors( &returned_errors, array_errors );
 
 	return returned_errors;
 }
@@ -1530,22 +1487,22 @@ static Errors_t _parse_config_array( const Libconfig_Config_t *config, Libconfig
  *
  * @return TODO
  */
-static Errors_t _parse_font( Libconfig_Setting_t *fonts_setting, const unsigned int fonts_index, const char *parsed_font ) {
+static Errors_t _parse_font( config_setting_t *fonts_setting, const unsigned int fonts_index, const char **parsed_font ) {
 
 	Errors_t returned_errors = { 0 };
 
 	RETURN_ERRORS_IF_NULL( fonts_setting, returned_errors, "Pointer to configuration setting is NULL, unable to parse theme font index %u\n", fonts_index );
 
 	if ( config_setting_type( fonts_setting ) != CONFIG_TYPE_STRING ) {
-		LOG_ERROR( "Font element at index %u is not a string\n", fonts_index );
+		LOG_WARN( "Font element at index %u is not a string\n", fonts_index );
 		add_error( &returned_errors, ERROR_TYPE );
 		return returned_errors;
 	}
 
-	parsed_font = config_setting_get_string( fonts_setting );
+	*parsed_font = config_setting_get_string( fonts_setting );
 
-	if ( parsed_font == NULL ) {
-		LOG_ERROR( "Failed to parse theme font at index %u for unknown an reason\n", fonts_index );
+	if ( *parsed_font == NULL ) {
+		LOG_WARN( "Failed to parse theme font at index %u for unknown an reason\n", fonts_index );
 		add_error( &returned_errors, ERROR_NULL_VALUE );
 		return returned_errors;
 	}
@@ -1560,8 +1517,8 @@ static Errors_t _parse_font( Libconfig_Setting_t *fonts_setting, const unsigned 
  *
  * @see @ref _parse_font()
  */
-static Errors_t _parse_font_adapter( Libconfig_Setting_t *fonts_setting, const unsigned int fonts_index, void *parsed_font ) {
-	return _parse_font( fonts_setting, fonts_index, (const char *) parsed_font );
+static Errors_t _parse_font_adapter( config_setting_t *fonts_setting, const unsigned int fonts_index, void *parsed_font ) {
+	return _parse_font( fonts_setting, fonts_index, (const char **) parsed_font );
 }
 
 /**
@@ -1573,7 +1530,7 @@ static Errors_t _parse_font_adapter( Libconfig_Setting_t *fonts_setting, const u
  *
  * @return TODO
  */
-static Errors_t _parse_generic_settings( const Libconfig_Config_t *config ) {
+static Errors_t _parse_generic_settings( const config_t *config ) {
 
 	Errors_t returned_errors = { 0 };
 
@@ -1589,17 +1546,17 @@ static Errors_t _parse_generic_settings( const Libconfig_Config_t *config ) {
 
 			case TYPE_INT:
 				returned_error = _libconfig_lookup_int( config, SETTING_ALIAS_MAP[ i ].alias, (int) SETTING_ALIAS_MAP[ i ].range_min, (int) SETTING_ALIAS_MAP[ i ].range_max,
-									SETTING_ALIAS_MAP[ i ].setting );
+				                                        SETTING_ALIAS_MAP[ i ].setting );
 				break;
 
 			case TYPE_UINT:
 				returned_error = _libconfig_lookup_uint( config, SETTING_ALIAS_MAP[ i ].alias, (unsigned int) SETTING_ALIAS_MAP[ i ].range_min,
-									 (unsigned int) SETTING_ALIAS_MAP[ i ].range_max, SETTING_ALIAS_MAP[ i ].setting );
+				                                         (unsigned int) SETTING_ALIAS_MAP[ i ].range_max, SETTING_ALIAS_MAP[ i ].setting );
 				break;
 
 			case TYPE_FLOAT:
 				returned_error = _libconfig_lookup_float( config, SETTING_ALIAS_MAP[ i ].alias, (float) SETTING_ALIAS_MAP[ i ].range_min, (float) SETTING_ALIAS_MAP[ i ].range_max,
-									  SETTING_ALIAS_MAP[ i ].setting );
+				                                          SETTING_ALIAS_MAP[ i ].setting );
 				break;
 
 			case TYPE_STRING:
@@ -1608,16 +1565,16 @@ static Errors_t _parse_generic_settings( const Libconfig_Config_t *config ) {
 
 			default:
 				returned_error = ERROR_TYPE;
-				LOG_ERROR( "Setting \"%s\" is programmed with an invalid type: \"%s\"\n", SETTING_ALIAS_MAP[ i ].alias, DATA_TYPE_ENUM_STRINGS[ SETTING_ALIAS_MAP[ i ].type ] );
+				LOG_WARN( "Setting \"%s\" is programmed with an invalid type\n", SETTING_ALIAS_MAP[ i ].alias );
 				break;
 		}
 
 		if ( returned_error != ERROR_NONE ) {
 			if ( returned_error == ERROR_NOT_FOUND && SETTING_ALIAS_MAP[ i ].optional ) {
-				LOG_DEBUG( "\"%s\" was not found but is flagged as optional, continuing", SETTING_ALIAS_MAP[ i ].name );
+				LOG_DEBUG( "\"%s\" was not found but is flagged as optional, continuing", SETTING_ALIAS_MAP[ i ].alias );
 			} else {
 				add_error( &returned_errors, returned_error );
-				LOG_ERROR( "Issue while parsing \"%s\": %s\n", SETTING_ALIAS_MAP[ i ].alias, ERROR_ENUM_STRINGS[ returned_error ] );
+				LOG_WARN( "Issue while parsing \"%s\": %s\n", SETTING_ALIAS_MAP[ i ].alias, ERROR_ENUM_STRINGS[ returned_error ] );
 			}
 		}
 	}
@@ -1636,7 +1593,7 @@ static Errors_t _parse_generic_settings( const Libconfig_Config_t *config ) {
  *
  * @return TODO
  */
-static Errors_t _parse_keybind( Libconfig_Setting_t *keybind_setting, const unsigned int keybind_index, Key *parsed_keybind ) {
+static Errors_t _parse_keybind( config_setting_t *keybind_setting, const unsigned int keybind_index, Key *parsed_keybind ) {
 
 	Errors_t returned_errors = { 0 };
 
@@ -1644,13 +1601,13 @@ static Errors_t _parse_keybind( Libconfig_Setting_t *keybind_setting, const unsi
 	RETURN_ERRORS_IF_NULL( parsed_keybind, returned_errors, "Pointer to where to store parsed keybind is NULL, unable to parse keybind\n" );
 
 	const Errors_t bind_core_errors = _parse_bind_core( keybind_setting, keybind_index, &parsed_keybind->mod, &parsed_keybind->func, &parsed_keybind->arg );
-	merge_errors( &returned_errors, bind_core_errors );
+	copy_errors( &returned_errors, bind_core_errors );
 
 	const Error_t keysym_error = _parse_keybind_keysym( keybind_setting, &parsed_keybind->keysym );
 	add_error( &returned_errors, keysym_error );
 
 	if ( keysym_error != ERROR_NONE ) {
-		LOG_ERROR( "Keybind %d invalid, unable to parse the bind's key: %s\n", keybind_index + 1, ERROR_ENUM_STRINGS[ keysym_error ] );
+		LOG_WARN( "Keybind %d invalid, unable to parse the bind's key: %s\n", keybind_index + 1, ERROR_ENUM_STRINGS[ keysym_error ] );
 	}
 
 	// Ensure key is zeroed and doesn't accidentally have any
@@ -1672,7 +1629,7 @@ static Errors_t _parse_keybind( Libconfig_Setting_t *keybind_setting, const unsi
  *
  * @see @ref _parse_keybind()
  */
-static Errors_t _parse_keybind_adapter( Libconfig_Setting_t *keybind_setting, const unsigned int keybind_index, void *parsed_keybind ) {
+static Errors_t _parse_keybind_adapter( config_setting_t *keybind_setting, const unsigned int keybind_index, void *parsed_keybind ) {
 	return _parse_keybind( keybind_setting, keybind_index, (Key *) parsed_keybind );
 }
 
@@ -1695,7 +1652,7 @@ static Errors_t _parse_keybind_adapter( Libconfig_Setting_t *keybind_setting, co
  * @see https://gitlab.freedesktop.org/xorg/app/xev
  * @see https://gitlab.freedesktop.org/xorg/lib/libx11/-/blob/master/src/StrKeysym.c?ref_type=heads#L74
  */
-static Error_t _parse_keybind_keysym( Libconfig_Setting_t *keybind_setting, KeySym *parsed_keysym ) {
+static Error_t _parse_keybind_keysym( config_setting_t *keybind_setting, KeySym *parsed_keysym ) {
 
 	RETURN_VALUE_IF_NULL( keybind_setting, ERROR_NULL_VALUE, "Pointer to configuration setting is NULL, unable to parse keysym\n" );
 	RETURN_VALUE_IF_NULL( parsed_keysym, ERROR_NULL_VALUE, "Pointer to where to store parsed keysym is NULL, unable to parse keysym\n" );
@@ -1708,7 +1665,7 @@ static Error_t _parse_keybind_keysym( Libconfig_Setting_t *keybind_setting, KeyS
 	*parsed_keysym = XStringToKeysym( keybind_string );
 
 	if ( *parsed_keysym == NoSymbol ) {
-		LOG_ERROR( "Failed to convert string (\"%s\") to keysym\n", keybind_string );
+		LOG_WARN( "Failed to convert string (\"%s\") to keysym\n", keybind_string );
 		return ERROR_NOT_FOUND;
 	}
 
@@ -1720,25 +1677,41 @@ static Error_t _parse_keybind_keysym( Libconfig_Setting_t *keybind_setting, KeyS
 }
 
 /**
- * @brief Parse a list of keybinds from a libconfig configuration into a list of @ref Key structs.
+ * @brief Parse a list of keybinds from a libconfig configuration into a list of Key structs.
  *
  * TODO
  *
- * @param[in] config Pointer to the libconfig configuration containing the keybinds to
- * be parsed into @p keybind_config.
- * @param[out] keybind_config Pointer to where to dynamically allocate memory and store all the parsed keybinds.
- * @param[out] keybinds_count Pointer to where to store the number of keybinds to be parsed.
- * This value does not take into account any failures during parsing the keybinds.
- * @param[out] keybinds_dynamically_allocated Boolean to track if @p keybind_config has been dynamically
- * allocated yet or not, analogous to if the default keybinds are being used or not. Value is set
- * to `false` after allocation.
+ * @param[in] config Pointer to the libconfig configuration containing the keybinds to be parsed into @p array.
+ * @param[out] array Pointer to where to dynamically allocate memory and store all the parsed keybinds.
+ * @param[out] count Pointer to where to store the number of keybinds to be parsed. This value does not take
+ * into account any failures during parsing the keybinds.
+ * @param[out] malloced Boolean to track if @p array has been dynamically allocated yet or not, analogous to if
+ * the default keybinds are being used or not. Value is set to `false` after allocation.
  *
  * @return TODO
  *
  * @note TODO Maybe mention dynamic allocation in _parse_binds_config()?
  */
-static Errors_t _parse_keybinds_config( const Libconfig_Config_t *config, Key **keybind_config, unsigned int *keybinds_count, bool *keybinds_dynamically_allocated ) {
-	return _parse_config_array( config, NULL, "keybinds", sizeof( Key ), _parse_keybind_adapter, keybinds_dynamically_allocated, (void **) keybind_config, keybinds_count );
+static Errors_t _parse_keybinds_config( const config_t *config, Key **array, unsigned int *count, bool *malloced ) {
+
+	Errors_t returned_errors = { 0 };
+	const char *lookup_path = "keybinds";
+
+	RETURN_ERRORS_IF_NULL( config, returned_errors, "Pointer to configuration is NULL, unable to parse %s\n", lookup_path );
+
+	config_setting_t *array_setting = NULL;
+	const Error_t lookup_error = _libconfig_lookup_list( config, lookup_path, &array_setting );
+	add_error( &returned_errors, lookup_error );
+
+	if ( lookup_error != ERROR_NONE ) {
+		LOG_ERROR( "Lookup of \"%s\" failed: %s\n", lookup_path, ERROR_ENUM_STRINGS[ lookup_error ] );
+		return returned_errors;
+	}
+
+	const Errors_t array_errors = _parse_setting_array( array_setting, sizeof( Key ), _parse_keybind_adapter, malloced, (void **) array, count );
+	copy_errors( &returned_errors, array_errors );
+
+	return returned_errors;
 }
 
 /**
@@ -1751,7 +1724,7 @@ static Errors_t _parse_keybinds_config( const Libconfig_Config_t *config, Key **
  * is found, a user's last configuration backup will be attempted to be loaded. If again
  * unsuccessful, a system default configuration file will be loaded. Finally, if all else
  * fails, the function will return and the program will rely on the hardcoded default values
- * loaded during @ref _parser_load_default_config().
+ * loaded from config.h
  *
  * @param[in] config TODO
  * @param[in] custom_config_filepath TODO
@@ -1763,7 +1736,7 @@ static Errors_t _parse_keybinds_config( const Libconfig_Config_t *config, Key **
  * @todo These error returns may not be the most accurate, not sure exactly the best fits.
  * @todo Should the parser even look for another config file if one is passed from the CLI? Could be deceptive behavior.
  */
-static Errors_t _parser_open_config_file( Libconfig_Config_t *config, const char *custom_config_filepath, char **found_config_filepath,bool *fallback_config_loaded ) {
+static Errors_t _parser_open_config_file( config_t *config, const char *custom_config_filepath, char **found_config_filepath, bool *fallback_config_loaded ) {
 
 	Errors_t returned_errors = { 0 };
 
@@ -1792,7 +1765,7 @@ static Errors_t _parser_open_config_file( Libconfig_Config_t *config, const char
 		if ( config_filepaths[ i ].filepath_1 != NULL && config_filepaths[ i ].filepath_2 != NULL ) {
 			snprintf( constructed_path, sizeof( constructed_path ), "%s%s", config_filepaths[ i ].filepath_1, config_filepaths[ i ].filepath_2 );
 		} else {
-			LOG_WARN( "Part of a path at index %d was NULL while trying top open a configuration file, skipping invalid path\n", i );
+			LOG_DEBUG( "Part of a path at index %d was NULL while trying top open a configuration file, skipping invalid path\n", i );
 			continue;
 		}
 
@@ -1802,7 +1775,6 @@ static Errors_t _parser_open_config_file( Libconfig_Config_t *config, const char
 
 		if ( configuration_file == NULL ) {
 			LOG_DEBUG( "Unable to open config file \"%s\"\n", constructed_path );
-			add_error( &returned_errors, ERROR_NOT_FOUND );
 			continue;
 		}
 
@@ -1816,7 +1788,7 @@ static Errors_t _parser_open_config_file( Libconfig_Config_t *config, const char
 		*found_config_filepath = estrdup( constructed_path );
 		if ( *found_config_filepath == NULL ) add_error( &returned_errors, ERROR_ALLOCATION );
 
-		*fallback_config_loaded = config_filepaths->is_fallback_config;
+		*fallback_config_loaded = config_filepaths[ i ].is_fallback_config;
 
 		fclose( configuration_file );
 
@@ -1830,54 +1802,17 @@ static Errors_t _parser_open_config_file( Libconfig_Config_t *config, const char
 }
 
 /**
- * @brief TODO
- *
- * TODO
- *
- * @param[in] config TODO
- * @param[in] parsed_config_filepath TODO
- *
- * @return ERROR_NONE on success.
- * @return ERROR_NULL_VALUE if a NULL argument is provided.
- * @return ERROR_ALLOCATION if memory allocation fails for @p parsed_config_filepath.
- * @return ERROR_NOT_FOUND if the function fails to resolve the include directory's path.
- */
-static Error_t _parser_resolve_include_directory( Libconfig_Config_t *config, const char *parsed_config_filepath ) {
-
-	RETURN_VALUE_IF_NULL( config, ERROR_NULL_VALUE, "Pointer to configuration is NULL, unable to resolve config include directory\n" );
-	RETURN_VALUE_IF_NULL( parsed_config_filepath, ERROR_NULL_VALUE, "Config filepath string is NULL, unable to resolve config include directory\n" );
-
-	char *config_include_directory = realpath( parsed_config_filepath, NULL );
-
-	RETURN_VALUE_IF_NULL( config_include_directory, ERROR_ALLOCATION, "Failed to allocate memory for the configuration file's include path\n" );
-
-	config_include_directory = dirname( config_include_directory );
-
-	if ( config_include_directory[ 0 ] == '.' ) {
-		LOG_WARN( "Unable to resolve configuration file's include directory\n" );
-		free( config_include_directory );
-		return ERROR_NOT_FOUND;
-	}
-
-	config_set_include_dir( config, config_include_directory );
-
-	free( config_include_directory );
-
-	return ERROR_NONE;
-}
-
-/**
  * @brief Parse a rule from a libconfig configuration setting.
  *
  * TODO
  *
  * @param[in] rule_setting Pointer to the libconfig setting containing the rule to be parsed into @p parsed_rule.
  * @param[in] rule_index Index of the current rule in the larger array. Used purely for debug printing.
- * @param[out] parsed_rule Pointer to the @ref Rule struct where the values parsed from @p rule_setting are stored.
+ * @param[out] parsed_rule Pointer to the Rule struct where the values parsed from @p rule_setting are stored.
  *
  * @return TODO
  */
-static Errors_t _parse_rule( Libconfig_Setting_t *rule_setting, const unsigned int rule_index, Rule *parsed_rule ) {
+static Errors_t _parse_rule( config_setting_t *rule_setting, const unsigned int rule_index, Rule *parsed_rule ) {
 
 	Errors_t returned_errors = { 0 };
 
@@ -1890,7 +1825,7 @@ static Errors_t _parse_rule( Libconfig_Setting_t *rule_setting, const unsigned i
 	add_error( &returned_errors, _libconfig_setting_lookup_uint( rule_setting, "tag-mask", 0, TAGMASK, &parsed_rule->tags ) );
 	add_error( &returned_errors, _libconfig_setting_lookup_int( rule_setting, "monitor", -1, 99, &parsed_rule->monitor ) );
 
-	// Note: This logically should be a boolean value, but I didn't want to
+	// This logically should be a boolean value, but I didn't want to
 	// deviate from the coded type, so I kept it an int and range check it.
 	add_error( &returned_errors, _libconfig_setting_lookup_int( rule_setting, "floating", 0, 1, &parsed_rule->isfloating ) );
 
@@ -1906,7 +1841,7 @@ static Errors_t _parse_rule( Libconfig_Setting_t *rule_setting, const unsigned i
 	}
 
 	LOG_DEBUG( "Rule %d: class: \"%s\", instance: \"%s\", title: \"%s\", tag-mask: %d, monitor: %d, floating: %d\n", rule_index, parsed_rule->class, parsed_rule->instance, parsed_rule->title,
-		   parsed_rule->tags, parsed_rule->monitor, parsed_rule->isfloating );
+	           parsed_rule->tags, parsed_rule->monitor, parsed_rule->isfloating );
 
 	return returned_errors;
 }
@@ -1918,26 +1853,135 @@ static Errors_t _parse_rule( Libconfig_Setting_t *rule_setting, const unsigned i
  *
  * @see @ref _parse_rule()
  */
-static Errors_t _parse_rule_adapter( Libconfig_Setting_t *rule_setting, const unsigned int rule_index, void *parsed_rule ) {
+static Errors_t _parse_rule_adapter( config_setting_t *rule_setting, const unsigned int rule_index, void *parsed_rule ) {
 	return _parse_rule( rule_setting, rule_index, (Rule *) parsed_rule );
 }
 
 /**
- * @brief Parse a list of rules from a libconfig configuration into a list of @ref Rule structs.
+ * @brief Parse a list of rules from a libconfig configuration into a list of Rule structs.
  *
  * TODO
  *
- * @param[in] config Pointer to the libconfig configuration containing the rules to be parsed into @p rules_config.
- * @param[out] rules_config Pointer to where to dynamically allocate memory and store all the parsed rules.
- * @param[out] rules_count Pointer to where to store the number of rules to be parsed. This value does not take into account
+ * @param[in] config Pointer to the libconfig configuration containing the rules to be parsed into @p array.
+ * @param[out] array Pointer to where to dynamically allocate memory and store all the parsed rules.
+ * @param[out] count Pointer to where to store the number of rules to be parsed. This value does not take into account
  * any failures during parsing the rules.
- * @param[out] rules_dynamically_allocated Boolean to track if @p rules_config has been dynamically allocated yet or not, analogous
+ * @param[out] malloced Boolean to track if @p array has been dynamically allocated yet or not, analogous
  * to if the default rules are being used or not. Value is set to `false` after allocation.
  *
  * @return TODO
+ *
+ * @todo Check for NULL pointers from function arguments. Possible able to use lookup_path in logs instead of repeating message
  */
-static Errors_t _parse_rules_config( const Libconfig_Config_t *config, Rule **rules_config, unsigned int *rules_count, bool *rules_dynamically_allocated ) {
-	return _parse_config_array( config, NULL, "rules", sizeof( Rule ), _parse_rule_adapter, rules_dynamically_allocated, (void **) rules_config, rules_count );
+static Errors_t _parse_rules_config( const config_t *config, Rule **array, unsigned int *count, bool *malloced ) {
+
+	Errors_t returned_errors = { 0 };
+	const char *lookup_path = "rules";
+
+	RETURN_ERRORS_IF_NULL( config, returned_errors, "Pointer to configuration is NULL, unable to parse %s\n", lookup_path );
+
+	config_setting_t *array_setting = NULL;
+	const Error_t lookup_error = _libconfig_lookup_list( config, lookup_path, &array_setting );
+	add_error( &returned_errors, lookup_error );
+
+	if ( lookup_error != ERROR_NONE ) {
+		LOG_ERROR( "Lookup of \"%s\" failed: %s\n", lookup_path, ERROR_ENUM_STRINGS[ lookup_error ] );
+		return returned_errors;
+	}
+
+	const Errors_t array_errors = _parse_setting_array( array_setting, sizeof( Rule ), _parse_rule_adapter, malloced, (void **) array, count );
+	copy_errors( &returned_errors, array_errors );
+
+	return returned_errors;
+}
+
+/**
+ * @brief TODO
+ *
+ * TODO
+ *
+ * @param[in] setting TODO
+ * @param[in] element_size TODO
+ * @param[in] array_element_parser_function TODO
+ * @param[in,out] malloced TODO
+ * @param[in,out] parsed_config TODO
+ * @param[out] parsed_config_length TODO
+ *
+ * @return TODO
+ *
+ * @todo It may be worth trying to add some kind of safeguard to fall back on default config if enough
+ * elements fail to be parsed. For example, if the keybinds all (or many) fail, it could soft-lock the
+ * user in the program. Not sure best way to do that, or if it is even the best idea to add.
+ *
+ * @todo The logic around @p malloced and null checking @p parsed_config before allocation is brittle, needs work.
+ */
+static Errors_t _parse_setting_array( const config_setting_t *setting, const size_t element_size, const Array_Element_Parser_Function_t array_element_parser_function, bool *malloced,
+                                      void **parsed_config, unsigned int *parsed_config_length ) {
+
+	Errors_t returned_errors = { 0 };
+
+	RETURN_ERRORS_IF_NULL( setting, returned_errors, "Pointer to setting NULL, unable to parse array\n" );
+	RETURN_ERRORS_IF_NULL( parsed_config_length, returned_errors, "Pointer to where to store parsed array length was NULL, unable to parse array\n" );
+
+	const char *setting_name = NULL;
+	_libconfig_get_setting_name( setting, &setting_name );
+
+	*parsed_config_length = config_setting_length( setting );
+	if ( *parsed_config_length == 0 ) {
+		LOG_ERROR( "No %s listed. Default values will be used\n", setting_name );
+		add_error( &returned_errors, ERROR_NOT_FOUND );
+		return returned_errors;
+	}
+
+	LOG_DEBUG( "%u elements detected in \"%s\"\n", *parsed_config_length, config_array_name );
+
+	// malloced is also used to determine if we should dynamically
+	// allocate the array or if it is already allocated some other
+	// way, usually on the stack, as well as report that it has
+	// been dynamically allocated here.
+	if ( malloced != NULL && parsed_config != NULL ) {
+
+		if ( element_size == 0 ) {
+			LOG_ERROR( "Cannot allocate memory correctly if element size to allocate is 0\n" );
+			add_error( &returned_errors, ERROR_RANGE );
+			return returned_errors;
+		}
+
+		LOG_DEBUG( "Dynamically allocating %lu bytes of memory for \"%s\"\n", *parsed_config_length * element_size, config_array_name );
+
+		errno = 0;
+		void *calloced_memory = calloc( *parsed_config_length, element_size );
+
+		if ( calloced_memory == NULL ) {
+			LOG_ERROR( "Failed to allocate %lu bytes for \"%s\": %s\n", *parsed_config_length * element_size, setting_name, strerror(errno) );
+			add_error( &returned_errors, ERROR_ALLOCATION );
+			return returned_errors;
+		}
+
+		*parsed_config = calloced_memory;
+		*malloced = true;
+	}
+
+	for ( unsigned int i = 0; i < *parsed_config_length; i++ ) {
+
+		config_setting_t *child_setting = config_setting_get_elem( setting, i );
+
+		RETURN_ERRORS_IF_NULL( child_setting, returned_errors, "element index %u in \"%s\" returned NULL\n", i, setting_name );
+
+		// Yes, parsed_config can be NULL, that is intended. It is used by things like
+		// theme or tag parsing that rely on global values.
+		void *element = parsed_config ? (char *) ( *parsed_config ) + ( i * element_size ) : NULL;
+
+		const Errors_t parsing_error = array_element_parser_function( child_setting, i, element );
+
+		if ( errors_failure_count( &parsing_error ) ) {
+			LOG_WARN( "\"%s\" element number %d failed to be parsed. It had %d errors\n", setting_name, i + 1, errors_failure_count( &parsing_error ) );
+			copy_errors( &returned_errors, parsing_error );
+			continue;
+		}
+	}
+
+	return returned_errors;
 }
 
 /**
@@ -1950,14 +1994,14 @@ static Errors_t _parse_rules_config( const Libconfig_Config_t *config, Rule **ru
  *
  * @return TODO
  */
-static Errors_t _parse_tag( Libconfig_Setting_t *tags_setting, const unsigned int tags_index ) {
+static Errors_t _parse_tag( config_setting_t *tags_setting, const unsigned int tags_index ) {
 
 	Errors_t returned_errors = { 0 };
 
 	RETURN_ERRORS_IF_NULL( tags_setting, returned_errors, "Pointer to configuration setting is NULL, unable to parse tag index %u\n", tags_index );
 
 	if ( tags_index >= LENGTH( tags ) ) {
-		LOG_ERROR( "Parsed tag's index exceeds limits of the tags array\n" );
+		LOG_WARN( "Parsed tag's index exceeds limits of the tags array\n" );
 		add_error( &returned_errors, ERROR_RANGE );
 		return returned_errors;
 	}
@@ -1965,7 +2009,7 @@ static Errors_t _parse_tag( Libconfig_Setting_t *tags_setting, const unsigned in
 	const char *original_tag_name = tags[ tags_index ];
 
 	if ( config_setting_type( tags_setting ) != CONFIG_TYPE_STRING ) {
-		LOG_ERROR( "Tag element at index %u is not a string\n", tags_index );
+		LOG_WARN( "Tag element at index %u is not a string\n", tags_index );
 		add_error( &returned_errors, ERROR_TYPE );
 		return returned_errors;
 	}
@@ -1974,7 +2018,7 @@ static Errors_t _parse_tag( Libconfig_Setting_t *tags_setting, const unsigned in
 
 	if ( tags[ tags_index ] == NULL ) {
 		tags[ tags_index ] = original_tag_name;
-		LOG_ERROR( "Failed to parse tag at index %u for unknown an reason\n", tags_index );
+		LOG_WARN( "Failed to parse tag at index %u for unknown an reason\n", tags_index );
 		add_error( &returned_errors, ERROR_NULL_VALUE );
 		return returned_errors;
 	}
@@ -1989,7 +2033,7 @@ static Errors_t _parse_tag( Libconfig_Setting_t *tags_setting, const unsigned in
  *
  * @see @ref _parse_tag()
  */
-static Errors_t _parse_tags_adapter( Libconfig_Setting_t *tags_setting, const unsigned int tags_index, void *unused ) {
+static Errors_t _parse_tags_adapter( config_setting_t *tags_setting, const unsigned int tags_index, void *unused ) {
 	return _parse_tag( tags_setting, tags_index );
 }
 
@@ -2002,14 +2046,25 @@ static Errors_t _parse_tags_adapter( Libconfig_Setting_t *tags_setting, const un
  *
  * @return TODO
  */
-static Errors_t _parse_tags_config( const Libconfig_Config_t *config ) {
+static Errors_t _parse_tags_config( const config_t *config ) {
 
+	const char *lookup_path = "tags";
 	unsigned int tags_count = 0;
 	Errors_t returned_errors = { 0 };
 
-	RETURN_ERRORS_IF_NULL( config, returned_errors, "Pointer to configuration is NULL, unable to parse tags\n" );
+	RETURN_ERRORS_IF_NULL( config, returned_errors, "Pointer to configuration is NULL, unable to parse %s\n", lookup_path );
 
-	merge_errors( &returned_errors, _parse_config_array( config, NULL, "tags", 0, _parse_tags_adapter, NULL, NULL, &tags_count ) );
+	config_setting_t *array_setting = NULL;
+	const Error_t lookup_error = _libconfig_lookup_list( config, lookup_path, &array_setting );
+	add_error( &returned_errors, lookup_error );
+
+	if ( lookup_error != ERROR_NONE ) {
+		LOG_ERROR( "Lookup of \"%s\" failed: %s\n", lookup_path, ERROR_ENUM_STRINGS[ lookup_error ] );
+		return returned_errors;
+	}
+
+	const Errors_t array_errors = _parse_setting_array( array_setting, 0, _parse_tags_adapter, NULL, NULL, &tags_count );
+	copy_errors( &returned_errors, array_errors );
 
 	if ( tags_count > LENGTH( tags ) ) {
 		LOG_WARN( "More than %lu tag names detected (%d were detected) while parsing config, only the first %lu will be used\n", LENGTH( tags ), tags_count, LENGTH( tags ) );
@@ -2030,7 +2085,7 @@ static Errors_t _parse_tags_config( const Libconfig_Config_t *config ) {
  *
  * @return TODO
  */
-static Errors_t _parse_theme( Libconfig_Setting_t *theme_setting, const unsigned int theme_index ) {
+static Errors_t _parse_theme( config_setting_t *theme_setting, const unsigned int theme_index ) {
 
 	Errors_t returned_errors = { 0 };
 
@@ -2043,15 +2098,24 @@ static Errors_t _parse_theme( Libconfig_Setting_t *theme_setting, const unsigned
 		return returned_errors;
 	}
 
-	// I would rather pass the font variables by reference in a theme data structure, but that is outside the scope of this patch.
-	const Errors_t font_errors = _parse_config_array( NULL, theme_setting, "fonts", sizeof( char * ), _parse_font_adapter, &fonts_malloced, (void **) fonts, &fonts_count );
-	merge_errors( &returned_errors, font_errors );
+	const char *fonts_lookup_path = "fonts";
+	config_setting_t *array_setting = NULL;
+	const Error_t lookup_error = _libconfig_setting_lookup_list( theme_setting, fonts_lookup_path, &array_setting );
+	add_error( &returned_errors, lookup_error );
+
+	if ( lookup_error != ERROR_NONE ) {
+		LOG_ERROR( "Lookup of \"%s\" failed: %s\n", fonts_lookup_path, ERROR_ENUM_STRINGS[ lookup_error ] );
+		return returned_errors;
+	}
+
+	const Errors_t font_errors = _parse_setting_array( array_setting, sizeof( char * ), _parse_font_adapter, &fonts_malloced, (void **) &fonts, &fonts_count );
+	copy_errors( &returned_errors, font_errors );
 
 	for ( int i = 0; i < LENGTH( THEME_ALIAS_MAP ); i++ ) {
 		const Error_t error = _libconfig_setting_lookup_string( theme_setting, THEME_ALIAS_MAP[ i ].alias, THEME_ALIAS_MAP[ i ].color );
 		add_error( &returned_errors, error );
 		if ( error != ERROR_NONE ) {
-			LOG_ERROR( "Failed to parse theme %d's element \"%s\": %s\n", theme_index, THEME_ALIAS_MAP[ i ].alias, ERROR_ENUM_STRINGS[ error ] );
+			LOG_WARN( "Failed to parse theme %d's element \"%s\": %s\n", theme_index, THEME_ALIAS_MAP[ i ].alias, ERROR_ENUM_STRINGS[ error ] );
 		}
 	}
 
@@ -2065,7 +2129,7 @@ static Errors_t _parse_theme( Libconfig_Setting_t *theme_setting, const unsigned
  *
  * @see @ref _parse_theme()
  */
-static Errors_t _parse_theme_adapter( Libconfig_Setting_t *theme_setting, const unsigned int theme_index, void *unused ) {
+static Errors_t _parse_theme_adapter( config_setting_t *theme_setting, const unsigned int theme_index, void *unused ) {
 	return _parse_theme( theme_setting, theme_index );
 }
 
@@ -2080,19 +2144,32 @@ static Errors_t _parse_theme_adapter( Libconfig_Setting_t *theme_setting, const 
  *
  * @note dwm only supports a single theme, so only the first theme in the list is parsed.
  */
-static Errors_t _parse_theme_config( const Libconfig_Config_t *config ) {
+static Errors_t _parse_theme_config( const config_t *config ) {
 
 	Errors_t returned_errors = { 0 };
+	const char *lookup_path = "themes";
 
-	RETURN_ERRORS_IF_NULL( config, returned_errors, "Pointer to configuration is NULL, unable to parse theme config\n" );
+	RETURN_ERRORS_IF_NULL( config, returned_errors, "Pointer to configuration is NULL, unable to parse %s\n", lookup_path );
 
-	unsigned int unused = 0; // Unused, but the pointer must exist to satisfy config array parsing
-	merge_errors( &returned_errors, _parse_config_array( config, NULL, "themes", 0, _parse_theme_adapter, NULL, NULL, &unused ) );
+	config_setting_t *array_setting = NULL;
+	const Error_t lookup_error = _libconfig_lookup_list( config, lookup_path, &array_setting );
+	add_error( &returned_errors, lookup_error );
+
+	if ( lookup_error != ERROR_NONE ) {
+		LOG_ERROR( "Lookup of \"%s\" failed: %s\n", lookup_path, ERROR_ENUM_STRINGS[ lookup_error ] );
+		return returned_errors;
+	}
+
+	unsigned int unused = 0;
+	const Errors_t array_errors = _parse_setting_array( array_setting, 0, _parse_theme_adapter, NULL, NULL, &unused );
+	copy_errors( &returned_errors, array_errors );
 
 	return returned_errors;
 }
 
-/// Parser internal utility functions ///
+/////////////////////////////////////////////
+///// Parser internal utility functions /////
+/////////////////////////////////////////////
 
 /**
  * @brief Returns the name of a given setting, or its nearest named parent setting.
@@ -2106,7 +2183,7 @@ static Errors_t _parse_theme_config( const Libconfig_Config_t *config ) {
  * @return ERROR_NULL_VALUE if a NULL argument is provided.
  * @return ERROR_NOT_FOUND if no named parent settings are found.
  */
-static Error_t _libconfig_get_setting_name( const Libconfig_Setting_t *setting, const char **found_name ) {
+static Error_t _libconfig_get_setting_name( const config_setting_t *setting, const char **found_name ) {
 
 	RETURN_VALUE_IF_NULL( setting, ERROR_NULL_VALUE, "Pointer to configuration setting is NULL, unable to get setting name\n" );
 	RETURN_VALUE_IF_NULL( found_name, ERROR_NULL_VALUE, "Pointer to where to store the found setting name string is NULL, unable to get setting name\n" );
@@ -2122,9 +2199,31 @@ static Error_t _libconfig_get_setting_name( const Libconfig_Setting_t *setting, 
 		setting = config_setting_parent( setting );
 	}
 
-	LOG_ERROR( "Could not find name of setting (%p)\n", (void *) setting );
+	LOG_WARN( "Could not find name of setting (%p)\n", (void *) setting );
 
 	return ERROR_NOT_FOUND;
+}
+
+/**
+ * @brief TODO
+ *
+ * TODO
+ *
+ * @param config TODO
+ * @param path TODO
+ * @param parsed_value TODO
+ * @return TODO
+ */
+static Error_t _libconfig_lookup_array( const config_t *config, const char *path, config_setting_t **parsed_value ) {
+
+	if ( config == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
+
+	*parsed_value = config_lookup( config, path );
+
+	if ( *parsed_value == NULL ) return ERROR_NOT_FOUND;
+	if ( config_setting_type( *parsed_value ) != CONFIG_TYPE_ARRAY ) return ERROR_TYPE;
+
+	return ERROR_NONE;
 }
 
 /**
@@ -2141,7 +2240,7 @@ static Error_t _libconfig_get_setting_name( const Libconfig_Setting_t *setting, 
  * @return ERROR_NOT_FOUND if the config lookup of @p path fails,
  * @return ERROR_TYPE if the value found at @p path isn't a boolean,
  */
-static Error_t _libconfig_lookup_bool( const Libconfig_Config_t *config, const char *path, bool *parsed_value ) {
+static Error_t _libconfig_lookup_bool( const config_t *config, const char *path, bool *parsed_value ) {
 
 	if ( config == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
 
@@ -2172,7 +2271,7 @@ static Error_t _libconfig_lookup_bool( const Libconfig_Config_t *config, const c
  * @return ERROR_TYPE if the value found at @p path isn't a float.
  * @return ERROR_RANGE if the found value is outside the range @p range_min to @p range_max.
  */
-static Error_t _libconfig_lookup_float( const Libconfig_Config_t *config, const char *path, const float range_min, const float range_max, float *parsed_value ) {
+static Error_t _libconfig_lookup_float( const config_t *config, const char *path, const float range_min, const float range_max, float *parsed_value ) {
 
 	if ( config == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
 
@@ -2207,7 +2306,7 @@ static Error_t _libconfig_lookup_float( const Libconfig_Config_t *config, const 
  * @return ERROR_TYPE if the value found at @p path isn't an integer.
  * @return ERROR_RANGE if the found value is outside the range @p range_min to @p range_max.
  */
-static Error_t _libconfig_lookup_int( const Libconfig_Config_t *config, const char *path, const int range_min, const int range_max, int *parsed_value ) {
+static Error_t _libconfig_lookup_int( const config_t *config, const char *path, const int range_min, const int range_max, int *parsed_value ) {
 
 	if ( config == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
 
@@ -2226,6 +2325,28 @@ static Error_t _libconfig_lookup_int( const Libconfig_Config_t *config, const ch
 }
 
 /**
+ * @brief TODO
+ *
+ * TODO
+ *
+ * @param config TODO
+ * @param path TODO
+ * @param parsed_value TODO
+ * @return TODO
+ */
+static Error_t _libconfig_lookup_list( const config_t *config, const char *path, config_setting_t **parsed_value ) {
+
+	if ( config == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
+
+	*parsed_value = config_lookup( config, path );
+
+	if ( *parsed_value == NULL ) return ERROR_NOT_FOUND;
+	if ( config_setting_type( *parsed_value ) != CONFIG_TYPE_LIST ) return ERROR_TYPE;
+
+	return ERROR_NONE;
+}
+
+/**
  * @brief Look up a string value in a libconfig configuration.
  *
  * TODO
@@ -2239,7 +2360,7 @@ static Error_t _libconfig_lookup_int( const Libconfig_Config_t *config, const ch
  * @return ERROR_NOT_FOUND if the config lookup of @p path fails.
  * @return ERROR_TYPE if the value found at @p path isn't a string.
  */
-static Error_t _libconfig_lookup_string( const Libconfig_Config_t *config, const char *path, const char **parsed_value ) {
+static Error_t _libconfig_lookup_string( const config_t *config, const char *path, const char **parsed_value ) {
 
 	if ( config == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
 
@@ -2272,7 +2393,7 @@ static Error_t _libconfig_lookup_string( const Libconfig_Config_t *config, const
  * @return ERROR_TYPE if the value found at @p path isn't an integer (no native unsigned integer type in libconfig).
  * @return ERROR_RANGE if the found value is below zero or outside the range @p range_min to @p range_max.
  */
-static Error_t _libconfig_lookup_uint( const Libconfig_Config_t *config, const char *path, const unsigned int range_min, const unsigned int range_max, unsigned int *parsed_value ) {
+static Error_t _libconfig_lookup_uint( const config_t *config, const char *path, const unsigned int range_min, const unsigned int range_max, unsigned int *parsed_value ) {
 
 	if ( config == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
 
@@ -2295,6 +2416,28 @@ static Error_t _libconfig_lookup_uint( const Libconfig_Config_t *config, const c
 }
 
 /**
+ * @brief TODO
+ *
+ * TODO
+ *
+ * @param setting TODO
+ * @param path TODO
+ * @param parsed_value TODO
+ * @return TODO
+ */
+static Error_t _libconfig_setting_lookup_array( config_setting_t *setting, const char *path, config_setting_t **parsed_value ) {
+
+	if ( setting == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
+
+	*parsed_value = config_setting_lookup( setting, path );
+
+	if ( *parsed_value == NULL ) return ERROR_NOT_FOUND;
+	if ( config_setting_type( *parsed_value ) != CONFIG_TYPE_ARRAY ) return ERROR_TYPE;
+
+	return ERROR_NONE;
+}
+
+/**
  * @brief Look up a boolean value in a libconfig setting.
  *
  * TODO
@@ -2308,7 +2451,7 @@ static Error_t _libconfig_lookup_uint( const Libconfig_Config_t *config, const c
  * @return ERROR_NOT_FOUND if the config lookup of @p path fails.
  * @return ERROR_TYPE if the value found at @p path isn't a boolean.
  */
-static Error_t _libconfig_setting_lookup_bool( Libconfig_Setting_t *parent_setting, const char *path, bool *parsed_value ) {
+static Error_t _libconfig_setting_lookup_bool( config_setting_t *parent_setting, const char *path, bool *parsed_value ) {
 
 	if ( parent_setting == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
 
@@ -2339,7 +2482,7 @@ static Error_t _libconfig_setting_lookup_bool( Libconfig_Setting_t *parent_setti
  * @return ERROR_TYPE if the value found at @p path isn't a float.
  * @return ERROR_RANGE if the found value is outside the range @p range_min to @p range_max.
  */
-static Error_t _libconfig_setting_lookup_float( Libconfig_Setting_t *parent_setting, const char *path, const float range_min, const float range_max, float *parsed_value ) {
+static Error_t _libconfig_setting_lookup_float( config_setting_t *parent_setting, const char *path, const float range_min, const float range_max, float *parsed_value ) {
 
 	if ( parent_setting == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
 
@@ -2374,7 +2517,7 @@ static Error_t _libconfig_setting_lookup_float( Libconfig_Setting_t *parent_sett
  * @return ERROR_TYPE if the value found at @p path isn't an integer.
  * @return ERROR_RANGE if the found value is outside the range @p range_min to @p range_max.
  */
-static Error_t _libconfig_setting_lookup_int( Libconfig_Setting_t *parent_setting, const char *path, const int range_min, const int range_max, int *parsed_value ) {
+static Error_t _libconfig_setting_lookup_int( config_setting_t *parent_setting, const char *path, const int range_min, const int range_max, int *parsed_value ) {
 
 	if ( parent_setting == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
 
@@ -2393,6 +2536,28 @@ static Error_t _libconfig_setting_lookup_int( Libconfig_Setting_t *parent_settin
 }
 
 /**
+ * @brief TODO
+ *
+ * TODO
+ *
+ * @param setting TODO
+ * @param path TODO
+ * @param parsed_value TODO
+ * @return TODO
+ */
+static Error_t _libconfig_setting_lookup_list( config_setting_t *setting, const char *path, config_setting_t **parsed_value ) {
+
+	if ( setting == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
+
+	*parsed_value = config_setting_lookup( setting, path );
+
+	if ( *parsed_value == NULL ) return ERROR_NOT_FOUND;
+	if ( config_setting_type( *parsed_value ) != CONFIG_TYPE_LIST ) return ERROR_TYPE;
+
+	return ERROR_NONE;
+}
+
+/**
  * @brief Look up a string value in a libconfig setting.
  *
  * TODO
@@ -2406,7 +2571,7 @@ static Error_t _libconfig_setting_lookup_int( Libconfig_Setting_t *parent_settin
  * @return ERROR_NOT_FOUND if the config lookup of @p path fails.
  * @return ERROR_TYPE if the value found at @p path isn't a string.
  */
-static Error_t _libconfig_setting_lookup_string( Libconfig_Setting_t *parent_setting, const char *path, const char **parsed_value ) {
+static Error_t _libconfig_setting_lookup_string( config_setting_t *parent_setting, const char *path, const char **parsed_value ) {
 
 	if ( parent_setting == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
 
@@ -2439,7 +2604,7 @@ static Error_t _libconfig_setting_lookup_string( Libconfig_Setting_t *parent_set
  * @return ERROR_TYPE if the value found at @p path isn't an integer (no native unsigned integer type in libconfig).
  * @return ERROR_RANGE if the found value is below zero or outside the range @p range_min to @p range_max.
  */
-static Error_t _libconfig_setting_lookup_uint( Libconfig_Setting_t *parent_setting, const char *path, const unsigned int range_min, const unsigned int range_max, unsigned int *parsed_value ) {
+static Error_t _libconfig_setting_lookup_uint( config_setting_t *parent_setting, const char *path, const unsigned int range_min, const unsigned int range_max, unsigned int *parsed_value ) {
 
 	if ( parent_setting == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
 
