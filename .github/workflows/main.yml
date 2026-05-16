@@ -1,44 +1,64 @@
 name: Main Workflow
 
-# TODO: Generate diffs here too
-
 on:
   push:
     branches: [ master ]
 
 jobs:
-  documentation:
+  build_docs:
+    name: Build Documentation
     runs-on: ubuntu-latest
+
+    container:
+      image: ghcr.io/doxygen/doxygen:latest
+
     permissions:
       contents: write
 
     steps:
       - name: Checkout Sourcecode
-        uses: actions/checkout@v2
+        uses: actions/checkout@v5
 
-      - name: Install Doxygen
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y doxygen
-
-      - name: Build Documentation
+      - name: Generate Documentation
         run: doxygen > doxygen.log 2>&1 | tee doxygen.log
 
-      - name: Upload Doxygen Log Artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload Doxygen Log
+        uses: actions/upload-artifact@v7
         with:
-          name: Doxygen Log Artifact
-          path: doxygen.log
+          name: doxygen-log
+          path: ${{ github.workspace }}/doxygen.log
+          archive: false
+
+      - name: Upload Documentation
+        uses: actions/upload-artifact@v7
+        with:
+          name: Documentation
+          path: ${{ github.workspace }}/docs/
+
+
+  deploy_docs:
+    name: Deploy Documentation
+    runs-on: ubuntu-latest
+    needs: build_docs
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download Documentation
+        uses: actions/download-artifact@v8
+        with:
+          name: Documentation
+          path: ${{ github.workspace }}/docs/
+
+      - name: Dir structure
+        run: tree ${{ github.workspace }}
 
       - name: Deploy Documentation
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          user_name: github-actions[bot]
-          user_email: github-actions[bot]@users.noreply.github.com
+          publish_dir: ${{ github.workspace }}/docs/html
           commit_message: ${{ github.event.head_commit.message }}
-          publish_dir: docs/html
           publish_branch: docs
           enable_jekyll: false
-          allow_empty_commit: false
-          force_orphan: false
