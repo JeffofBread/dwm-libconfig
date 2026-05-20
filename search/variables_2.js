@@ -1,4 +1,7 @@
 var searchData=
 [
-  ['config_5ffilepath_0',['config_filepath',['../parser_8c.html#a832561ba2dce3c83398f55b8c6279704',1,'parser.c']]]
+  ['button_0',['button',['../structButton__Alias__Map__t.html#ac70dda02c614b8defd038c8fe1881cba',1,'Button_Alias_Map_t']]],
+  ['buttons_1',['buttons',['../parser_8c.html#a6d7fe27c5d41a5de70bc14ce40d0c0a5',1,'parser.c']]],
+  ['buttons_5fcount_2',['buttons_count',['../parser_8c.html#a0a2f402d7e691d01865e76c005cf0ea2',1,'parser.c']]],
+  ['buttons_5fmalloced_3',['buttons_malloced',['../parser_8c.html#a1a6c6411672eda49889fd2a5e6c5011d',1,'parser.c']]]
 ];

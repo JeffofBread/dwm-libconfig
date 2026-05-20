@@ -1,6 +1,5 @@
 var searchData=
 [
-  ['fonts_0',['fonts',['../parser_8c.html#a2b9a934f6a63855e580c6ec7eddbdbab',1,'parser.c']]],
-  ['fonts_5fcount_1',['fonts_count',['../parser_8c.html#a7676f459d4c0728e170004727a2988fb',1,'parser.c']]],
-  ['fonts_5fmalloced_2',['fonts_malloced',['../parser_8c.html#a06a4e4f6283b59d8461fa025d7d19ff5',1,'parser.c']]]
+  ['error_5fenum_5fstrings_0',['ERROR_ENUM_STRINGS',['../parser_8c.html#a34919fa8c164383bdeab290be390624d',1,'parser.c']]],
+  ['errors_5fcount_1',['errors_count',['../structErrors__t.html#a50e97ec598d97fdd0f74d0b6efe6aa65',1,'Errors_t']]]
 ];
