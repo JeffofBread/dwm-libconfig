@@ -84,9 +84,6 @@ $(function() {
   <div class="headertitle"><div class="title">parser.c File Reference</div></div>
 </div><!--header-->
 <div class="contents">
-
-<p>Runtime configuration parser using <a href="https://github.com/hyperrealm/libconfig">libconfig</a>.  
-<a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;errno.h&gt;</code><br />
 <code>#include &lt;libconfig.h&gt;</code><br />
 <code>#include &lt;libgen.h&gt;</code><br />
@@ -100,6 +97,32 @@ $(function() {
 <code>#include &lt;X11/X.h&gt;</code><br />
 <code>#include &lt;X11/Xlib.h&gt;</code><br />
 <code>#include &lt;X11/Xutil.h&gt;</code><br />
+</div><a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Runtime configuration parser using <a href="https://github.com/hyperrealm/libconfig">libconfig</a>. </p>
+<p>This file replaces the need to edit config.h or config.def.h and recompile to make changes to dwm's configuration by parsing a configuration file (see example dwm.conf) at runtime. That configuration file contains all the configuration values traditionally found in config.h or config.def.h, and can be edited at any time without the need to change dwm's source code, allowing you to install dwm once and configure it any time you wish without the source code. For more information, please see the patch's GitHub page: <a href="https://github.com/JeffofBread/dwm-libconfig">https://github.com/JeffofBread/dwm-libconfig</a>.</p>
+<dl class="section author"><dt>Authors</dt><dd>JeffOfBread <a href="#" onclick="location.href='mai'+'lto:'+'jef'+'fo'+'fbr'+'ea'+'dco'+'di'+'ng@'+'gm'+'ail'+'.c'+'om'; return false;">jeffo<span class="obfuscator">.nosp@m.</span>fbre<span class="obfuscator">.nosp@m.</span>adcod<span class="obfuscator">.nosp@m.</span>ing@<span class="obfuscator">.nosp@m.</span>gmail<span class="obfuscator">.nosp@m.</span>.com</a> </dd>
+<dd>
+Yuxuan Shui - <a href="#" onclick="location.href='mai'+'lto:'+'ysh'+'ui'+'v7@'+'gm'+'ail'+'.c'+'om'; return false;">yshui<span class="obfuscator">.nosp@m.</span>v7@g<span class="obfuscator">.nosp@m.</span>mail.<span class="obfuscator">.nosp@m.</span>com</a>, author of <a href="https://github.com/yshui/picom">picom</a>, which I (JeffOfBread) copied code from. Code from picom is credited as such. </dd>
+<dd>
+Mihir Lad - <a href="#" onclick="location.href='mai'+'lto:'+'mih'+'ir'+'lad'+'55'+'@gm'+'ai'+'l.c'+'om'; return false;">mihir<span class="obfuscator">.nosp@m.</span>lad5<span class="obfuscator">.nosp@m.</span>5@gma<span class="obfuscator">.nosp@m.</span>il.c<span class="obfuscator">.nosp@m.</span>om</a>, author of <a href="https://github.com/mihirlad55/dwm-ipc">dwm-ipc</a>, which I (JeffOfBread) copied code from. Code from dwm-ipc is credited as such.</dd></dl>
+<dl class="section see"><dt>See also</dt><dd><a href="https://github.com/hyperrealm/libconfig">https://github.com/hyperrealm/libconfig</a> </dd>
+<dd>
+<a href="https://github.com/JeffofBread/dwm-libconfig">https://github.com/JeffofBread/dwm-libconfig</a> </dd>
+<dd>
+<a href="https://github.com/yshui/picom">https://github.com/yshui/picom</a> </dd>
+<dd>
+<a href="https://github.com/mihirlad55/dwm-ipc">https://github.com/mihirlad55/dwm-ipc</a></dd></dl>
+<dl class="section warning"><dt>Warning</dt><dd>This file must be included in dwm.c after these:<ol type="1">
+<li>The inclusion of config.h</li>
+<li>The structs Arg, Rule, Button, Key</li>
+<li>The enums for clicks and color schemes</li>
+</ol>
+</dd></dl>
+<dl class="section note"><dt>Note</dt><dd>I (JeffOfBread) did not write all the code present in this file. Though I have made minor changes, it's still not fair to say I wrote the code. I have listed them above as authors, and all code I used from them (many of the public utility functions) has been credited accordingly.</dd></dl>
+<dl class="todo"><dt><b><a class="el" href="todo.html#_todo000001">Todo</a></b></dt><dd><p class="startdd">Finish documentation. Make sure function arguments are noted for being dynamically allocated in that function or its sub functions. </p>
+<p class="interdd">Overhaul printing / logging to match the new error handling. </p>
+<p class="enddd">Try and reduce the number of unique string literals throughout the program. Tons are used for logging, inflating binary size by 8kb. </p>
+</dd></dl>
 </div><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Data Structures</h2></td></tr>
@@ -362,33 +385,7 @@ const char *&#160;</td><td class="memItemRight"><b>POINTER_NULL_PRINT_STRING</b>
 <tr class="memitem:a790750afe0634a962a71bb4455d9df20" id="r_a790750afe0634a962a71bb4455d9df20"><td class="memItemLeft">static const <a class="el" href="structSetting__Alias__Map__t.html">Setting_Alias_Map_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a790750afe0634a962a71bb4455d9df20">SETTING_ALIAS_MAP</a> []</td></tr>
 <tr class="memitem:afaa31e65bae3ca486bc84b4846bc43ee" id="r_afaa31e65bae3ca486bc84b4846bc43ee"><td class="memItemLeft">static const <a class="el" href="structTheme__Alias__Map__t.html">Theme_Alias_Map_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afaa31e65bae3ca486bc84b4846bc43ee">THEME_ALIAS_MAP</a> []</td></tr>
 </table>
-<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Runtime configuration parser using <a href="https://github.com/hyperrealm/libconfig">libconfig</a>. </p>
-<p>This file replaces the need to edit config.h or config.def.h and recompile to make changes to dwm's configuration by parsing a configuration file (see example dwm.conf) at runtime. That configuration file contains all the configuration values traditionally found in config.h or config.def.h, and can be edited at any time without the need to change dwm's source code, allowing you to install dwm once and configure it any time you wish without the source code. For more information, please see the patch's GitHub page: <a href="https://github.com/JeffofBread/dwm-libconfig">https://github.com/JeffofBread/dwm-libconfig</a>.</p>
-<dl class="section author"><dt>Authors</dt><dd>JeffOfBread <a href="#" onclick="location.href='mai'+'lto:'+'jef'+'fo'+'fbr'+'ea'+'dco'+'di'+'ng@'+'gm'+'ail'+'.c'+'om'; return false;">jeffo<span class="obfuscator">.nosp@m.</span>fbre<span class="obfuscator">.nosp@m.</span>adcod<span class="obfuscator">.nosp@m.</span>ing@<span class="obfuscator">.nosp@m.</span>gmail<span class="obfuscator">.nosp@m.</span>.com</a> </dd>
-<dd>
-Yuxuan Shui - <a href="#" onclick="location.href='mai'+'lto:'+'ysh'+'ui'+'v7@'+'gm'+'ail'+'.c'+'om'; return false;">yshui<span class="obfuscator">.nosp@m.</span>v7@g<span class="obfuscator">.nosp@m.</span>mail.<span class="obfuscator">.nosp@m.</span>com</a>, author of <a href="https://github.com/yshui/picom">picom</a>, which I (JeffOfBread) copied code from. Code from picom is credited as such. </dd>
-<dd>
-Mihir Lad - <a href="#" onclick="location.href='mai'+'lto:'+'mih'+'ir'+'lad'+'55'+'@gm'+'ai'+'l.c'+'om'; return false;">mihir<span class="obfuscator">.nosp@m.</span>lad5<span class="obfuscator">.nosp@m.</span>5@gma<span class="obfuscator">.nosp@m.</span>il.c<span class="obfuscator">.nosp@m.</span>om</a>, author of <a href="https://github.com/mihirlad55/dwm-ipc">dwm-ipc</a>, which I (JeffOfBread) copied code from. Code from dwm-ipc is credited as such.</dd></dl>
-<dl class="section see"><dt>See also</dt><dd><a href="https://github.com/hyperrealm/libconfig">https://github.com/hyperrealm/libconfig</a> </dd>
-<dd>
-<a href="https://github.com/JeffofBread/dwm-libconfig">https://github.com/JeffofBread/dwm-libconfig</a> </dd>
-<dd>
-<a href="https://github.com/yshui/picom">https://github.com/yshui/picom</a> </dd>
-<dd>
-<a href="https://github.com/mihirlad55/dwm-ipc">https://github.com/mihirlad55/dwm-ipc</a></dd></dl>
-<dl class="section warning"><dt>Warning</dt><dd>This file must be included in dwm.c after these:<ol type="1">
-<li>The inclusion of config.h</li>
-<li>The structs Arg, Rule, Button, Key</li>
-<li>The enums for clicks and color schemes</li>
-</ol>
-</dd></dl>
-<dl class="section note"><dt>Note</dt><dd>I (JeffOfBread) did not write all the code present in this file. Though I have made minor changes, it's still not fair to say I wrote the code. I have listed them above as authors, and all code I used from them (many of the public utility functions) has been credited accordingly.</dd></dl>
-<dl class="todo"><dt><b><a class="el" href="todo.html#_todo000001">Todo</a></b></dt><dd><p class="startdd">Finish documentation. Make sure function arguments are noted for being dynamically allocated in that function or its sub functions. </p>
-<p class="interdd">Overhaul printing / logging to match the new error handling. </p>
-<p class="enddd">Try and reduce the number of unique string literals throughout the program. Tons are used for logging, inflating binary size by 8kb. </p>
-</dd></dl>
-</div><a name="doc-define-members" id="doc-define-members"></a><h2 id="header-doc-define-members" class="groupheader">Macro Definition Documentation</h2>
+<a name="doc-define-members" id="doc-define-members"></a><h2 id="header-doc-define-members" class="groupheader">Macro Definition Documentation</h2>
 <a id="a3410447ff6505f7bfdfbfda99b46cc95" name="a3410447ff6505f7bfdfbfda99b46cc95"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a3410447ff6505f7bfdfbfda99b46cc95">&#9670;&#160;</a></span>_LOG</h2>
 
