@@ -51,9 +51,6 @@ jobs:
           name: Documentation
           path: ${{ github.workspace }}/docs/
 
-      - name: Dir structure
-        run: tree ${{ github.workspace }}
-
       - name: Deploy Documentation
         uses: peaceiris/actions-gh-pages@v4
         with:
