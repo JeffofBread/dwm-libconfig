@@ -147,11 +147,12 @@
 
   <!-- Layout definition for a file page -->
   <file>
-    <briefdescription visible="yes"/>
+    <briefdescription visible="no"/>
     <includes visible="$SHOW_INCLUDE_FILES"/>
     <includegraph visible="yes"/>
     <includedbygraph visible="yes"/>
     <sourcelink visible="yes"/>
+    <detaileddescription visible="yes" title=""/>
     <memberdecl>
       <interfaces visible="yes" title=""/>
       <classes visible="yes" title=""/>
@@ -170,7 +171,6 @@
       <properties visible="yes" title=""/>
       <membergroups visible="yes"/>
     </memberdecl>
-    <detaileddescription visible="yes" title=""/>
     <memberdef>
       <inlineclasses visible="yes" title=""/>
       <defines visible="yes" title=""/>
