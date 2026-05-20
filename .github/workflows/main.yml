@@ -26,14 +26,14 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: doxygen-log
-          path: ${{ github.workspace }}/doxygen.log
+          path: doxygen.log
           archive: false
 
       - name: Upload Documentation
         uses: actions/upload-artifact@v7
         with:
           name: Documentation
-          path: ${{ github.workspace }}/docs/
+          path: docs/
 
 
   deploy_docs:
@@ -49,13 +49,13 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: Documentation
-          path: ${{ github.workspace }}/docs/
+          path: docs/
 
       - name: Deploy Documentation
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ${{ github.workspace }}/docs/html
+          publish_dir: docs/html
           commit_message: ${{ github.event.head_commit.message }}
           publish_branch: docs
           enable_jekyll: false
