@@ -79,18 +79,20 @@ $(function() {
 <div class="contents">
 <div class="textblock"><dl class="reflist">
 <dt>Global <a class="el" href="parser_8c.html#a7bd26c7eb037ddf341fb8571c26cae03">_parse_rules_config</a>  (const config_t *config, Rule **array, unsigned int *count, bool *malloced)</dt>
-<dd><a class="anchor" id="_todo000004"></a>Check for NULL pointers from function arguments. Possible able to use lookup_path in logs instead of repeating message  </dd>
+<dd><a class="anchor" id="_todo000005"></a>Check for NULL pointers from function arguments. Possible able to use lookup_path in logs instead of repeating message  </dd>
 <dt>Global <a class="el" href="parser_8c.html#aa3c27d5c2a66d7f8ebcc307e32d909ab">_parse_setting_array</a>  (const config_setting_t *setting, const size_t element_size, const <a class="el" href="parser_8c.html#af6afce1143e1fbea2a9f4e476608d9d4" title="Typedef used to abstract config array parsing functions. Allows for more generic parsing of multiple ...">Array_Element_Parser_Function_t</a> array_element_parser_function, bool *malloced, void **parsed_config, unsigned int *parsed_config_length)</dt>
-<dd><p class="startdd"><a class="anchor" id="_todo000005"></a>It may be worth trying to add some kind of safeguard to fall back on default config if enough elements fail to be parsed. For example, if the keybinds all (or many) fail, it could soft-lock the user in the program. Not sure best way to do that, or if it is even the best idea to add.</p>
-<p class="enddd"><a class="anchor" id="_todo000006"></a>The logic around <code class="param">malloced</code> and null checking <code class="param">parsed_config</code> before allocation is brittle, needs work.  </p>
+<dd><p class="startdd"><a class="anchor" id="_todo000006"></a>It may be worth trying to add some kind of safeguard to fall back on default config if enough elements fail to be parsed. For example, if the keybinds all (or many) fail, it could soft-lock the user in the program. Not sure best way to do that, or if it is even the best idea to add.</p>
+<p class="enddd"><a class="anchor" id="_todo000007"></a>The logic around <code class="param">malloced</code> and null checking <code class="param">parsed_config</code> before allocation is brittle, needs work.  </p>
 </dd>
 <dt>Global <a class="el" href="parser_8c.html#a7132623e20b8810faeb55488e6cc39ec">_parser_open_config_file</a>  (config_t *config, const char *custom_config_filepath, char **found_config_filepath, bool *fallback_config_loaded)</dt>
-<dd><p class="startdd"><a class="anchor" id="_todo000003"></a>These error returns may not be the most accurate, not sure exactly the best fits. </p>
+<dd><p class="startdd"><a class="anchor" id="_todo000004"></a>These error returns may not be the most accurate, not sure exactly the best fits. </p>
 <p class="interdd"></p>
 <p class="enddd">Should the parser even look for another config file if one is passed from the CLI? Could be deceptive behavior.  </p>
 </dd>
+<dt>Global <a class="el" href="parser_8c.html#a4e8c0d09726859e3d3369c0da5a1aa7f">Error_t</a>  </dt>
+<dd><a class="anchor" id="_todo000002"></a>Maybe look at adding ERROR_ARGUMENT, as we check function arguments a ton.  </dd>
 <dt>Global <a class="el" href="parser_8c.html#ad8f7e478dc4e30f70b42e5643fbf5677">parse_config</a>  (void)</dt>
-<dd><p class="startdd"><a class="anchor" id="_todo000002"></a>Polish the status texts a little. I like the idea but could be refined. </p>
+<dd><p class="startdd"><a class="anchor" id="_todo000003"></a>Polish the status texts a little. I like the idea but could be refined. </p>
 <p class="interdd"></p>
 <p class="enddd">Backup config file logic is clumsily structured, it should be improved. It also probably should include rules_malloced  </p>
 </dd>
@@ -99,7 +101,7 @@ $(function() {
 <p class="interdd"></p>
 <p class="interdd">Overhaul printing / logging to match the new error handling. </p>
 <p class="interdd"></p>
-<p class="enddd">Try and reduce the number of unique string literals throughout the program. Tons are used for logging, inflating binary size by 8kb. </p>
+<p class="enddd">Try and reduce the number of unique string literals throughout the parser. Tons are used for logging, inflating binary size by 8kb. </p>
 </dd>
 </dl>
 </div></div><!-- contents -->
