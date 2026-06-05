@@ -31,13 +31,12 @@
  *
  * @todo Finish documentation. Make sure function arguments are noted for being dynamically allocated in that function or its sub functions.
  * @todo Overhaul printing / logging to match the new error handling.
- * @todo Try and reduce the number of unique string literals throughout the program. Tons are used for logging, inflating binary size by 8kb.
+ * @todo Try and reduce the number of unique string literals throughout the parser. Tons are used for logging, inflating binary size by 8kb.
  */
 
 #include <errno.h>
 #include <libconfig.h>
 #include <libgen.h>
-#include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -167,9 +166,12 @@ typedef enum {
 	TYPE_STRING,   ///< String data.
 } Data_Type_t;
 
-/** @brief Enum to categorize the types of errors that can occur during parsing. */
+/**
+ * @brief Enum to categorize the types of errors that can occur during parsing.
+ * @todo Maybe look at adding ERROR_ARGUMENT, as we check function arguments a ton.
+ */
 typedef enum {
-	ERROR_NONE = 0,   ///< No issue.
+	ERROR_NONE = 0,   ///< No issue. Always must be first.
 	ERROR_NOT_FOUND,  ///< Value was unable to be acquired.
 	ERROR_TYPE,       ///< Value was not of required type.
 	ERROR_RANGE,      ///< Value evaluated out of required range.
@@ -184,7 +186,8 @@ typedef struct {
 	unsigned int errors_count[ ERROR_ENUM_LENGTH ]; ///< Array of error counts for every enum of @ref Error_t.
 } Errors_t;
 
-/** @brief Typedef used to abstract config array parsing functions. Allows for more generic parsing of multiple types. */
+/** @brief Typedef used to abstract config array parsing functions. Allows for
+ * more generic parsing of multiple types. */
 typedef Errors_t ( *Array_Element_Parser_Function_t )( config_setting_t *element_setting, unsigned int element_index, void *parsed_element );
 
 /** @brief Struct to map a string alias to a matching function pointer, its argument data type, and that argument's acceptable range. */
@@ -232,7 +235,7 @@ const char **fonts = default_fonts; ///< Array of current fonts.
 
 unsigned int keys_count = LENGTH( default_keys );       ///< Number of elements in @ref keys.
 unsigned int buttons_count = LENGTH( default_buttons ); ///< Number of elements in @ref buttons.
-unsigned int rules_count = LENGTH( default_buttons );   ///< Number of elements in @ref rules.
+unsigned int rules_count = LENGTH( default_rules );     ///< Number of elements in @ref rules.
 unsigned int fonts_count = LENGTH( default_fonts );     ///< Number of elements in @ref fonts_count.
 
 bool keys_malloced = false;    ///< Boolean tracking whether @ref keys has been dynamically allocated.
@@ -270,6 +273,7 @@ Errors_t parse_config( void );
 ////////////////////////////////////
 
 void add_error( Errors_t *errors, Error_t error );
+void copy_errors( Errors_t *destination, Errors_t source );
 int errors_failure_count( const Errors_t *errors );
 char *estrdup( const char *string );
 void extend_string( char **source_string, const char *addition );
@@ -278,7 +282,6 @@ char *get_xdg_config_home( void );
 char *get_xdg_data_home( void );
 char *join_strings( const char *string_1, const char *string_2 );
 int make_directory_path( const char *path );
-void copy_errors( Errors_t *destination, Errors_t source );
 int normalize_path( const char *original_path, char **normalized_path );
 void setlayout_floating( const Arg *arg );
 void setlayout_monocle( const Arg *arg );
@@ -306,7 +309,7 @@ static Errors_t _parse_keybind( config_setting_t *setting, unsigned int index, K
 static Errors_t _parse_keybind_adapter( config_setting_t *setting, unsigned int index, void *keybind );
 static Error_t _parse_keybind_keysym( config_setting_t *setting, KeySym *keysym );
 static Errors_t _parse_keybinds_config( const config_t *config, Key **array, unsigned int *count, bool *malloced );
-static Errors_t _parser_open_config_file( config_t *config, const char *custom_config_filepath, char **found_config_filepath,bool *fallback_config_loaded );
+static Errors_t _parser_open_config_file( config_t *config, const char *custom_config_filepath, char **found_config_filepath, bool *fallback_config_loaded );
 static Errors_t _parse_rule( config_setting_t *setting, unsigned int index, Rule *rule );
 static Errors_t _parse_rule_adapter( config_setting_t *setting, unsigned int index, void *rule );
 static Errors_t _parse_rules_config( const config_t *config, Rule **array, unsigned int *count, bool *malloced );
@@ -323,24 +326,18 @@ static Errors_t _parse_theme_config( const config_t *config );
 ///// Parser internal utility functions /////
 /////////////////////////////////////////////
 
+static Error_t _libconfig_generic_lookup( config_setting_t *parent_setting, const char *path, int expected_type, void *parsed_value );
 static Error_t _libconfig_get_setting_name( const config_setting_t *setting, const char **found_name );
-static Error_t _libconfig_lookup_bool( const config_t *config, const char *path, bool *parsed_value );
-static Error_t _libconfig_lookup_float( const config_t *config, const char *path, float range_min, float range_max, float *parsed_value );
-static Error_t _libconfig_lookup_int( const config_t *config, const char *path, int range_min, int range_max, int *parsed_value );
-static Error_t _libconfig_lookup_list( const config_t *config, const char *path, config_setting_t **parsed_value );
-static Error_t _libconfig_lookup_string( const config_t *config, const char *path, const char **parsed_value );
-static Error_t _libconfig_lookup_uint( const config_t *config, const char *path, unsigned int range_min, unsigned int range_max, unsigned int *parsed_value );
-static Error_t _libconfig_setting_lookup_bool( config_setting_t *parent_setting, const char *path, bool *parsed_value );
-static Error_t _libconfig_setting_lookup_float( config_setting_t *parent_setting, const char *path, float range_min, float range_max, float *parsed_value );
-static Error_t _libconfig_setting_lookup_int( config_setting_t *parent_setting, const char *path, int range_min, int range_max, int *parsed_value );
-static Error_t _libconfig_setting_lookup_list( config_setting_t *setting, const char *path, config_setting_t **parsed_value );
-static Error_t _libconfig_setting_lookup_string( config_setting_t *parent_setting, const char *path, const char **parsed_value );
-static Error_t _libconfig_setting_lookup_uint( config_setting_t *parent_setting, const char *path, unsigned int range_min, unsigned int range_max, unsigned int *parsed_value );
+static Error_t _libconfig_lookup_float( config_setting_t *parent_setting, const char *path, float range_min, float range_max, float *parsed_value );
+static Error_t _libconfig_lookup_int( config_setting_t *parent_setting, const char *path, int range_min, int range_max, int *parsed_value );
+static Error_t _libconfig_lookup_string( config_setting_t *parent_setting, const char *path, const char **parsed_value );
+static Error_t _libconfig_lookup_uint( config_setting_t *parent_setting, const char *path, unsigned int range_min, unsigned int range_max, unsigned int *parsed_value );
 
 /////////////////////////////
 ///// Parser alias maps /////
 /////////////////////////////
 
+/** @brief Default alias map for dwm's click enum. */
 static const Click_Alias_Map_t CLICK_ALIAS_MAP[ ] = {
 	{ "tag", ClkTagBar },
 	{ "layout", ClkLtSymbol },
@@ -350,6 +347,7 @@ static const Click_Alias_Map_t CLICK_ALIAS_MAP[ ] = {
 	{ "desktop", ClkRootWin },
 };
 
+/** @brief Default alias map for common X11 buttons. */
 static const Button_Alias_Map_t BUTTON_ALIAS_MAP[ ] = {
 	{ "leftclick", Button1 },
 	{ "left-click", Button1 },
@@ -363,6 +361,7 @@ static const Button_Alias_Map_t BUTTON_ALIAS_MAP[ ] = {
 	{ "scroll-down", Button5 },
 };
 
+/** @brief Default alias map for dwm's arg functions. */
 static const Function_Alias_Map_t FUNCTION_ALIAS_MAP[ ] = {
 	{ "focusmon", focusmon, TYPE_INT, -99, 99 },
 	{ "focusstack", focusstack, TYPE_INT, -99, 99 },
@@ -387,6 +386,7 @@ static const Function_Alias_Map_t FUNCTION_ALIAS_MAP[ ] = {
 	{ "zoom", zoom, TYPE_NONE },
 };
 
+/** @brief Default alias map for common X11 modifiers. */
 static const Modifier_Alias_Map_t MODIFIER_ALIAS_MAP[ ] = {
 	{ "super", Mod4Mask },
 	{ "control", ControlMask },
@@ -402,6 +402,7 @@ static const Modifier_Alias_Map_t MODIFIER_ALIAS_MAP[ ] = {
 	{ "mod5", Mod5Mask },
 };
 
+/** @brief Default alias map for dwm's global config settings. */
 static const Setting_Alias_Map_t SETTING_ALIAS_MAP[ ] = {
 	{ "showbar", &showbar, TYPE_BOOLEAN, true },
 	{ "topbar", &topbar, TYPE_BOOLEAN, true },
@@ -414,6 +415,7 @@ static const Setting_Alias_Map_t SETTING_ALIAS_MAP[ ] = {
 	{ "mfact", &mfact, TYPE_FLOAT, true, 0.05f, 0.95f },
 };
 
+/** @brief Default alias map for dwm's scheme indexes. */
 static const Theme_Alias_Map_t THEME_ALIAS_MAP[ ] = {
 	{ "normal-foreground", &colors[ SchemeNorm ][ ColFg ] },
 	{ "normal-background", &colors[ SchemeNorm ][ ColBg ] },
@@ -459,9 +461,8 @@ void config_cleanup( void ) {
  * please reference the helper function related to the functionality you want to learn
  * more about, they all have their own documentation and comments.
  *
- * @return An @ref Errors_t struct containing all collected errors (and @ref ERROR_NONE,
- * aka successes) while parsing the configuration. See @ref Error_t for a list of possible
- * error types.
+ * @return An @ref Errors_t struct containing all collected errors (including @ref ERROR_NONE)
+ * while parsing the configuration. See @ref Error_t for a list of possible error types.
  *
  * @todo Polish the status texts a little. I like the idea but could be refined.
  * @todo Backup config file logic is clumsily structured, it should be improved. It also probably should include rules_malloced
@@ -549,6 +550,26 @@ void add_error( Errors_t *errors, const Error_t error ) {
 }
 
 /**
+ * @brief Copy errors from @p source to @p destination.
+ *
+ * This function copies the errors in @p source to the @ref Errors_t
+ * struct pointed to by @p destination. It does not alter the errors
+ * in @p source. If the pointer to @p destination is NULL, an error
+ * will be logged and the function will return.
+ *
+ * @param[out] destination Pointer to where to copy errors to.
+ * @param[in] source Errors to copy.
+ */
+void copy_errors( Errors_t *destination, const Errors_t source ) {
+
+	RETURN_IF_NULL( destination, "%s:\"destination\"\n", POINTER_NULL_PRINT_STRING );
+
+	for ( unsigned int i = 0; i < ERROR_ENUM_LENGTH; i++ ) {
+		destination->errors_count[ i ] += source.errors_count[ i ];
+	}
+}
+
+/**
  * @brief Counts the number of failure errors present in an @ref Errors_t struct.
  *
  * This function acts as a simple way to count the number of failure errors
@@ -565,7 +586,7 @@ int errors_failure_count( const Errors_t *errors ) {
 
 	int count = 0;
 
-	for ( int i = ERROR_NONE + 1; i < ERROR_ENUM_LENGTH; i++ ) {
+	for ( unsigned int i = ERROR_NONE + 1; i < ERROR_ENUM_LENGTH; i++ ) {
 		count += (int) errors->errors_count[ i ];
 	}
 
@@ -610,8 +631,8 @@ char *estrdup( const char *string ) {
  * @param[in,out] source_string Pointer to the string to be extended with @p addition. Must point to a NULL or heap allocated string.
  * @param[in] addition Additional string to be appended to the string pointed to by @p source_string.
  *
- * @warning String at @p source_string must be NULL or heap allocated. If it points to a string
- * literal, `realloc()` will crash the program. See @ref join_strings() if you wish to append a string literal.
+ * @warning String at @p source_string must be NULL or heap allocated. If it points to a string literal,
+ * `realloc()` will crash the program. See @ref join_strings() if you wish to append a string literal.
  *
  * @note
  * 	-# @p source_string is or will be dynamically allocated and must be manually freed.
@@ -648,17 +669,23 @@ void extend_string( char **source_string, const char *addition ) {
 }
 
 /**
- * @brief Find and return layout in layouts that uses a specific arrange function.
+ * @brief Find and return a layout that uses a specific arrange function.
  *
- * TODO
+ * This function searches the global array `layouts` for a layout struct that contains
+ * @p arrange. If it is found, a pointer to it is returned, else NULL is returned.
  *
  * @param[in] arrange Arrange function used by the layout to be found and returned.
  *
  * @return Pointer to the found layout or NULL if no layout containing @p arrange was found.
+ *
+ * @note This function assumes that only one layout uses the given arrange
+ * function. If multiple layouts use the same arrange function, then this
+ * function will simply return the first one in the array using that arrange
+ * function.
  */
 const Layout *get_layout( void ( *arrange )( Monitor * ) ) {
 
-	for ( int i = 0; i < LENGTH( layouts ); i++ ) {
+	for ( unsigned int i = 0; i < LENGTH( layouts ); i++ ) {
 		if ( layouts[ i ].arrange == arrange ) {
 			return &layouts[ i ];
 		}
@@ -750,8 +777,8 @@ char *get_xdg_data_home( void ) {
  * @param[in] string_1 String for @p string_2 to be appended to.
  * @param[in] string_2 String to be appended to @p string_1.
  *
- * @return Pointer of a dynamically allocated string containing the now joined strings,
- * or NULL on failure.
+ * @return Pointer of a dynamically allocated string containing the now joined
+ * strings, or NULL on failure.
  *
  * @note
  * 	-# Returned string is dynamically allocated and will need to be manually freed.
@@ -878,26 +905,6 @@ int make_directory_path( const char *path ) {
 }
 
 /**
- * @brief Copy errors from @p source to @p destination.
- *
- * This function copies the errors in @p source to the @ref Errors_t
- * struct pointed to by @p destination. It does not alter the errors
- * in @p source. If the pointer to @p destination is NULL, an error
- * will be logged and the function will return.
- *
- * @param[out] destination Pointer to where to copy errors to.
- * @param[in] source Errors to copy.
- */
-void copy_errors( Errors_t *destination, const Errors_t source ) {
-
-	RETURN_IF_NULL( destination, "%s:\"destination\"\n", POINTER_NULL_PRINT_STRING );
-
-	for ( int i = 0; i < ERROR_ENUM_LENGTH; i++ ) {
-		destination->errors_count[ i ] += source.errors_count[ i ];
-	}
-}
-
-/**
  * @brief Normalize a file or folder path to remove repeat forward slash characters.
  *
  * TODO
@@ -971,14 +978,11 @@ int normalize_path( const char *original_path, char **normalized_path ) {
  */
 void setlayout_floating( const Arg *arg ) {
 
-	static const Layout *layout = NULL;
-
-	if ( layout == NULL ) layout = get_layout( NULL ); // NULL is floating layout's arrange function
+	const Layout *layout = get_layout( NULL ); // NULL is floating layout's arrange function
 
 	RETURN_IF_NULL( layout, "Failed to get floating layout" );
 
-	const Arg argument = { .v = layout };
-	setlayout( &argument );
+	setlayout( &(Arg){ .v = layout } );
 }
 
 /**
@@ -992,14 +996,11 @@ void setlayout_floating( const Arg *arg ) {
  */
 void setlayout_monocle( const Arg *arg ) {
 
-	static const Layout *layout = NULL;
-
-	if ( layout == NULL ) layout = get_layout( monocle );
+	const Layout *layout = get_layout( monocle );
 
 	RETURN_IF_NULL( layout, "Failed to get monocle layout" );
 
-	const Arg argument = { .v = layout };
-	setlayout( &argument );
+	setlayout( &(Arg){ .v = layout } );
 }
 
 /**
@@ -1013,14 +1014,11 @@ void setlayout_monocle( const Arg *arg ) {
  */
 void setlayout_tiled( const Arg *arg ) {
 
-	static const Layout *layout = NULL;
-
-	if ( layout == NULL ) layout = get_layout( tile );
+	const Layout *layout = get_layout( tile );
 
 	RETURN_IF_NULL( layout, "Failed to get tile layout" );
 
-	const Arg argument = { .v = layout };
-	setlayout( &argument );
+	setlayout( &(Arg){ .v = layout } );
 }
 
 /**
@@ -1122,10 +1120,10 @@ static Error_t _parser_backup_config( config_t *config ) {
  * @param[out] argument Pointer to an Arg struct where the parsed value of type @p argument_type
  * in range @p range_min to @p range_max will be stored.
  *
- * @return Any error returned from any of the `_libconfig_setting_lookup_TYPE()` functions.
  * @return @ref ERROR_NONE on success.
  * @return @ref ERROR_NULL_VALUE if a NULL argument is provided.
  * @return @ref ERROR_TYPE if @p argument_type does not match any case in the switch statement.
+ * @return Any error returned from any of the `_libconfig_setting_lookup_TYPE()` functions.
  */
 static Error_t _parse_bind_argument( config_setting_t *setting, const Data_Type_t argument_type, const long double range_min, const long double range_max, Arg *argument ) {
 
@@ -1140,27 +1138,27 @@ static Error_t _parse_bind_argument( config_setting_t *setting, const Data_Type_
 		}
 
 		case TYPE_BOOLEAN: {
-			lookup_error = _libconfig_setting_lookup_bool( setting, argument_path, (bool *) &argument->ui );
+			lookup_error = _libconfig_generic_lookup( setting, argument_path, CONFIG_TYPE_BOOL, (bool *) &argument->ui );
 			break;
 		}
 
 		case TYPE_INT: {
-			lookup_error = _libconfig_setting_lookup_int( setting, argument_path, range_min, range_max, &argument->i );
+			lookup_error = _libconfig_lookup_int( setting, argument_path, range_min, range_max, &argument->i );
 			break;
 		}
 
 		case TYPE_UINT: {
-			lookup_error = _libconfig_setting_lookup_uint( setting, argument_path, range_min, range_max, &argument->ui );
+			lookup_error = _libconfig_lookup_uint( setting, argument_path, range_min, range_max, &argument->ui );
 			break;
 		}
 
 		case TYPE_FLOAT: {
-			lookup_error = _libconfig_setting_lookup_float( setting, argument_path, range_min, range_max, &argument->f );
+			lookup_error = _libconfig_lookup_float( setting, argument_path, range_min, range_max, &argument->f );
 			break;
 		}
 
 		case TYPE_STRING: {
-			lookup_error = _libconfig_setting_lookup_string( setting, argument_path, (const char **) &argument->v );
+			lookup_error = _libconfig_lookup_string( setting, argument_path, (const char **) &argument->v );
 			break;
 		}
 
@@ -1243,11 +1241,10 @@ static Errors_t _parse_bind_core( config_setting_t *setting, const unsigned int 
  * @param[out] range_min Pointer to where to store the minimum value of the Arg that can be passed to @p function.
  * @param[out] range_max Pointer to where to store the maximum value of the Arg that can be passed to @p function.
  *
- * @return Any error returned from @ref _libconfig_setting_lookup_string().
  * @return @ref ERROR_NONE on success.
  * @return @ref ERROR_NULL_VALUE if a NULL argument is provided.
- * @return @ref ERROR_NOT_FOUND if parsed intermediate function string does not
- * match any alias found in @ref FUNCTION_ALIAS_MAP.
+ * @return @ref ERROR_NOT_FOUND if parsed intermediate function string does not match any alias found in @ref FUNCTION_ALIAS_MAP.
+ * @return Any error returned from @ref _libconfig_setting_lookup_string().
  */
 static Error_t _parse_bind_function( config_setting_t *setting, void ( **function )( const Arg * ), Data_Type_t *argument_type, long double *range_min, long double *range_max ) {
 
@@ -1258,11 +1255,11 @@ static Error_t _parse_bind_function( config_setting_t *setting, void ( **functio
 	RETURN_VALUE_IF_NULL( range_max, ERROR_NULL_VALUE, "%s:\"range_max\"\n", POINTER_NULL_PRINT_STRING );
 
 	const char *function_string = NULL;
-	const Error_t lookup_error = _libconfig_setting_lookup_string( setting, "function", &function_string );
+	const Error_t lookup_error = _libconfig_lookup_string( setting, "function", &function_string );
 
 	if ( lookup_error != ERROR_NONE ) return lookup_error;
 
-	for ( int i = 0; i < LENGTH( FUNCTION_ALIAS_MAP ); i++ ) {
+	for ( unsigned int i = 0; i < LENGTH( FUNCTION_ALIAS_MAP ); i++ ) {
 		if ( strcasecmp( function_string, FUNCTION_ALIAS_MAP[ i ].alias ) == 0 ) {
 			*function = FUNCTION_ALIAS_MAP[ i ].function;
 			*argument_type = FUNCTION_ALIAS_MAP[ i ].argument_type;
@@ -1283,12 +1280,12 @@ static Error_t _parse_bind_function( config_setting_t *setting, void ( **functio
  * @param[in] setting TODO
  * @param[out] modifier TODO
  *
- * @return Any error returned from @ref _libconfig_setting_lookup_string().
  * @return @ref ERROR_NONE on success.
  * @return @ref ERROR_NULL_VALUE if a NULL argument is provided.
  * @return @ref ERROR_ALLOCATION if @ref estrdup() fails to allocate memory.
  * @return @ref ERROR_NOT_FOUND if parsed intermediate modifier string does not
  * match any alias found in @ref MODIFIER_ALIAS_MAP.
+ * @return Any error returned from @ref _libconfig_setting_lookup_string().
  *
  * @see https://gitlab.freedesktop.org/xorg/proto/xorgproto/-/blob/master/include/X11/X.h
  */
@@ -1298,7 +1295,7 @@ static Error_t _parse_bind_modifier( config_setting_t *setting, unsigned int *mo
 	RETURN_VALUE_IF_NULL( modifier, ERROR_NULL_VALUE, "%s:\"modifier\"\n", POINTER_NULL_PRINT_STRING );
 
 	const char *modifier_string = NULL;
-	const Error_t lookup_error = _libconfig_setting_lookup_string( setting, "modifier", &modifier_string );
+	const Error_t lookup_error = _libconfig_lookup_string( setting, "modifier", &modifier_string );
 
 	if ( lookup_error != ERROR_NONE ) return lookup_error;
 
@@ -1318,7 +1315,7 @@ static Error_t _parse_bind_modifier( config_setting_t *setting, unsigned int *mo
 		}
 
 		bool found = false;
-		for ( int i = 0; i < LENGTH( MODIFIER_ALIAS_MAP ); i++ ) {
+		for ( unsigned int i = 0; i < LENGTH( MODIFIER_ALIAS_MAP ); i++ ) {
 			if ( strcasecmp( modifier_token, MODIFIER_ALIAS_MAP[ i ].alias ) == 0 ) {
 				*modifier |= MODIFIER_ALIAS_MAP[ i ].modifier;
 				found = true;
@@ -1392,8 +1389,6 @@ static Errors_t _parse_buttonbind( config_setting_t *setting, const unsigned int
  * @brief Thin adapter function to allow for buttonbind parsing inside a generic array parsing function.
  *
  * See @ref _parse_buttonbind() for function documentation.
- *
- * @see @ref _parse_buttonbind()
  */
 static Errors_t _parse_buttonbind_adapter( config_setting_t *setting, const unsigned int index, void *buttonbind ) {
 	return _parse_buttonbind( setting, index, (Button *) buttonbind );
@@ -1407,7 +1402,6 @@ static Errors_t _parse_buttonbind_adapter( config_setting_t *setting, const unsi
  * @param[in] setting TODO
  * @param[out] button TODO
  *
- * @return Any error returned from @ref _libconfig_setting_lookup_string().
  * @return @ref ERROR_NONE on success.
  * @return @ref ERROR_NULL_VALUE if a NULL argument is provided or if `strtoul()`
  * failed to properly convert parsed intermediate button string to a number.
@@ -1422,11 +1416,11 @@ static Error_t _parse_buttonbind_button( config_setting_t *setting, unsigned int
 	RETURN_VALUE_IF_NULL( button, ERROR_NULL_VALUE, "%s:\"button\"\n", POINTER_NULL_PRINT_STRING );
 
 	const char *button_string = NULL;
-	const Error_t lookup_error = _libconfig_setting_lookup_string( setting, "button", &button_string );
+	const Error_t lookup_error = _libconfig_lookup_string( setting, "button", &button_string );
 
 	if ( lookup_error != ERROR_NONE ) return lookup_error;
 
-	for ( int i = 0; i < LENGTH( BUTTON_ALIAS_MAP ); i++ ) {
+	for ( unsigned int i = 0; i < LENGTH( BUTTON_ALIAS_MAP ); i++ ) {
 		if ( strcasecmp( button_string, BUTTON_ALIAS_MAP[ i ].alias ) == 0 ) {
 			*button = BUTTON_ALIAS_MAP[ i ].button;
 			return ERROR_NONE;
@@ -1455,11 +1449,11 @@ static Error_t _parse_buttonbind_button( config_setting_t *setting, unsigned int
  * @param[in] setting TODO
  * @param[out] click TODO
  *
- * @return Any error returned from @ref _libconfig_setting_lookup_string().
  * @return @ref ERROR_NONE on success.
  * @return @ref ERROR_NULL_VALUE if a NULL argument is provided.
  * @return @ref ERROR_NOT_FOUND if parsed intermediate click string does not
  * match any alias found in @ref CLICK_ALIAS_MAP.
+ * @return Any error returned from @ref _libconfig_setting_lookup_string().
  */
 static Error_t _parse_buttonbind_click( config_setting_t *setting, unsigned int *click ) {
 
@@ -1467,11 +1461,11 @@ static Error_t _parse_buttonbind_click( config_setting_t *setting, unsigned int 
 	RETURN_VALUE_IF_NULL( click, ERROR_NULL_VALUE, "%s:\"click\"\n", POINTER_NULL_PRINT_STRING );
 
 	const char *click_string = NULL;
-	const Error_t lookup_error = _libconfig_setting_lookup_string( setting, "click", &click_string );
+	const Error_t lookup_error = _libconfig_lookup_string( setting, "click", &click_string );
 
 	if ( lookup_error != ERROR_NONE ) return lookup_error;
 
-	for ( int i = 0; i < LENGTH( CLICK_ALIAS_MAP ); i++ ) {
+	for ( unsigned int i = 0; i < LENGTH( CLICK_ALIAS_MAP ); i++ ) {
 		if ( strcasecmp( click_string, CLICK_ALIAS_MAP[ i ].alias ) == 0 ) {
 			*click = CLICK_ALIAS_MAP[ i ].click;
 			return ERROR_NONE;
@@ -1505,7 +1499,7 @@ static Errors_t _parse_buttonbinds_config( const config_t *config, Button **arra
 	RETURN_ERRORS_IF_NULL( config, returned_errors, "%s:\"config\"\n", POINTER_NULL_PRINT_STRING );
 
 	config_setting_t *array_setting = NULL;
-	const Error_t lookup_error = _libconfig_lookup_list( config, lookup_path, &array_setting );
+	const Error_t lookup_error = _libconfig_generic_lookup( config_root_setting( config ), lookup_path, CONFIG_TYPE_LIST, &array_setting );
 	add_error( &returned_errors, lookup_error );
 
 	if ( lookup_error != ERROR_NONE ) {
@@ -1557,8 +1551,6 @@ static Errors_t _parse_font( config_setting_t *setting, const unsigned int index
  * @brief Thin adapter function to allow for font parsing inside a generic array parsing function.
  *
  * See @ref _parse_font() for function documentation.
- *
- * @see @ref _parse_font()
  */
 static Errors_t _parse_font_adapter( config_setting_t *setting, const unsigned int index, void *font ) {
 	return _parse_font( setting, index, (const char **) font );
@@ -1579,31 +1571,31 @@ static Errors_t _parse_generic_settings( const config_t *config ) {
 
 	RETURN_ERRORS_IF_NULL( config, returned_errors, "%s:\"config\"\n", POINTER_NULL_PRINT_STRING );
 
-	for ( int i = 0; i < LENGTH( SETTING_ALIAS_MAP ); ++i ) {
+	for ( unsigned int i = 0; i < LENGTH( SETTING_ALIAS_MAP ); ++i ) {
 		Error_t returned_error = ERROR_NONE;
 
 		switch ( SETTING_ALIAS_MAP[ i ].type ) {
 			case TYPE_BOOLEAN:
-				returned_error = _libconfig_lookup_bool( config, SETTING_ALIAS_MAP[ i ].alias, SETTING_ALIAS_MAP[ i ].setting );
+				returned_error = _libconfig_generic_lookup( config_root_setting( config ), SETTING_ALIAS_MAP[ i ].alias, CONFIG_TYPE_BOOL, SETTING_ALIAS_MAP[ i ].setting );
 				break;
 
 			case TYPE_INT:
-				returned_error = _libconfig_lookup_int( config, SETTING_ALIAS_MAP[ i ].alias, (int) SETTING_ALIAS_MAP[ i ].range_min, (int) SETTING_ALIAS_MAP[ i ].range_max,
-				                                        SETTING_ALIAS_MAP[ i ].setting );
+				returned_error = _libconfig_lookup_int( config_root_setting( config ), SETTING_ALIAS_MAP[ i ].alias, (int) SETTING_ALIAS_MAP[ i ].range_min,
+				                                        (int) SETTING_ALIAS_MAP[ i ].range_max, SETTING_ALIAS_MAP[ i ].setting );
 				break;
 
 			case TYPE_UINT:
-				returned_error = _libconfig_lookup_uint( config, SETTING_ALIAS_MAP[ i ].alias, (unsigned int) SETTING_ALIAS_MAP[ i ].range_min,
+				returned_error = _libconfig_lookup_uint( config_root_setting( config ), SETTING_ALIAS_MAP[ i ].alias, (unsigned int) SETTING_ALIAS_MAP[ i ].range_min,
 				                                         (unsigned int) SETTING_ALIAS_MAP[ i ].range_max, SETTING_ALIAS_MAP[ i ].setting );
 				break;
 
 			case TYPE_FLOAT:
-				returned_error = _libconfig_lookup_float( config, SETTING_ALIAS_MAP[ i ].alias, (float) SETTING_ALIAS_MAP[ i ].range_min, (float) SETTING_ALIAS_MAP[ i ].range_max,
-				                                          SETTING_ALIAS_MAP[ i ].setting );
+				returned_error = _libconfig_lookup_float( config_root_setting( config ), SETTING_ALIAS_MAP[ i ].alias, (float) SETTING_ALIAS_MAP[ i ].range_min,
+				                                          (float) SETTING_ALIAS_MAP[ i ].range_max, SETTING_ALIAS_MAP[ i ].setting );
 				break;
 
 			case TYPE_STRING:
-				returned_error = _libconfig_lookup_string( config, SETTING_ALIAS_MAP[ i ].alias, SETTING_ALIAS_MAP[ i ].setting );
+				returned_error = _libconfig_lookup_string( config_root_setting( config ), SETTING_ALIAS_MAP[ i ].alias, SETTING_ALIAS_MAP[ i ].setting );
 				break;
 
 			default:
@@ -1669,8 +1661,6 @@ static Errors_t _parse_keybind( config_setting_t *setting, const unsigned int in
  * @brief Thin adapter function to allow for keybind parsing inside a generic array parsing function.
  *
  * See @ref _parse_keybind() for function documentation.
- *
- * @see @ref _parse_keybind()
  */
 static Errors_t _parse_keybind_adapter( config_setting_t *setting, const unsigned int index, void *keybind ) {
 	return _parse_keybind( setting, index, (Key *) keybind );
@@ -1684,10 +1674,10 @@ static Errors_t _parse_keybind_adapter( config_setting_t *setting, const unsigne
  * @param[in] setting TODO
  * @param[out] keysym Pointer to where to store the parsed keysym value.
  *
- * @return Any error returned from @ref _libconfig_setting_lookup_string().
  * @return @ref ERROR_NONE on success.
  * @return @ref ERROR_NULL_VALUE if a NULL argument is provided.
  * @return @ref ERROR_NOT_FOUND if unable to convert parsed string to keysym.
+ * @return Any error returned from @ref _libconfig_setting_lookup_string().
  *
  * @note `xev` is likely your best bet at finding the keysym values that will work with `XStringToKeysym()`.
  * If someone knows a better way, please reach out and let me know.
@@ -1701,7 +1691,7 @@ static Error_t _parse_keybind_keysym( config_setting_t *setting, KeySym *keysym 
 	RETURN_VALUE_IF_NULL( keysym, ERROR_NULL_VALUE, "%s:\"keysym\"\n", POINTER_NULL_PRINT_STRING );
 
 	const char *keybind_string = NULL;
-	const Error_t lookup_error = _libconfig_setting_lookup_string( setting, "key", &keybind_string );
+	const Error_t lookup_error = _libconfig_lookup_string( setting, "key", &keybind_string );
 
 	if ( lookup_error != ERROR_NONE ) return lookup_error;
 
@@ -1720,7 +1710,8 @@ static Error_t _parse_keybind_keysym( config_setting_t *setting, KeySym *keysym 
 }
 
 /**
- * @brief Parse a list of keybinds from a libconfig configuration into a list of Key structs.
+ * @brief Parse a list of keybinds from a libconfig configuration into a list of
+ * Key structs.
  *
  * TODO
  *
@@ -1743,7 +1734,7 @@ static Errors_t _parse_keybinds_config( const config_t *config, Key **array, uns
 	RETURN_ERRORS_IF_NULL( config, returned_errors, "%s:\"config\"\n", POINTER_NULL_PRINT_STRING );
 
 	config_setting_t *array_setting = NULL;
-	const Error_t lookup_error = _libconfig_lookup_list( config, lookup_path, &array_setting );
+	const Error_t lookup_error = _libconfig_generic_lookup( config_root_setting( config ), lookup_path, CONFIG_TYPE_LIST, &array_setting );
 	add_error( &returned_errors, lookup_error );
 
 	if ( lookup_error != ERROR_NONE ) {
@@ -1802,7 +1793,7 @@ static Errors_t _parser_open_config_file( config_t *config, const char *custom_c
 		{ "/etc/dwm.conf", "", true }
 	};
 
-	for ( int i = 0; i < LENGTH( config_filepaths ); i++ ) {
+	for ( unsigned int i = 0; i < LENGTH( config_filepaths ); i++ ) {
 		char constructed_path[ PATH_MAX ];
 
 		if ( config_filepaths[ i ].filepath_1 != NULL && config_filepaths[ i ].filepath_2 != NULL ) {
@@ -1862,15 +1853,15 @@ static Errors_t _parse_rule( config_setting_t *setting, const unsigned int index
 	RETURN_ERRORS_IF_NULL( setting, returned_errors, "%s:\"config\" at index %d\n", POINTER_NULL_PRINT_STRING, index );
 	RETURN_ERRORS_IF_NULL( rule, returned_errors, "%s:\"rule\" at index %d\n", POINTER_NULL_PRINT_STRING, index );
 
-	add_error( &returned_errors, _libconfig_setting_lookup_string( setting, "class", &rule->class ) );
-	add_error( &returned_errors, _libconfig_setting_lookup_string( setting, "instance", &rule->instance ) );
-	add_error( &returned_errors, _libconfig_setting_lookup_string( setting, "title", &rule->title ) );
-	add_error( &returned_errors, _libconfig_setting_lookup_uint( setting, "tag-mask", 0, TAGMASK, &rule->tags ) );
-	add_error( &returned_errors, _libconfig_setting_lookup_int( setting, "monitor", -1, 99, &rule->monitor ) );
+	add_error( &returned_errors, _libconfig_lookup_string( setting, "class", &rule->class ) );
+	add_error( &returned_errors, _libconfig_lookup_string( setting, "instance", &rule->instance ) );
+	add_error( &returned_errors, _libconfig_lookup_string( setting, "title", &rule->title ) );
+	add_error( &returned_errors, _libconfig_lookup_uint( setting, "tag-mask", 0, TAGMASK, &rule->tags ) );
+	add_error( &returned_errors, _libconfig_lookup_int( setting, "monitor", -1, 99, &rule->monitor ) );
 
 	// This logically should be a boolean value, but I didn't want to
 	// deviate from the coded type, so I kept it an int and range check it.
-	add_error( &returned_errors, _libconfig_setting_lookup_int( setting, "floating", 0, 1, &rule->isfloating ) );
+	add_error( &returned_errors, _libconfig_lookup_int( setting, "floating", 0, 1, &rule->isfloating ) );
 
 	// Ensure rule is zeroed and doesn't accidentally have any
 	// data left over from parsing that could cause unusual behavior
@@ -1893,8 +1884,6 @@ static Errors_t _parse_rule( config_setting_t *setting, const unsigned int index
  * @brief Thin adapter function to allow for rule parsing inside a generic array parsing function.
  *
  * See @ref _parse_rule() for function documentation.
- *
- * @see @ref _parse_rule()
  */
 static Errors_t _parse_rule_adapter( config_setting_t *setting, const unsigned int index, void *rule ) {
 	return _parse_rule( setting, index, (Rule *) rule );
@@ -1924,7 +1913,7 @@ static Errors_t _parse_rules_config( const config_t *config, Rule **array, unsig
 	RETURN_ERRORS_IF_NULL( config, returned_errors, "%s:\"config\"\n", POINTER_NULL_PRINT_STRING );
 
 	config_setting_t *array_setting = NULL;
-	const Error_t lookup_error = _libconfig_lookup_list( config, lookup_path, &array_setting );
+	const Error_t lookup_error = _libconfig_generic_lookup( config_root_setting( config ), lookup_path, CONFIG_TYPE_LIST, &array_setting );
 	add_error( &returned_errors, lookup_error );
 
 	if ( lookup_error != ERROR_NONE ) {
@@ -2077,8 +2066,6 @@ static Errors_t _parse_tag( config_setting_t *setting, const unsigned int index 
  * @brief Thin adapter function to allow for tag parsing inside a generic array parsing function.
  *
  * See @ref _parse_tag() for function documentation.
- *
- * @see @ref _parse_tag()
  */
 static Errors_t _parse_tags_adapter( config_setting_t *setting, const unsigned int index, void *unused ) {
 	return _parse_tag( setting, index );
@@ -2102,7 +2089,7 @@ static Errors_t _parse_tags_config( const config_t *config ) {
 	RETURN_ERRORS_IF_NULL( config, returned_errors, "%s:\"config\"\n", POINTER_NULL_PRINT_STRING );
 
 	config_setting_t *array_setting = NULL;
-	const Error_t lookup_error = _libconfig_lookup_list( config, lookup_path, &array_setting );
+	const Error_t lookup_error = _libconfig_generic_lookup( config_root_setting( config ), lookup_path, CONFIG_TYPE_LIST, &array_setting );
 	add_error( &returned_errors, lookup_error );
 
 	if ( lookup_error != ERROR_NONE ) {
@@ -2147,7 +2134,7 @@ static Errors_t _parse_theme( config_setting_t *setting, const unsigned int inde
 
 	const char *fonts_lookup_path = "fonts";
 	config_setting_t *array_setting = NULL;
-	const Error_t lookup_error = _libconfig_setting_lookup_list( setting, fonts_lookup_path, &array_setting );
+	const Error_t lookup_error = _libconfig_generic_lookup( setting, fonts_lookup_path, CONFIG_TYPE_LIST, &array_setting );
 	add_error( &returned_errors, lookup_error );
 
 	if ( lookup_error != ERROR_NONE ) {
@@ -2158,8 +2145,8 @@ static Errors_t _parse_theme( config_setting_t *setting, const unsigned int inde
 	const Errors_t font_errors = _parse_setting_array( array_setting, sizeof( char * ), _parse_font_adapter, &fonts_malloced, (void **) &fonts, &fonts_count );
 	copy_errors( &returned_errors, font_errors );
 
-	for ( int i = 0; i < LENGTH( THEME_ALIAS_MAP ); i++ ) {
-		const Error_t error = _libconfig_setting_lookup_string( setting, THEME_ALIAS_MAP[ i ].alias, THEME_ALIAS_MAP[ i ].color );
+	for ( unsigned int i = 0; i < LENGTH( THEME_ALIAS_MAP ); i++ ) {
+		const Error_t error = _libconfig_lookup_string( setting, THEME_ALIAS_MAP[ i ].alias, THEME_ALIAS_MAP[ i ].color );
 		add_error( &returned_errors, error );
 		if ( error != ERROR_NONE ) {
 			LOG_WARN( "Failed to parse theme %d's element \"%s\": %s\n", index, THEME_ALIAS_MAP[ i ].alias, ERROR_ENUM_STRINGS[ error ] );
@@ -2173,8 +2160,6 @@ static Errors_t _parse_theme( config_setting_t *setting, const unsigned int inde
  * @brief Thin adapter function to allow for theme parsing inside a generic array parsing function.
  *
  * See @ref _parse_theme() for function documentation.
- *
- * @see @ref _parse_theme()
  */
 static Errors_t _parse_theme_adapter( config_setting_t *setting, const unsigned int index, void *unused ) {
 	return _parse_theme( setting, index );
@@ -2199,7 +2184,7 @@ static Errors_t _parse_theme_config( const config_t *config ) {
 	RETURN_ERRORS_IF_NULL( config, returned_errors, "%s:\"config\"\n", POINTER_NULL_PRINT_STRING );
 
 	config_setting_t *array_setting = NULL;
-	const Error_t lookup_error = _libconfig_lookup_list( config, lookup_path, &array_setting );
+	const Error_t lookup_error = _libconfig_generic_lookup( config_root_setting( config ), lookup_path, CONFIG_TYPE_LIST, &array_setting );
 	add_error( &returned_errors, lookup_error );
 
 	if ( lookup_error != ERROR_NONE ) {
@@ -2219,6 +2204,66 @@ static Errors_t _parse_theme_config( const config_t *config ) {
 /////////////////////////////////////////////
 
 /**
+ * @brief TODO
+ *
+ * TODO
+ *
+ * @param[in] parent_setting TODO
+ * @param[in] path TODO
+ * @param[in] expected_type TODO
+ * @param[out] parsed_value TODO
+ *
+ * @return @ref ERROR_NONE on success.
+ * @return @ref ERROR_NULL_VALUE if a NULL argument is provided.
+ * @return @ref ERROR_NOT_FOUND if lookup failed.
+ * @return @ref ERROR_TYPE if type found at @p path does not match
+ * @p expected_type or if there is an unexpected type in the switch case.
+ */
+static Error_t _libconfig_generic_lookup( config_setting_t *parent_setting, const char *path, const int expected_type, void *parsed_value ) {
+
+	if ( parent_setting == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
+
+	config_setting_t *child_setting = config_setting_lookup( parent_setting, path );
+
+	if ( child_setting == NULL ) return ERROR_NOT_FOUND;
+
+	if ( config_setting_type( child_setting ) != expected_type ) return ERROR_TYPE;
+
+	switch ( expected_type ) {
+		case CONFIG_TYPE_STRING:
+			*(const char **) parsed_value = config_setting_get_string( child_setting );
+			break;
+
+		case CONFIG_TYPE_INT:
+			*(int *) parsed_value = config_setting_get_int( child_setting );
+			break;
+
+		case CONFIG_TYPE_INT64:
+			*(long long *) parsed_value = config_setting_get_int64( child_setting );
+			break;
+
+		case CONFIG_TYPE_FLOAT:
+			*(float *) parsed_value = config_setting_get_float( child_setting );
+			break;
+
+		case CONFIG_TYPE_BOOL:
+			*(bool *) parsed_value = config_setting_get_bool( child_setting );
+			break;
+
+		case CONFIG_TYPE_GROUP:
+		case CONFIG_TYPE_ARRAY:
+		case CONFIG_TYPE_LIST:
+			*(config_setting_t **) parsed_value = child_setting;
+			break;
+
+		default:
+			return ERROR_TYPE;
+	}
+
+	return ERROR_NONE;
+}
+
+/**
  * @brief Returns the name of a given setting, or its nearest named parent setting.
  *
  * TODO
@@ -2232,8 +2277,7 @@ static Errors_t _parse_theme_config( const config_t *config ) {
  */
 static Error_t _libconfig_get_setting_name( const config_setting_t *setting, const char **found_name ) {
 
-	RETURN_VALUE_IF_NULL( setting, ERROR_NULL_VALUE, "%s:\"setting\"\n", POINTER_NULL_PRINT_STRING );
-	RETURN_VALUE_IF_NULL( found_name, ERROR_NULL_VALUE, "%s:\"found_name\"\n", POINTER_NULL_PRINT_STRING );
+	if ( setting == NULL || found_name == NULL ) return ERROR_NULL_VALUE;
 
 	while ( setting != NULL ) {
 		const char *tmp_string = config_setting_name( setting );
@@ -2246,226 +2290,7 @@ static Error_t _libconfig_get_setting_name( const config_setting_t *setting, con
 		setting = config_setting_parent( setting );
 	}
 
-	LOG_WARN( "Could not find name of setting (%p)\n", (void *) setting );
-
 	return ERROR_NOT_FOUND;
-}
-
-/**
- * @brief Look up a boolean value in a libconfig configuration.
- *
- * TODO
- *
- * @param[in] config Pointer to the libconfig configuration to perform the lookup from.
- * @param[in] path Path expression to search within @p config.
- * @param[out] parsed_value Pointer to where the parsed value will be stored on success.
- *
- * @return @ref ERROR_NONE on success.
- * @return @ref ERROR_NULL_VALUE if a NULL argument is provided,
- * @return @ref ERROR_NOT_FOUND if the config lookup of @p path fails,
- * @return @ref ERROR_TYPE if the value found at @p path isn't a boolean,
- */
-static Error_t _libconfig_lookup_bool( const config_t *config, const char *path, bool *parsed_value ) {
-
-	if ( config == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
-
-	const config_setting_t *setting = config_lookup( config, path );
-
-	if ( setting == NULL ) return ERROR_NOT_FOUND;
-	if ( config_setting_type( setting ) != CONFIG_TYPE_BOOL ) return ERROR_TYPE;
-
-	*parsed_value = config_setting_get_bool( setting );
-
-	return ERROR_NONE;
-}
-
-/**
- * @brief Look up a float value in a libconfig configuration.
- *
- * TODO
- *
- * @param[in] config Pointer to the libconfig config to perform the lookup from.
- * @param[in] path Path expression to search within @p config.
- * @param[in] range_min Minimum value that can be saved to @p parsed_value.
- * @param[in] range_max Maximum value that can be saved to @p parsed_value.
- * @param[out] parsed_value Pointer to where the parsed value will be stored on success.
- *
- * @return @ref ERROR_NONE on success.
- * @return @ref ERROR_NULL_VALUE if a NULL argument is provided.
- * @return @ref ERROR_NOT_FOUND if the config lookup of @p path fails.
- * @return @ref ERROR_TYPE if the value found at @p path isn't a float.
- * @return @ref ERROR_RANGE if the found value is outside the range @p range_min to @p range_max.
- */
-static Error_t _libconfig_lookup_float( const config_t *config, const char *path, const float range_min, const float range_max, float *parsed_value ) {
-
-	if ( config == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
-
-	const config_setting_t *setting = config_lookup( config, path );
-
-	if ( setting == NULL ) return ERROR_NOT_FOUND;
-	if ( config_setting_type( setting ) != CONFIG_TYPE_FLOAT ) return ERROR_TYPE;
-
-	const float tmp = (float) config_setting_get_float( setting );
-
-	if ( tmp < range_min || tmp > range_max ) return ERROR_RANGE;
-
-	*parsed_value = tmp;
-
-	return ERROR_NONE;
-}
-
-/**
- * @brief Look up an integer value in a libconfig configuration.
- *
- * TODO
- *
- * @param[in] config Pointer to the libconfig config to perform the lookup from.
- * @param[in] path Path expression to search within @p config.
- * @param[in] range_min Minimum value that can be saved to @p parsed_value.
- * @param[in] range_max Maximum value that can be saved to @p parsed_value.
- * @param[out] parsed_value Pointer to where the parsed value will be stored on success.
- *
- * @return @ref ERROR_NONE on success.
- * @return @ref ERROR_NULL_VALUE if a NULL argument is provided.
- * @return @ref ERROR_NOT_FOUND if the config lookup of @p path fails.
- * @return @ref ERROR_TYPE if the value found at @p path isn't an integer.
- * @return @ref ERROR_RANGE if the found value is outside the range @p range_min to @p range_max.
- */
-static Error_t _libconfig_lookup_int( const config_t *config, const char *path, const int range_min, const int range_max, int *parsed_value ) {
-
-	if ( config == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
-
-	const config_setting_t *setting = config_lookup( config, path );
-
-	if ( setting == NULL ) return ERROR_NOT_FOUND;
-	if ( config_setting_type( setting ) != CONFIG_TYPE_INT ) return ERROR_TYPE;
-
-	const int tmp = config_setting_get_int( setting );
-
-	if ( tmp < range_min || tmp > range_max ) return ERROR_RANGE;
-
-	*parsed_value = tmp;
-
-	return ERROR_NONE;
-}
-
-/**
- * @brief TODO
- *
- * TODO
- *
- * @param config TODO
- * @param path TODO
- * @param parsed_value TODO
- * @return TODO
- */
-static Error_t _libconfig_lookup_list( const config_t *config, const char *path, config_setting_t **parsed_value ) {
-
-	if ( config == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
-
-	*parsed_value = config_lookup( config, path );
-
-	if ( *parsed_value == NULL ) return ERROR_NOT_FOUND;
-	if ( config_setting_type( *parsed_value ) != CONFIG_TYPE_LIST ) return ERROR_TYPE;
-
-	return ERROR_NONE;
-}
-
-/**
- * @brief Look up a string value in a libconfig configuration.
- *
- * TODO
- *
- * @param[in] config Pointer to the libconfig configuration to perform the lookup from.
- * @param[in] path Path expression to search within @p config.
- * @param[out] parsed_value Pointer to where the parsed value will be stored on success.
- *
- * @return @ref ERROR_NONE on success.
- * @return @ref ERROR_NULL_VALUE if a NULL argument is provided.
- * @return @ref ERROR_NOT_FOUND if the config lookup of @p path fails.
- * @return @ref ERROR_TYPE if the value found at @p path isn't a string.
- */
-static Error_t _libconfig_lookup_string( const config_t *config, const char *path, const char **parsed_value ) {
-
-	if ( config == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
-
-	const config_setting_t *setting = config_lookup( config, path );
-
-	if ( setting == NULL ) return ERROR_NOT_FOUND;
-	if ( config_setting_type( setting ) != CONFIG_TYPE_STRING ) return ERROR_TYPE;
-
-	*parsed_value = config_setting_get_string( setting );
-
-	if ( strcasecmp( *parsed_value, "NULL" ) == 0 ) *parsed_value = NULL;
-
-	return ERROR_NONE;
-}
-
-/**
- * @brief Look up an unsigned integer value in a libconfig configuration.
- *
- * TODO
- *
- * @param[in] config Pointer to the libconfig config to perform the lookup from.
- * @param[in] path Path expression to search within @p config.
- * @param[in] range_min Minimum value that can be saved to @p parsed_value.
- * @param[in] range_max Maximum value that can be saved to @p parsed_value.
- * @param[out] parsed_value Pointer to where the parsed value will be stored on success.
- *
- * @return @ref ERROR_NONE on success.
- * @return @ref ERROR_NULL_VALUE if a NULL argument is provided.
- * @return @ref ERROR_NOT_FOUND if the config lookup of @p path fails.
- * @return @ref ERROR_TYPE if the value found at @p path isn't an integer (no native unsigned integer type in libconfig).
- * @return @ref ERROR_RANGE if the found value is below zero or outside the range @p range_min to @p range_max.
- */
-static Error_t _libconfig_lookup_uint( const config_t *config, const char *path, const unsigned int range_min, const unsigned int range_max, unsigned int *parsed_value ) {
-
-	if ( config == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
-
-	const config_setting_t *setting = config_lookup( config, path );
-
-	if ( setting == NULL ) return ERROR_NOT_FOUND;
-	if ( config_setting_type( setting ) != CONFIG_TYPE_INT ) return ERROR_TYPE;
-
-	const int tmp_int = config_setting_get_int( setting );
-
-	if ( tmp_int < 0 ) return ERROR_RANGE;
-
-	const unsigned int tmp_uint = (unsigned int) tmp_int;
-
-	if ( tmp_uint < range_min || tmp_uint > range_max ) return ERROR_RANGE;
-
-	*parsed_value = tmp_uint;
-
-	return ERROR_NONE;
-}
-
-/**
- * @brief Look up a boolean value in a libconfig setting.
- *
- * TODO
- *
- * @param[in] parent_setting Pointer to the libconfig setting to perform the lookup from.
- * @param[in] path Path expression to search within @p parent_setting.
- * @param[out] parsed_value Pointer to where the parsed value will be stored on success.
- *
- * @return @ref ERROR_NONE on success.
- * @return @ref ERROR_NULL_VALUE if a NULL argument is provided.
- * @return @ref ERROR_NOT_FOUND if the config lookup of @p path fails.
- * @return @ref ERROR_TYPE if the value found at @p path isn't a boolean.
- */
-static Error_t _libconfig_setting_lookup_bool( config_setting_t *parent_setting, const char *path, bool *parsed_value ) {
-
-	if ( parent_setting == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
-
-	const config_setting_t *child_setting = config_setting_lookup( parent_setting, path );
-
-	if ( child_setting == NULL ) return ERROR_NOT_FOUND;
-	if ( config_setting_type( child_setting ) != CONFIG_TYPE_BOOL ) return ERROR_TYPE;
-
-	*parsed_value = config_setting_get_bool( child_setting );
-
-	return ERROR_NONE;
 }
 
 /**
@@ -2473,7 +2298,7 @@ static Error_t _libconfig_setting_lookup_bool( config_setting_t *parent_setting,
  *
  * TODO
  *
- * @param[in] parent_setting Pointer to the libconfig setting to perform the lookup from.
+ * @param[in] parent_setting Pointer to the libconfig setting to perform the lookup in.
  * @param[in] path Path expression to search within @p parent_setting.
  * @param[in] range_min Minimum value that can be saved to @p parsed_value.
  * @param[in] range_max Maximum value that can be saved to @p parsed_value.
@@ -2481,24 +2306,22 @@ static Error_t _libconfig_setting_lookup_bool( config_setting_t *parent_setting,
  *
  * @return @ref ERROR_NONE on success.
  * @return @ref ERROR_NULL_VALUE if a NULL argument is provided.
- * @return @ref ERROR_NOT_FOUND if the config lookup of @p path fails.
- * @return @ref ERROR_TYPE if the value found at @p path isn't a float.
- * @return @ref ERROR_RANGE if the found value is outside the range @p range_min to @p range_max.
+ * @return @ref ERROR_RANGE if @p range_min exceeds @p range_max or
+ * if the parsed value at @p path is outside the provided range.
+ * @return Any error returned from @ref _libconfig_generic_lookup().
  */
-static Error_t _libconfig_setting_lookup_float( config_setting_t *parent_setting, const char *path, const float range_min, const float range_max, float *parsed_value ) {
+static Error_t _libconfig_lookup_float( config_setting_t *parent_setting, const char *path, const float range_min, const float range_max, float *parsed_value ) {
 
 	if ( parent_setting == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
+	if ( range_min > range_max ) return ERROR_RANGE;
 
-	const config_setting_t *child_setting = config_setting_lookup( parent_setting, path );
+	float tmp_float = 0;
+	const Error_t lookup_error = _libconfig_generic_lookup( parent_setting, path, CONFIG_TYPE_FLOAT, &tmp_float );
+	if ( lookup_error != ERROR_NONE ) return lookup_error;
 
-	if ( child_setting == NULL ) return ERROR_NOT_FOUND;
-	if ( config_setting_type( child_setting ) != CONFIG_TYPE_FLOAT ) return ERROR_TYPE;
+	if ( tmp_float < range_min || tmp_float > range_max ) return ERROR_RANGE;
 
-	const float tmp = (float) config_setting_get_float( child_setting );
-
-	if ( tmp < range_min || tmp > range_max ) return ERROR_RANGE;
-
-	*parsed_value = tmp;
+	*parsed_value = tmp_float;
 
 	return ERROR_NONE;
 }
@@ -2508,7 +2331,7 @@ static Error_t _libconfig_setting_lookup_float( config_setting_t *parent_setting
  *
  * TODO
  *
- * @param[in] parent_setting Pointer to the libconfig setting to perform the lookup from.
+ * @param[in] parent_setting Pointer to the libconfig setting to perform the lookup in.
  * @param[in] path Path expression to search within @p parent_setting.
  * @param[in] range_min Minimum value that can be saved to @p parsed_value.
  * @param[in] range_max Maximum value that can be saved to @p parsed_value.
@@ -2516,46 +2339,22 @@ static Error_t _libconfig_setting_lookup_float( config_setting_t *parent_setting
  *
  * @return @ref ERROR_NONE on success.
  * @return @ref ERROR_NULL_VALUE if a NULL argument is provided.
- * @return @ref ERROR_NOT_FOUND if the config lookup of @p path fails.
- * @return @ref ERROR_TYPE if the value found at @p path isn't an integer.
- * @return @ref ERROR_RANGE if the found value is outside the range @p range_min to @p range_max.
+ * @return @ref ERROR_RANGE if @p range_min exceeds @p range_max or
+ * if the parsed value at @p path is outside the provided range.
+ * @return Any error returned from @ref _libconfig_generic_lookup().
  */
-static Error_t _libconfig_setting_lookup_int( config_setting_t *parent_setting, const char *path, const int range_min, const int range_max, int *parsed_value ) {
+static Error_t _libconfig_lookup_int( config_setting_t *parent_setting, const char *path, const int range_min, const int range_max, int *parsed_value ) {
 
 	if ( parent_setting == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
+	if ( range_min > range_max ) return ERROR_RANGE;
 
-	const config_setting_t *child_setting = config_setting_lookup( parent_setting, path );
+	int tmp_int = 0;
+	const Error_t lookup_error = _libconfig_generic_lookup( parent_setting, path, CONFIG_TYPE_INT, &tmp_int );
+	if ( lookup_error != ERROR_NONE ) return lookup_error;
 
-	if ( child_setting == NULL ) return ERROR_NOT_FOUND;
-	if ( config_setting_type( child_setting ) != CONFIG_TYPE_INT ) return ERROR_TYPE;
+	if ( tmp_int < range_min || tmp_int > range_max ) return ERROR_RANGE;
 
-	const int tmp = config_setting_get_int( child_setting );
-
-	if ( tmp < range_min || tmp > range_max ) return ERROR_RANGE;
-
-	*parsed_value = tmp;
-
-	return ERROR_NONE;
-}
-
-/**
- * @brief TODO
- *
- * TODO
- *
- * @param setting TODO
- * @param path TODO
- * @param parsed_value TODO
- * @return TODO
- */
-static Error_t _libconfig_setting_lookup_list( config_setting_t *setting, const char *path, config_setting_t **parsed_value ) {
-
-	if ( setting == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
-
-	*parsed_value = config_setting_lookup( setting, path );
-
-	if ( *parsed_value == NULL ) return ERROR_NOT_FOUND;
-	if ( config_setting_type( *parsed_value ) != CONFIG_TYPE_LIST ) return ERROR_TYPE;
+	*parsed_value = tmp_int;
 
 	return ERROR_NONE;
 }
@@ -2565,27 +2364,24 @@ static Error_t _libconfig_setting_lookup_list( config_setting_t *setting, const 
  *
  * TODO
  *
- * @param[in] parent_setting Pointer to the libconfig setting to perform the lookup from.
+ * @param[in] parent_setting Pointer to the libconfig setting to perform the lookup in.
  * @param[in] path Path expression to search within @p parent_setting.
  * @param[out] parsed_value Pointer to where the parsed value will be stored on success.
  *
  * @return @ref ERROR_NONE on success.
  * @return @ref ERROR_NULL_VALUE if a NULL argument is provided.
- * @return @ref ERROR_NOT_FOUND if the config lookup of @p path fails.
- * @return @ref ERROR_TYPE if the value found at @p path isn't a string.
+ * @return Any error returned from @ref _libconfig_generic_lookup().
  */
-static Error_t _libconfig_setting_lookup_string( config_setting_t *parent_setting, const char *path, const char **parsed_value ) {
+static Error_t _libconfig_lookup_string( config_setting_t *parent_setting, const char *path, const char **parsed_value ) {
 
 	if ( parent_setting == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
 
-	const config_setting_t *child_setting = config_setting_lookup( parent_setting, path );
+	const Error_t lookup_error = _libconfig_generic_lookup( parent_setting, path, CONFIG_TYPE_STRING, parsed_value );
+	if ( lookup_error != ERROR_NONE ) return lookup_error;
 
-	if ( child_setting == NULL ) return ERROR_NOT_FOUND;
-	if ( config_setting_type( child_setting ) != CONFIG_TYPE_STRING ) return ERROR_TYPE;
-
-	*parsed_value = config_setting_get_string( child_setting );
-
-	if ( strcasecmp( *parsed_value, "NULL" ) == 0 ) *parsed_value = NULL;
+	if ( *parsed_value && strcasecmp( *parsed_value, "NULL" ) == 0 ) {
+		*parsed_value = NULL;
+	}
 
 	return ERROR_NONE;
 }
@@ -2595,7 +2391,7 @@ static Error_t _libconfig_setting_lookup_string( config_setting_t *parent_settin
  *
  * TODO
  *
- * @param[in] parent_setting Pointer to the libconfig setting to perform the lookup from.
+ * @param[in] parent_setting Pointer to the libconfig setting to perform the lookup in.
  * @param[in] path Path expression to search within @p parent_setting.
  * @param[in] range_min Minimum value that can be saved to @p parsed_value.
  * @param[in] range_max Maximum value that can be saved to @p parsed_value.
@@ -2603,20 +2399,18 @@ static Error_t _libconfig_setting_lookup_string( config_setting_t *parent_settin
  *
  * @return @ref ERROR_NONE on success.
  * @return @ref ERROR_NULL_VALUE if a NULL argument is provided.
- * @return @ref ERROR_NOT_FOUND if the config lookup of @p path fails.
- * @return @ref ERROR_TYPE if the value found at @p path isn't an integer (no native unsigned integer type in libconfig).
- * @return @ref ERROR_RANGE if the found value is below zero or outside the range @p range_min to @p range_max.
+ * @return @ref ERROR_RANGE if @p range_min exceeds @p range_max or if the
+ * parsed value at @p path is less than zero or outside the provided range.
+ * @return Any error returned from @ref _libconfig_generic_lookup().
  */
-static Error_t _libconfig_setting_lookup_uint( config_setting_t *parent_setting, const char *path, const unsigned int range_min, const unsigned int range_max, unsigned int *parsed_value ) {
+static Error_t _libconfig_lookup_uint( config_setting_t *parent_setting, const char *path, const unsigned int range_min, const unsigned int range_max, unsigned int *parsed_value ) {
 
 	if ( parent_setting == NULL || path == NULL || parsed_value == NULL ) return ERROR_NULL_VALUE;
+	if ( range_min > range_max ) return ERROR_RANGE;
 
-	const config_setting_t *child_setting = config_setting_lookup( parent_setting, path );
-
-	if ( child_setting == NULL ) return ERROR_NOT_FOUND;
-	if ( config_setting_type( child_setting ) != CONFIG_TYPE_INT ) return ERROR_TYPE;
-
-	const int tmp_int = config_setting_get_int( child_setting );
+	int tmp_int = 0;
+	const Error_t lookup_error = _libconfig_generic_lookup( parent_setting, path, CONFIG_TYPE_INT, &tmp_int );
+	if ( lookup_error != ERROR_NONE ) return lookup_error;
 
 	if ( tmp_int < 0 ) return ERROR_RANGE;
 
